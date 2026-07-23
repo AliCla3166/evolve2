@@ -221,7 +221,7 @@ export function resourceName(res: ResourceId): string {
 
 export function freshGameState(now: number): GameState {
   return {
-    saveVersion: 2,
+    saveVersion: 3,
     tutorialStep: 0, // nouveau joueur : micro-tutoriel actif après création du profil
     resources: startingResources(),
     buildings: startingBuildings(),
@@ -237,5 +237,18 @@ export function freshGameState(now: number): GameState {
     lastTick: now,
     createdAt: now,
     profile: null,
+    // ----- Couche militaire (Phase 5) — tuning dans military_config.json -----
+    units: { garde: 0, sonde: 0, phage: 0 },
+    expeditions: [],
+    nextExpeditionId: 1,
+    reports: [],
+    nextReportId: 1,
+    reportsSeenAt: now,
+    nextAttackAt: 0, // planifiée au premier tick
+    waveCount: 0,
+    nextEventAt: 0, // planifié au premier tick
+    pendingEvent: null,
+    fragments: 0,
+    rngSeed: (now % 2147483647) | 1,
   };
 }

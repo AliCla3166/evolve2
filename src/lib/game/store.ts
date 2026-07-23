@@ -24,11 +24,25 @@ import {
   evaluateEntry,
   STREAK_MILESTONES,
 } from "./habits";
+import {
+  availableUnits,
+  canRecruit,
+  dailyOffers,
+  MILITARY,
+  recruitCost,
+  resolveChoiceEvent,
+} from "./military";
 import { applyTick } from "./tick";
-import { TUTORIAL_DONE, type BuildingId, type GameState, type HabitDayEntry } from "./types";
+import {
+  TUTORIAL_DONE,
+  type BuildingId,
+  type GameState,
+  type HabitDayEntry,
+  type UnitId,
+} from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
 export type HabitPatch = Partial<
@@ -51,6 +65,15 @@ interface GameActions {
   createProfile: (portraitId: string, nomOrganisme: string) => void;
   /** Avance le micro-tutoriel (monotone : jamais de retour en arrière). */
   advanceTutorial: (step: number) => void;
+  /* ----- Couche militaire (Phase 5) ----- */
+  /** Recrute une unité au Noyau (coût + cap d'effectif tirés de la config). */
+  recruit: (id: UnitId) => boolean;
+  /** Envoie une escouade sur l'offre du jour d'index donné. */
+  sendExpedition: (offerIndex: number, squad: Record<UnitId, number>) => boolean;
+  /** Tranche l'événement à choix en attente. */
+  chooseEventOption: (optionIndex: number) => void;
+  /** Marque les rapports comme lus (badge). */
+  markReportsSeen: () => void;
 }
 
 export type GameStore = GameState & GameActions;
@@ -67,6 +90,18 @@ function gameSlice(s: GameStore): GameState {
     lastTick: s.lastTick,
     createdAt: s.createdAt,
     profile: s.profile,
+    units: s.units,
+    expeditions: s.expeditions,
+    nextExpeditionId: s.nextExpeditionId,
+    reports: s.reports,
+    nextReportId: s.nextReportId,
+    reportsSeenAt: s.reportsSeenAt,
+    nextAttackAt: s.nextAttackAt,
+    waveCount: s.waveCount,
+    nextEventAt: s.nextEventAt,
+    pendingEvent: s.pendingEvent,
+    fragments: s.fragments,
+    rngSeed: s.rngSeed,
   };
 }
 
@@ -203,6 +238,72 @@ export const useGame = create<GameStore>()(
         const clamped = Math.min(TUTORIAL_DONE, Math.max(0, Math.round(step)));
         if (clamped > get().tutorialStep) set({ tutorialStep: clamped });
       },
+
+      recruit: (id) => {
+        const now = Date.now();
+        const s = applyTick(gameSlice(get()), now);
+        if (!canRecruit(s, id)) return false;
+        const resources = { ...s.resources };
+        for (const [res, amount] of Object.entries(recruitCost(id))) {
+          resources[res as keyof typeof resources] -= amount;
+        }
+        set({
+          ...s,
+          resources,
+          units: { ...s.units, [id]: (s.units[id] ?? 0) + 1 },
+        });
+        return true;
+      },
+
+      sendExpedition: (offerIndex, squad) => {
+        const now = Date.now();
+        const s = applyTick(gameSlice(get()), now);
+        if (s.expeditions.length >= MILITARY.expeditions.max_concurrent) return false;
+        const offer = dailyOffers(s, now)[offerIndex];
+        if (!offer) return false;
+        // Escouade non vide et couverte par les unités disponibles.
+        const avail = availableUnits(s);
+        const size = (["garde", "sonde", "phage"] as UnitId[]).reduce(
+          (sum, u) => sum + (squad[u] ?? 0),
+          0,
+        );
+        if (size <= 0) return false;
+        for (const u of ["garde", "sonde", "phage"] as UnitId[]) {
+          if ((squad[u] ?? 0) < 0 || (squad[u] ?? 0) > avail[u]) return false;
+        }
+        set({
+          ...s,
+          expeditions: [
+            ...s.expeditions,
+            {
+              id: s.nextExpeditionId,
+              destId: offer.destId,
+              destName: offer.destName,
+              tier: offer.tier,
+              risk: offer.risk,
+              difficulty: offer.difficulty,
+              rewards: offer.rewards,
+              boostChance: offer.boostChance,
+              squad: { garde: squad.garde ?? 0, sonde: squad.sonde ?? 0, phage: squad.phage ?? 0 },
+              startedAt: now,
+              endsAt: now + offer.durationH * 3_600_000,
+            },
+          ],
+          nextExpeditionId: s.nextExpeditionId + 1,
+        });
+        return true;
+      },
+
+      chooseEventOption: (optionIndex) => {
+        const now = Date.now();
+        const s = applyTick(gameSlice(get()), now);
+        resolveChoiceEvent(s, optionIndex, now); // mute le draft s (pur vis-à-vis du store)
+        set(s);
+      },
+
+      markReportsSeen: () => {
+        set({ reportsSeenAt: Date.now() });
+      },
     }),
     {
       name: SAVE_KEY,
@@ -212,12 +313,28 @@ export const useGame = create<GameStore>()(
       skipHydration: true,
       // v1 -> v2 : les sauvegardes d'avant la Phase 4 n'ont pas de tutorialStep —
       // leurs joueurs connaissent déjà le jeu, le tutoriel est marqué terminé.
+      // v2 -> v3 : ajout de la couche militaire (Phase 5), tout part de zéro ;
+      // vagues/événements se planifient d'eux-mêmes au premier tick (champs à 0).
       migrate: (persisted, version) => {
         const state = persisted as GameState;
         if (version < 2 || state.tutorialStep === undefined) {
           state.tutorialStep = TUTORIAL_DONE;
-          state.saveVersion = 2;
         }
+        if (version < 3 || state.units === undefined) {
+          state.units = { garde: 0, sonde: 0, phage: 0 };
+          state.expeditions = [];
+          state.nextExpeditionId = 1;
+          state.reports = [];
+          state.nextReportId = 1;
+          state.reportsSeenAt = state.lastTick || state.createdAt;
+          state.nextAttackAt = 0;
+          state.waveCount = 0;
+          state.nextEventAt = 0;
+          state.pendingEvent = null;
+          state.fragments = 0;
+          state.rngSeed = ((state.createdAt || 1) % 2147483647) | 1;
+        }
+        state.saveVersion = SAVE_VERSION;
         return state;
       },
       partialize: gameSlice,

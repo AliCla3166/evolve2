@@ -9,6 +9,7 @@ import {
   resourceCap,
   totalProductionPerHour,
 } from "./economy";
+import { applyMilitary } from "./military";
 import type { GameState, ResourceId } from "./types";
 
 /** Ajoute la production entre deux timestamps (ms) aux stocks, plafonnée aux caps.
@@ -36,6 +37,10 @@ export function applyTick(state: GameState, now: number): GameState {
     resources: { ...state.resources },
     buildings: { ...state.buildings },
     buildQueue: state.buildQueue ? { ...state.buildQueue } : null,
+    units: { ...state.units },
+    expeditions: [...state.expeditions],
+    reports: state.reports, // pushReport remplace le tableau (jamais de mutation en place)
+    pendingEvent: state.pendingEvent ? { ...state.pendingEvent } : null,
   };
 
   const from = next.lastTick > 0 ? next.lastTick : now;
@@ -64,6 +69,9 @@ export function applyTick(state: GameState, now: number): GameState {
   } else {
     produce(next, from, now);
   }
+
+  // Couche militaire : expéditions échues, vagues de pathogènes, événements.
+  applyMilitary(next, now);
 
   next.lastTick = now;
   return next;

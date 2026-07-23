@@ -82,6 +82,45 @@ export interface Profile {
   createdAt: number;
 }
 
+/* ---------- Couche militaire (Phase 5) ---------- */
+
+/** Les 3 rôles d'unités recrutées au Noyau (tuning dans military_config.json). */
+export type UnitId = "garde" | "sonde" | "phage";
+
+/** Expédition en cours — snapshot de la destination au moment de l'envoi
+ *  (les offres du jour changent, l'expédition partie reste figée). */
+export interface Expedition {
+  id: number;
+  destId: string;
+  destName: string;
+  tier: number;
+  /** Risque résolu (0..1) et difficulté résolue de l'offre. */
+  risk: number;
+  difficulty: number;
+  /** Ressources ciblées par la destination. */
+  rewards: string[];
+  boostChance: number;
+  squad: Record<UnitId, number>;
+  startedAt: number;
+  endsAt: number;
+}
+
+/** Entrée du journal de rapports (expéditions, vagues, événements). */
+export interface Report {
+  id: number;
+  ts: number;
+  type: "expedition" | "pathogene" | "evenement";
+  title: string;
+  lines: string[];
+  success?: boolean;
+}
+
+/** Événement à choix en attente d'une décision du joueur. */
+export interface PendingEvent {
+  eventId: string;
+  expiresAt: number;
+}
+
 /** Micro-tutoriel 3 étapes (Phase 4) :
  *  0 = valider une habitude · 1 = lancer une construction ·
  *  2 = comprendre le timer · 3 = terminé (TUTORIAL_DONE).
@@ -107,4 +146,26 @@ export interface GameState {
   createdAt: number;
   /** Profil (null tant que la création n'est pas faite). */
   profile: Profile | null;
+
+  /* ----- Couche militaire (Phase 5) ----- */
+  /** Unités possédées (déployées comprises — le disponible se déduit des expéditions). */
+  units: Record<UnitId, number>;
+  /** Expéditions en cours (max : military_config.expeditions.max_concurrent). */
+  expeditions: Expedition[];
+  nextExpeditionId: number;
+  /** Journal des rapports, plus récent en premier (plafonné). */
+  reports: Report[];
+  nextReportId: number;
+  /** Dernière consultation des rapports (badge non-lus). */
+  reportsSeenAt: number;
+  /** Prochaine vague de pathogènes (ms) — 0 = à planifier au premier tick. */
+  nextAttackAt: number;
+  waveCount: number;
+  /** Prochain événement aléatoire (ms) — 0 = à planifier au premier tick. */
+  nextEventAt: number;
+  pendingEvent: PendingEvent | null;
+  /** Fragments de carte (préparent la Phase 6 — la Mare & les cartes). */
+  fragments: number;
+  /** Graine du PRNG déterministe du moteur (avance à chaque tirage). */
+  rngSeed: number;
 }

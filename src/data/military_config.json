@@ -1,0 +1,110 @@
+{
+  "$comment": "Tuning v1 de la couche militaire (Phase 5) — unités, expéditions, pathogènes, événements. SÉPARÉ de economy_config.json (calibré 90 j, intouchable) ; ces valeurs seront recalibrées en Phase 7 par l'extension du simulateur Python. Aucune de ces valeurs ne doit être codée en dur dans le code.",
+  "units": {
+    "garde": {
+      "name": "Garde membranaire",
+      "role": "defense",
+      "desc": "Garnison permanente : repousse les vagues de pathogènes.",
+      "icon": "🛡️",
+      "accent": "#3fe0d8",
+      "power_def": 10,
+      "power_exp": 2,
+      "power_atk": 3,
+      "cost": { "proteine": 220, "enzyme": 140, "energie": 25 }
+    },
+    "sonde": {
+      "name": "Sonde ciliée",
+      "role": "exploration",
+      "desc": "Exploratrice : le cœur de toute escouade d'expédition.",
+      "icon": "🧭",
+      "accent": "#6df6ff",
+      "power_def": 2,
+      "power_exp": 10,
+      "power_atk": 2,
+      "cost": { "biomasse": 200, "lipide": 120, "energie": 25 }
+    },
+    "phage": {
+      "name": "Phage assaillant",
+      "role": "assaut",
+      "desc": "Offensif : sécurise les expéditions risquées.",
+      "icon": "⚔️",
+      "accent": "#ff54d6",
+      "power_def": 4,
+      "power_exp": 5,
+      "power_atk": 12,
+      "cost": { "adn": 240, "signaux": 90, "energie": 40 }
+    }
+  },
+  "unit_cap": {
+    "$comment": "Effectif max total = base + per_noyau_level * niveau du Noyau.",
+    "base": 6,
+    "per_noyau_level": 3
+  },
+  "expeditions": {
+    "daily_slots": 4,
+    "max_concurrent": 2,
+    "success": {
+      "$comment": "p = clamp(base + ratio_weight * min(1, puissance/difficulté) - risk_weight * risque, min, max).",
+      "base": 0.15,
+      "ratio_weight": 0.75,
+      "risk_weight": 0.3,
+      "min": 0.05,
+      "max": 0.95
+    },
+    "failure_reward_ratio": 0.3,
+    "failure_loss_chance_per_risk": 0.5,
+    "max_losses_per_expedition": 2,
+    "boost_reduction_range": [0.1, 0.25],
+    "destinations": [
+      { "id": "courant", "name": "Courant tiède", "tier": 1, "duration_h": [2, 3], "risk": [0.08, 0.15], "difficulty": [8, 14], "rewards": ["biomasse", "proteine"], "fragments": [0, 1], "boost_chance": 0.05 },
+      { "id": "recif", "name": "Récif de silice", "tier": 1, "duration_h": [2.5, 4], "risk": [0.1, 0.18], "difficulty": [10, 16], "rewards": ["enzyme", "lipide"], "fragments": [0, 1], "boost_chance": 0.05 },
+      { "id": "nappe", "name": "Nappe planctonique", "tier": 2, "duration_h": [4, 6], "risk": [0.15, 0.25], "difficulty": [16, 26], "rewards": ["biomasse", "adn", "lipide"], "fragments": [0, 2], "boost_chance": 0.1 },
+      { "id": "epave", "name": "Épave organique", "tier": 2, "duration_h": [5, 7], "risk": [0.18, 0.3], "difficulty": [20, 30], "rewards": ["proteine", "enzyme", "signaux"], "fragments": [1, 2], "boost_chance": 0.12 },
+      { "id": "fumeur", "name": "Fumeur abyssal", "tier": 3, "duration_h": [7, 10], "risk": [0.25, 0.38], "difficulty": [28, 42], "rewards": ["enzyme", "signaux", "adn"], "fragments": [1, 3], "boost_chance": 0.18 },
+      { "id": "faille", "name": "Faille bioluminescente", "tier": 3, "duration_h": [8, 11], "risk": [0.3, 0.45], "difficulty": [34, 50], "rewards": ["adn", "signaux", "lipide"], "fragments": [2, 3], "boost_chance": 0.22 },
+      { "id": "colonie", "name": "Colonie endormie", "tier": 2, "duration_h": [4.5, 6.5], "risk": [0.16, 0.28], "difficulty": [18, 28], "rewards": ["proteine", "biomasse", "enzyme"], "fragments": [0, 2], "boost_chance": 0.1 },
+      { "id": "abysse", "name": "Jardin des abysses", "tier": 3, "duration_h": [9, 12], "risk": [0.32, 0.45], "difficulty": [38, 55], "rewards": ["signaux", "adn", "enzyme"], "fragments": [2, 4], "boost_chance": 0.25 }
+    ],
+    "reward_hours_by_tier": {
+      "$comment": "Récompense en ressources ≈ N heures de la production horaire TOTALE courante de la cellule, répartie sur les ressources listées.",
+      "1": [2, 4],
+      "2": [4, 7],
+      "3": [7, 12]
+    }
+  },
+  "pathogens": {
+    "$comment": "Vagues annoncées à l'avance, résolution automatique déf. vs vague, pertes légères — jamais punitif sans contre-jeu (le TD jouable attendra le Bastion-Défense).",
+    "first_attack_delay_h": 48,
+    "interval_h": [36, 84],
+    "wave_power_base": 14,
+    "wave_power_growth_per_day": 0.1,
+    "wave_power_growth_cap": 6,
+    "wave_variance": 0.2,
+    "defense_membrane_bonus_per_level": 6,
+    "defense_noyau_bonus_per_level": 4,
+    "defeat_resource_loss_ratio": 0.08,
+    "defeat_unit_loss": 1,
+    "victory_reward": { "signaux": 60, "enzyme": 40 }
+  },
+  "events": {
+    "$comment": "1 à 3 événements par jour réel, toujours positifs ou à choix. Rattrapage offline plafonné.",
+    "interval_h": [8, 24],
+    "max_offline_catchup": 3,
+    "choice_expiry_h": 24,
+    "pool": [
+      { "id": "courant_nutritif", "weight": 30, "kind": "auto", "name": "Courant nutritif", "icon": "🌊", "production_hours": [2, 4] },
+      { "id": "mutation_spontanee", "weight": 20, "kind": "auto", "name": "Mutation spontanée", "icon": "🧬", "build_time_reduction": [0.15, 0.3], "fallback_energie": 10 },
+      { "id": "banc_plancton", "weight": 20, "kind": "auto", "name": "Banc de plancton", "icon": "✨", "biomasse_hours": [3, 6] },
+      { "id": "alerte_pathogene", "weight": 10, "kind": "auto", "name": "Alerte pathogène", "icon": "📡", "reveal_only": true },
+      {
+        "id": "spore_rare", "weight": 20, "kind": "choice", "name": "Spore rare", "icon": "🦠",
+        "prompt": "Une spore inconnue dérive contre ta membrane. Son enveloppe scintille d'ADN inconnu…",
+        "options": [
+          { "label": "L'absorber", "success_chance": 0.5, "success": { "adn_hours": [6, 10], "signaux_hours": [4, 8] }, "failure": { "biomasse_loss_ratio": 0.06 } },
+          { "label": "La repousser", "effect": "none" }
+        ]
+      }
+    ]
+  },
+  "reports_cap": 40
+}
