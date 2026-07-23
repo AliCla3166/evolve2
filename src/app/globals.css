@@ -46,6 +46,13 @@ body {
 }
 .plankton { animation: drift linear infinite; }
 
+/* Bottom sheet du panneau bâtiment (dépliement membrane) */
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-sheet-up { animation: sheet-up 0.22s ease-out; }
+
 /* Bouton pixel art 4 états */
 .pixel-btn {
   border: none;

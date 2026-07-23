@@ -1,20 +1,24 @@
 /* Page de jeu /play — mobile-first, fond océan.
-   HUD ressources · file de construction · habitudes du jour · 12 bâtiments. */
+   HUD ressources · file de construction · base vivante (scène Canvas,
+   tap sur un bâtiment → panneau d'amélioration) · habitudes du jour. */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BuildingList } from "@/components/game/BuildingList";
+import { BuildingSheet } from "@/components/game/BuildingSheet";
+import { CellScene } from "@/components/game/CellScene";
 import { HabitsPanel } from "@/components/game/HabitsPanel";
 import { Hud } from "@/components/game/Hud";
 import { ProfileCreate, portraitSrc } from "@/components/game/ProfileCreate";
 import { QueueBanner } from "@/components/game/QueueBanner";
 import { useGame } from "@/lib/game/store";
+import type { BuildingId } from "@/lib/game/types";
 
 export default function PlayPage() {
   const hasHydrated = useGame((s) => s.hasHydrated);
   const profile = useGame((s) => s.profile);
+  const [selected, setSelected] = useState<BuildingId | null>(null);
 
   // Recharge la sauvegarde localStorage (une seule fois, côté client).
   useEffect(() => {
@@ -78,13 +82,16 @@ export default function PlayPage() {
           {/* File de construction (1 slot) */}
           <QueueBanner />
 
+          {/* La base vivante — tap sur un bâtiment pour ouvrir son panneau */}
+          <CellScene selected={selected} onSelect={setSelected} />
+
           {/* Habitudes du jour */}
           <HabitsPanel />
-
-          {/* Les 12 bâtiments */}
-          <BuildingList />
         </div>
       )}
+
+      {/* Panneau d'amélioration (bottom sheet) */}
+      {selected && <BuildingSheet id={selected} onClose={() => setSelected(null)} />}
     </main>
   );
 }
