@@ -21,3 +21,7 @@
 - Composants React : `src/components/ui/Pixel.tsx` (Panel 9-slice, PixelButton, ResourceBar, CardFrame 6 raretés, NavIcon) + états CSS boutons dans globals.css.
 - Page de revue `/ui` : tous les composants habillés + grille des 20 portraits + cadres de cartes avec portraits.
 - Build vert. Reste Phase 1 : rien de bloquant — passer Phase 2 (moteur : store, tick, économie JSON, habitudes, sauvegarde).
+
+## 2026-07-23 - Preparation Phase 2
+- Backend confirme : Firebase, reutilisation du projet v1 evolve-game-ebc60 (auth Google + Firestore). La config cliente est dans le index.html du repo public v1 evolve-game (bloc FIREBASE_CONFIG, vers la ligne 3548) - en Phase 2, injecter via variables NEXT_PUBLIC_FIREBASE_* (Vercel + .env.local), pas de cle en dur dans ce repo.
+- Les mises a jour de la page Notion Initialisation Evolve sont suspendues (choix d'Ali en session) - le point de reprise de reference est CE journal, versionne dans le repo.
