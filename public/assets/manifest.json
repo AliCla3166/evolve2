@@ -3,9 +3,9 @@
   "age": "age01_cellule",
   "style": "pixel art semi-realiste, vue top-down, fond transparent",
   "format": {
-    "buildings": "256x256 PNG RGBA, fond transparent",
-    "resources": "256x256 PNG RGBA, fond transparent",
-    "envelope": "512x512 PNG RGBA, fond transparent"
+    "buildings": "128x128 PNG RGBA, fond transparent",
+    "resources": "128x128 PNG RGBA, fond transparent",
+    "envelope": "256x256 PNG RGBA, fond transparent"
   },
   "naming_convention": "age01_cell_[type]_[nom]_[etat]_v001.png (cf. Charte Graphique section 03)",
   "buildings": [
