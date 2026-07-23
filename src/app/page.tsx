@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { PixelButton } from "@/components/ui/Pixel";
 
 const PLANKTON = [
   { left: "8%", size: 3, dur: 26, delay: 0 },
@@ -52,8 +53,12 @@ export default function Home() {
         cellule au divin.
       </p>
 
+      <PixelButton href="/play" className="px-10 py-3 text-sm">
+        COMMENCER
+      </PixelButton>
+
       <span className="rounded-full border border-cell-cyan/30 px-4 py-1 text-xs tracking-widest text-cell-cyan/60">
-        Phase 0 — fondations · en construction
+        Phase 2 — moteur de jeu · jouable
       </span>
     </main>
   );

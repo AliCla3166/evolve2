@@ -1,6 +1,7 @@
 /* Composants UI pixel art de base — Âge 1 Cellule.
    Tous consomment les assets de public/assets/ui/ (kit PixelLab). */
 /* eslint-disable @next/next/no-img-element */
+import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
 const UI = "/assets/ui";
@@ -34,24 +35,31 @@ export function Panel({
   );
 }
 
-/** Bouton organique 4 états (normal / hover / pressed / disabled). */
+/** Bouton organique 4 états (normal / hover / pressed / disabled).
+ *  Avec `href`, rend un Link Next stylé à l'identique (navigation). */
 export function PixelButton({
   children,
   onClick,
   disabled = false,
   className = "",
+  href,
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   className?: string;
+  href?: string;
 }) {
+  const cls = `pixel-btn pixelated relative select-none px-6 py-2 text-xs tracking-widest text-cell-cyan ${className}`;
+  if (href && !disabled) {
+    return (
+      <Link href={href} className={`inline-flex items-center justify-center ${cls}`}>
+        {children}
+      </Link>
+    );
+  }
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`pixel-btn pixelated relative select-none px-6 py-2 text-xs tracking-widest text-cell-cyan ${className}`}
-    >
+    <button onClick={onClick} disabled={disabled} className={cls}>
       {children}
     </button>
   );
@@ -64,18 +72,28 @@ export function ResourceBar({
   color = "var(--cyan)",
   large = false,
   label,
+  width,
+  title,
 }: {
   value: number;
   max: number;
   color?: string;
   large?: boolean;
   label?: string;
+  /** Largeur en px (défaut : 192, ou 256 en large) — pour les HUD compacts. */
+  width?: number;
+  /** Tooltip natif (infobulle de ressource). */
+  title?: string;
 }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   const frame = large ? "bar_frame_large" : "bar_frame";
   const h = large ? 24 : 16;
   return (
-    <div className="relative inline-block" style={{ width: large ? 256 : 192, height: h * 2 }}>
+    <div
+      className="relative inline-block"
+      style={{ width: width ?? (large ? 256 : 192), height: h * 2 }}
+      title={title}
+    >
       <div
         className="absolute rounded-full"
         style={{

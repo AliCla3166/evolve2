@@ -25,3 +25,15 @@
 ## 2026-07-23 - Preparation Phase 2
 - Backend confirme : Firebase, reutilisation du projet v1 evolve-game-ebc60 (auth Google + Firestore). La config cliente est dans le index.html du repo public v1 evolve-game (bloc FIREBASE_CONFIG, vers la ligne 3548) - en Phase 2, injecter via variables NEXT_PUBLIC_FIREBASE_* (Vercel + .env.local), pas de cle en dur dans ce repo.
 - Les mises a jour de la page Notion Initialisation Evolve sont suspendues (choix d'Ali en session) - le point de reprise de reference est CE journal, versionne dans le repo.
+
+## 2026-07-23 — Phase 2 : moteur de jeu + page /play jouable
+- Moteur `src/lib/game/` (pur, testé par smoke tests) :
+  - `types.ts` : GameState complet (ressources, niveaux, file 1 slot, habitudes+historique, streaks, profil, saveVersion).
+  - `economy.ts` : lecture typée de `economy_config.json` (source de vérité, zéro tuning en dur) — coûts, temps, production/h, caps de stockage (formule noyau×biomasse vérifiée contre la table du JSON), canAfford, stocks/niveaux de départ (260/productible, noyau Nv1).
+  - `tick.ts` : moteur à timestamps réels — production plafonnée aux caps, fin de chantier avec production découpée avant/après (rattrapage offline exact en un seul gros tick au chargement), resynchro sans production si horloge en arrière.
+  - `habits.ts` : les 5 habitudes v1 (calories 80–100% +10 ⚡ · pas +1/1000 cap 15 · Magic Focus +3×10 · ALILOU +5×3 · rituels +5×5, max 95 ⚡/j), clé YYYY-MM-DD locale modifiable le jour même, streaks stricts (consécutifs) avec jalons 7/30/90 j → +50/+200/+500 ⚡ (constantes commentées), cap énergie 9999.
+  - `store.ts` : Zustand + persist localStorage `evolve2_save_v1` (version 1, migration no-op, skipHydration + réhydratation client), actions startUpgrade (1 slot strict, débit des coûts), collectTick (interval 1 s), updateHabitToday (delta d'énergie à l'édition, aller-retour jalon neutre), createProfile.
+- UI : page `/play` mobile-first (fond océan) — HUD sticky de ResourceBars compactes avec tooltips, bannière de file avec timer live, panneau Habitudes du jour (+/−, valider, ⚡ et streak visibles), 12 bâtiments (sprite par niveau, production, coût vert/rouge selon payable, bouton AMÉLIORER/CONSTRUIRE, timer chantier ; peche/defense/raid grisés + overlay locked "À venir"). Création de profil simple (20 portraits + nom) si aucun profil. Écran titre : vrai bouton COMMENCER → /play (bug "rien n'est cliquable" corrigé).
+- Composants Pixel.tsx : ajouts non cassants (ResourceBar `width`/`title`, PixelButton `href` via Link).
+- `npm run build` + eslint verts (règle react-hooks/purity : le "now" de rendu vient de `lastTick` du store, pas de Date.now() en rendu). Dépendance ajoutée : zustand.
+- Point de reprise suivant — Phase 3 : scène Canvas de la base vivante (rendu 2D natif de la cellule, bâtiments posés dans le diorama, enveloppe par stades).
