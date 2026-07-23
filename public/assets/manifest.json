@@ -1,0 +1,64 @@
+{
+  "$comment": "Manifest machine-lisible des assets pixel art de l'Age 1 (Cellule) d'EVOLVE. Concu pour qu'une IA (ou un humain) recuperant ce projet Claude Design puisse localiser et charger chaque PNG sans ambiguite. Voir aussi 'Charte Graphique - Age 1 Cellulaire.dc.html' (specs DA, palette, prompts, etats) et les pages Notion 'Background narratif - Mode Cellule' et 'Conception technique - Base vivante evolutive & animee' pour le contexte complet.",
+  "age": "age01_cellule",
+  "style": "pixel art semi-realiste, vue top-down, fond transparent",
+  "format": {
+    "buildings": "256x256 PNG RGBA, fond transparent",
+    "resources": "256x256 PNG RGBA, fond transparent",
+    "envelope": "512x512 PNG RGBA, fond transparent"
+  },
+  "naming_convention": "age01_cell_[type]_[nom]_[etat]_v001.png (cf. Charte Graphique section 03)",
+  "buildings": [
+    { "id": "noyau", "name": "Noyau primordial", "family": "structure_centrale", "accent": "#6df6ff",
+      "levels": { "1": "assets/buildings/noyau/niveau1.png", "2": "assets/buildings/noyau/niveau2.png", "3": "assets/buildings/noyau/niveau3.png", "4": "assets/buildings/noyau/niveau4.png", "5": "assets/buildings/noyau/niveau5.png" } },
+    { "id": "membrane", "name": "Membrane protectrice", "family": "structure_centrale", "accent": "#3fe0d8",
+      "levels": { "1": "assets/buildings/membrane/niveau1.png", "2": "assets/buildings/membrane/niveau2.png", "3": "assets/buildings/membrane/niveau3.png", "4": "assets/buildings/membrane/niveau4.png", "5": "assets/buildings/membrane/niveau5.png" } },
+    { "id": "adn", "name": "Generateur d'ADN", "family": "producteur", "accent": "#35e7ff",
+      "levels": { "1": "assets/buildings/adn/niveau1.png", "2": "assets/buildings/adn/niveau2.png", "3": "assets/buildings/adn/niveau3.png", "4": "assets/buildings/adn/niveau4.png", "5": "assets/buildings/adn/niveau5.png" } },
+    { "id": "proteine", "name": "Synthetiseur de proteines", "family": "producteur", "accent": "#58ff9e",
+      "levels": { "1": "assets/buildings/proteine/niveau1.png", "2": "assets/buildings/proteine/niveau2.png", "3": "assets/buildings/proteine/niveau3.png", "4": "assets/buildings/proteine/niveau4.png", "5": "assets/buildings/proteine/niveau5.png" } },
+    { "id": "biomasse", "name": "Producteur de biomasse", "family": "producteur", "accent": "#a6ff3d",
+      "levels": { "1": "assets/buildings/biomasse/niveau1.png", "2": "assets/buildings/biomasse/niveau2.png", "3": "assets/buildings/biomasse/niveau3.png", "4": "assets/buildings/biomasse/niveau4.png", "5": "assets/buildings/biomasse/niveau5.png" } },
+    { "id": "enzyme", "name": "Reacteur enzymatique", "family": "producteur", "accent": "#ff9a3d",
+      "levels": { "1": "assets/buildings/enzyme/niveau1.png", "2": "assets/buildings/enzyme/niveau2.png", "3": "assets/buildings/enzyme/niveau3.png", "4": "assets/buildings/enzyme/niveau4.png", "5": "assets/buildings/enzyme/niveau5.png" } },
+    { "id": "lipide", "name": "Reservoir lipidique", "family": "producteur", "accent": "#7cf0c0",
+      "levels": { "1": "assets/buildings/lipide/niveau1.png", "2": "assets/buildings/lipide/niveau2.png", "3": "assets/buildings/lipide/niveau3.png", "4": "assets/buildings/lipide/niveau4.png", "5": "assets/buildings/lipide/niveau5.png" } },
+    { "id": "signaux", "name": "Capteur de signaux", "family": "producteur", "accent": "#35d6ff",
+      "levels": { "1": "assets/buildings/signaux/niveau1.png", "2": "assets/buildings/signaux/niveau2.png", "3": "assets/buildings/signaux/niveau3.png", "4": "assets/buildings/signaux/niveau4.png", "5": "assets/buildings/signaux/niveau5.png" } },
+    { "id": "peche", "name": "Centre Peche / Collection", "family": "centre_specialise", "accent": "#b06bff",
+      "levels": { "1": "assets/buildings/peche/niveau1.png", "2": "assets/buildings/peche/niveau2.png", "3": "assets/buildings/peche/niveau3.png", "4": "assets/buildings/peche/niveau4.png", "5": "assets/buildings/peche/niveau5.png" } },
+    { "id": "defense", "name": "Bastion - Defense", "family": "centre_specialise", "accent": "#8f7bff",
+      "levels": { "1": "assets/buildings/defense/niveau1.png", "2": "assets/buildings/defense/niveau2.png", "3": "assets/buildings/defense/niveau3.png", "4": "assets/buildings/defense/niveau4.png", "5": "assets/buildings/defense/niveau5.png" } },
+    { "id": "raid", "name": "Bastion - Raid", "family": "centre_specialise", "accent": "#ff3d5e",
+      "levels": { "1": "assets/buildings/raid/niveau1.png", "2": "assets/buildings/raid/niveau2.png", "3": "assets/buildings/raid/niveau3.png", "4": "assets/buildings/raid/niveau4.png", "5": "assets/buildings/raid/niveau5.png" } },
+    { "id": "mutation", "name": "Centre de mutation", "family": "centre_specialise", "accent": "#ff54d6",
+      "levels": { "1": "assets/buildings/mutation/niveau1.png", "2": "assets/buildings/mutation/niveau2.png", "3": "assets/buildings/mutation/niveau3.png", "4": "assets/buildings/mutation/niveau4.png", "5": "assets/buildings/mutation/niveau5.png" } }
+  ],
+  "resources": [
+    { "id": "energie", "name": "Points d'energie", "color": "#46ecff", "icon": "assets/resources/energie.png" },
+    { "id": "vitalite", "name": "Points de Vitalite", "color": "#6dff9a", "icon": "assets/resources/vitalite.png" },
+    { "id": "adn", "name": "ADN", "color": "#35e7ff", "icon": "assets/resources/adn.png" },
+    { "id": "proteine", "name": "Proteines", "color": "#8dff5a", "icon": "assets/resources/proteine.png" },
+    { "id": "biomasse", "name": "Biomasse", "color": "#58e0b0", "icon": "assets/resources/biomasse.png" },
+    { "id": "enzyme", "name": "Enzymes", "color": "#ff9a3d", "icon": "assets/resources/enzyme.png" },
+    { "id": "lipide", "name": "Lipides", "color": "#ffd24d", "icon": "assets/resources/lipide.png" },
+    { "id": "signaux", "name": "Signaux chimiques", "color": "#7cc8ff", "icon": "assets/resources/signaux.png" },
+    { "id": "combat", "name": "Monnaie de combat", "color": "#d98b4a", "icon": "assets/resources/combat.png" },
+    { "id": "rubis", "name": "Rubis", "color": "#ff5b7a", "icon": "assets/resources/rubis.png" },
+    { "id": "age", "name": "Points d'age", "color": "#ffcf4d", "icon": "assets/resources/age.png" }
+  ],
+  "envelope_stages": [
+    { "stage": 1, "trigger": "0 batiment construit (seul le Noyau existe)", "sprite": "assets/envelope/niveau1.png" },
+    { "stage": 2, "trigger": "1 a 3 batiments construits", "sprite": "assets/envelope/niveau2.png" },
+    { "stage": 3, "trigger": "4 a 7 batiments construits", "sprite": "assets/envelope/niveau3.png" },
+    { "stage": 4, "trigger": "8 a 10 batiments construits", "sprite": "assets/envelope/niveau4.png" },
+    { "stage": 5, "trigger": "11 a 12 batiments construits", "sprite": "assets/envelope/niveau5.png" }
+  ],
+  "related_docs": {
+    "charte_graphique": "Charte Graphique - Age 1 Cellulaire.dc.html (meme projet Claude Design)",
+    "economy_config": "economy/economy_config.json (meme projet Claude Design - couts/temps/production/stockage des 9 batiments)",
+    "economy_balance_xlsx": "economy/economy_balance.xlsx (meme projet Claude Design - classeur de calibrage modifiable avec formules)",
+    "background_lore_notion": "https://app.notion.com/p/3a6e0615d7f281b4b3abd2499c50727c",
+    "conception_technique_notion": "https://app.notion.com/p/3a6e0615d7f281529b83e2fcb70fcdf2"
+  }
+}

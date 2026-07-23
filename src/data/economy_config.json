@@ -1,0 +1,836 @@
+{
+  "$comment": "Modele economique complet et modifiable de l'Age 1 'Cellule' d'EVOLVE. Genere par economy/export_json.py a partir de economy/model.py (source de verite). Perimetre : 9 batiments (hors mini-jeux Peche/Bastion-Defense/Bastion-Raid, marques designed:false). Pour retoucher le calibrage : modifier les constantes en tete de model.py (TIME_BUDGET_HOURS, TIME_RATIO, PROD_RATIO, COST_RATIO, COST_SCALE, STARTING_STOCK, BASE_CAP) puis relancer 'python3 export_json.py'.",
+  "age": "age01_cellule",
+  "global_params": {
+    "total_target_days": 90,
+    "total_target_hours": 2160,
+    "n_parallel_build_slots": 1,
+    "time_ratio_per_level": 3.0,
+    "production_ratio_per_level": 1.8,
+    "cost_ratio_per_level": 2.1,
+    "cost_scale": 130,
+    "starting_stock_per_producible_resource": 260,
+    "base_storage_cap": 600
+  },
+  "buildings": {
+    "noyau": {
+      "name": "Noyau primordial",
+      "family": "structure_centrale",
+      "role": "meta",
+      "designed": true,
+      "total_time_budget_hours": 300,
+      "cost_recipe_resources": [
+        "biomasse",
+        "signaux"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/noyau/niveau1.png",
+        "2": "assets/buildings/noyau/niveau2.png",
+        "3": "assets/buildings/noyau/niveau3.png",
+        "4": "assets/buildings/noyau/niveau4.png",
+        "5": "assets/buildings/noyau/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": true,
+          "build_time_hours": 0,
+          "cost": {},
+          "production_per_hour": {
+            "vitalite": 2.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 7.5,
+          "cost": {
+            "biomasse": 130.0,
+            "signaux": 130.0
+          },
+          "production_per_hour": {
+            "vitalite": 3.2
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 22.5,
+          "cost": {
+            "biomasse": 273.0,
+            "signaux": 273.0
+          },
+          "production_per_hour": {
+            "vitalite": 5.12
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 67.5,
+          "cost": {
+            "biomasse": 573.3,
+            "signaux": 573.3
+          },
+          "production_per_hour": {
+            "vitalite": 8.192
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 202.5,
+          "cost": {
+            "biomasse": 1203.9,
+            "signaux": 1203.9
+          },
+          "production_per_hour": {
+            "vitalite": 13.107
+          }
+        }
+      }
+    },
+    "membrane": {
+      "name": "Membrane protectrice",
+      "family": "structure_centrale",
+      "role": "support",
+      "designed": true,
+      "total_time_budget_hours": 260,
+      "cost_recipe_resources": [
+        "lipide",
+        "proteine"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/membrane/niveau1.png",
+        "2": "assets/buildings/membrane/niveau2.png",
+        "3": "assets/buildings/membrane/niveau3.png",
+        "4": "assets/buildings/membrane/niveau4.png",
+        "5": "assets/buildings/membrane/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": false,
+          "build_time_hours": 2.15,
+          "cost": {
+            "lipide": 130.0,
+            "proteine": 130.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 6.45,
+          "cost": {
+            "lipide": 273.0,
+            "proteine": 273.0
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 19.34,
+          "cost": {
+            "lipide": 573.3,
+            "proteine": 573.3
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 58.02,
+          "cost": {
+            "lipide": 1203.9,
+            "proteine": 1203.9
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 174.05,
+          "cost": {
+            "lipide": 2528.3,
+            "proteine": 2528.3
+          }
+        }
+      }
+    },
+    "adn": {
+      "name": "Generateur d'ADN",
+      "family": "producteur",
+      "role": "producer",
+      "designed": true,
+      "total_time_budget_hours": 200,
+      "cost_recipe_resources": [
+        "enzyme",
+        "biomasse"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/adn/niveau1.png",
+        "2": "assets/buildings/adn/niveau2.png",
+        "3": "assets/buildings/adn/niveau3.png",
+        "4": "assets/buildings/adn/niveau4.png",
+        "5": "assets/buildings/adn/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": false,
+          "build_time_hours": 1.65,
+          "cost": {
+            "enzyme": 130.0,
+            "biomasse": 130.0
+          },
+          "production_per_hour": {
+            "adn": 10.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 4.96,
+          "cost": {
+            "enzyme": 273.0,
+            "biomasse": 273.0
+          },
+          "production_per_hour": {
+            "adn": 18.0
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 14.88,
+          "cost": {
+            "enzyme": 573.3,
+            "biomasse": 573.3
+          },
+          "production_per_hour": {
+            "adn": 32.4
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 44.63,
+          "cost": {
+            "enzyme": 1203.9,
+            "biomasse": 1203.9
+          },
+          "production_per_hour": {
+            "adn": 58.32
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 133.88,
+          "cost": {
+            "enzyme": 2528.3,
+            "biomasse": 2528.3
+          },
+          "production_per_hour": {
+            "adn": 104.976
+          }
+        }
+      }
+    },
+    "proteine": {
+      "name": "Synthetiseur de proteines",
+      "family": "producteur",
+      "role": "producer",
+      "designed": true,
+      "total_time_budget_hours": 220,
+      "cost_recipe_resources": [
+        "adn",
+        "enzyme"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/proteine/niveau1.png",
+        "2": "assets/buildings/proteine/niveau2.png",
+        "3": "assets/buildings/proteine/niveau3.png",
+        "4": "assets/buildings/proteine/niveau4.png",
+        "5": "assets/buildings/proteine/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": false,
+          "build_time_hours": 1.82,
+          "cost": {
+            "adn": 130.0,
+            "enzyme": 130.0
+          },
+          "production_per_hour": {
+            "proteine": 10.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 5.45,
+          "cost": {
+            "adn": 273.0,
+            "enzyme": 273.0
+          },
+          "production_per_hour": {
+            "proteine": 18.0
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 16.36,
+          "cost": {
+            "adn": 573.3,
+            "enzyme": 573.3
+          },
+          "production_per_hour": {
+            "proteine": 32.4
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 49.09,
+          "cost": {
+            "adn": 1203.9,
+            "enzyme": 1203.9
+          },
+          "production_per_hour": {
+            "proteine": 58.32
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 147.27,
+          "cost": {
+            "adn": 2528.3,
+            "enzyme": 2528.3
+          },
+          "production_per_hour": {
+            "proteine": 104.976
+          }
+        }
+      }
+    },
+    "biomasse": {
+      "name": "Producteur de biomasse",
+      "family": "producteur",
+      "role": "producer",
+      "designed": true,
+      "total_time_budget_hours": 220,
+      "cost_recipe_resources": [
+        "lipide",
+        "signaux"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/biomasse/niveau1.png",
+        "2": "assets/buildings/biomasse/niveau2.png",
+        "3": "assets/buildings/biomasse/niveau3.png",
+        "4": "assets/buildings/biomasse/niveau4.png",
+        "5": "assets/buildings/biomasse/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": false,
+          "build_time_hours": 1.82,
+          "cost": {
+            "lipide": 130.0,
+            "signaux": 130.0
+          },
+          "production_per_hour": {
+            "biomasse": 10.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 5.45,
+          "cost": {
+            "lipide": 273.0,
+            "signaux": 273.0
+          },
+          "production_per_hour": {
+            "biomasse": 18.0
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 16.36,
+          "cost": {
+            "lipide": 573.3,
+            "signaux": 573.3
+          },
+          "production_per_hour": {
+            "biomasse": 32.4
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 49.09,
+          "cost": {
+            "lipide": 1203.9,
+            "signaux": 1203.9
+          },
+          "production_per_hour": {
+            "biomasse": 58.32
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 147.27,
+          "cost": {
+            "lipide": 2528.3,
+            "signaux": 2528.3
+          },
+          "production_per_hour": {
+            "biomasse": 104.976
+          }
+        }
+      }
+    },
+    "enzyme": {
+      "name": "Reacteur enzymatique",
+      "family": "producteur",
+      "role": "producer",
+      "designed": true,
+      "total_time_budget_hours": 200,
+      "cost_recipe_resources": [
+        "proteine",
+        "adn"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/enzyme/niveau1.png",
+        "2": "assets/buildings/enzyme/niveau2.png",
+        "3": "assets/buildings/enzyme/niveau3.png",
+        "4": "assets/buildings/enzyme/niveau4.png",
+        "5": "assets/buildings/enzyme/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": false,
+          "build_time_hours": 1.65,
+          "cost": {
+            "proteine": 130.0,
+            "adn": 130.0
+          },
+          "production_per_hour": {
+            "enzyme": 10.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 4.96,
+          "cost": {
+            "proteine": 273.0,
+            "adn": 273.0
+          },
+          "production_per_hour": {
+            "enzyme": 18.0
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 14.88,
+          "cost": {
+            "proteine": 573.3,
+            "adn": 573.3
+          },
+          "production_per_hour": {
+            "enzyme": 32.4
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 44.63,
+          "cost": {
+            "proteine": 1203.9,
+            "adn": 1203.9
+          },
+          "production_per_hour": {
+            "enzyme": 58.32
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 133.88,
+          "cost": {
+            "proteine": 2528.3,
+            "adn": 2528.3
+          },
+          "production_per_hour": {
+            "enzyme": 104.976
+          }
+        }
+      }
+    },
+    "lipide": {
+      "name": "Reservoir lipidique",
+      "family": "producteur",
+      "role": "producer",
+      "designed": true,
+      "total_time_budget_hours": 200,
+      "cost_recipe_resources": [
+        "biomasse",
+        "enzyme"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/lipide/niveau1.png",
+        "2": "assets/buildings/lipide/niveau2.png",
+        "3": "assets/buildings/lipide/niveau3.png",
+        "4": "assets/buildings/lipide/niveau4.png",
+        "5": "assets/buildings/lipide/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": false,
+          "build_time_hours": 1.65,
+          "cost": {
+            "biomasse": 130.0,
+            "enzyme": 130.0
+          },
+          "production_per_hour": {
+            "lipide": 10.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 4.96,
+          "cost": {
+            "biomasse": 273.0,
+            "enzyme": 273.0
+          },
+          "production_per_hour": {
+            "lipide": 18.0
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 14.88,
+          "cost": {
+            "biomasse": 573.3,
+            "enzyme": 573.3
+          },
+          "production_per_hour": {
+            "lipide": 32.4
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 44.63,
+          "cost": {
+            "biomasse": 1203.9,
+            "enzyme": 1203.9
+          },
+          "production_per_hour": {
+            "lipide": 58.32
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 133.88,
+          "cost": {
+            "biomasse": 2528.3,
+            "enzyme": 2528.3
+          },
+          "production_per_hour": {
+            "lipide": 104.976
+          }
+        }
+      }
+    },
+    "signaux": {
+      "name": "Capteur de signaux",
+      "family": "producteur",
+      "role": "producer",
+      "designed": true,
+      "total_time_budget_hours": 220,
+      "cost_recipe_resources": [
+        "proteine",
+        "adn"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/signaux/niveau1.png",
+        "2": "assets/buildings/signaux/niveau2.png",
+        "3": "assets/buildings/signaux/niveau3.png",
+        "4": "assets/buildings/signaux/niveau4.png",
+        "5": "assets/buildings/signaux/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": false,
+          "build_time_hours": 1.82,
+          "cost": {
+            "proteine": 130.0,
+            "adn": 130.0
+          },
+          "production_per_hour": {
+            "signaux": 10.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 5.45,
+          "cost": {
+            "proteine": 273.0,
+            "adn": 273.0
+          },
+          "production_per_hour": {
+            "signaux": 18.0
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 16.36,
+          "cost": {
+            "proteine": 573.3,
+            "adn": 573.3
+          },
+          "production_per_hour": {
+            "signaux": 32.4
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 49.09,
+          "cost": {
+            "proteine": 1203.9,
+            "adn": 1203.9
+          },
+          "production_per_hour": {
+            "signaux": 58.32
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 147.27,
+          "cost": {
+            "proteine": 2528.3,
+            "adn": 2528.3
+          },
+          "production_per_hour": {
+            "signaux": 104.976
+          }
+        }
+      }
+    },
+    "mutation": {
+      "name": "Centre de mutation",
+      "family": "centre_specialise",
+      "role": "sink",
+      "designed": true,
+      "total_time_budget_hours": 340,
+      "cost_recipe_resources": [
+        "signaux",
+        "vitalite"
+      ],
+      "sprite_levels": {
+        "1": "assets/buildings/mutation/niveau1.png",
+        "2": "assets/buildings/mutation/niveau2.png",
+        "3": "assets/buildings/mutation/niveau3.png",
+        "4": "assets/buildings/mutation/niveau4.png",
+        "5": "assets/buildings/mutation/niveau5.png"
+      },
+      "levels": {
+        "1": {
+          "unlocked_at_start": false,
+          "build_time_hours": 2.81,
+          "cost": {
+            "signaux": 130.0,
+            "vitalite": 78.0
+          }
+        },
+        "2": {
+          "unlocked_at_start": false,
+          "build_time_hours": 8.43,
+          "cost": {
+            "signaux": 273.0,
+            "vitalite": 163.8
+          }
+        },
+        "3": {
+          "unlocked_at_start": false,
+          "build_time_hours": 25.29,
+          "cost": {
+            "signaux": 573.3,
+            "vitalite": 344.0
+          }
+        },
+        "4": {
+          "unlocked_at_start": false,
+          "build_time_hours": 75.87,
+          "cost": {
+            "signaux": 1203.9,
+            "vitalite": 722.4
+          }
+        },
+        "5": {
+          "unlocked_at_start": false,
+          "build_time_hours": 227.6,
+          "cost": {
+            "signaux": 2528.3,
+            "vitalite": 1517.0
+          }
+        }
+      }
+    },
+    "peche": {
+      "name": "Centre Peche / Collection",
+      "family": "centre_specialise",
+      "role": "minigame_gate",
+      "designed": false,
+      "note": "Mini-jeu de peche non finalise. Ce fichier ne definit pas ses niveaux/couts/temps ; a completer une fois le mini-jeu specifie.",
+      "sprite_levels": {
+        "1": "assets/buildings/peche/niveau1.png",
+        "2": "assets/buildings/peche/niveau2.png",
+        "3": "assets/buildings/peche/niveau3.png",
+        "4": "assets/buildings/peche/niveau4.png",
+        "5": "assets/buildings/peche/niveau5.png"
+      },
+      "levels": {}
+    },
+    "defense": {
+      "name": "Bastion - Defense",
+      "family": "centre_specialise",
+      "role": "minigame_gate",
+      "designed": false,
+      "note": "Mini-jeu de Bastion Defense non finalise. Idem, hors perimetre de ce modele.",
+      "sprite_levels": {
+        "1": "assets/buildings/defense/niveau1.png",
+        "2": "assets/buildings/defense/niveau2.png",
+        "3": "assets/buildings/defense/niveau3.png",
+        "4": "assets/buildings/defense/niveau4.png",
+        "5": "assets/buildings/defense/niveau5.png"
+      },
+      "levels": {}
+    },
+    "raid": {
+      "name": "Bastion - Raid",
+      "family": "centre_specialise",
+      "role": "minigame_gate",
+      "designed": false,
+      "note": "Mini-jeu de Bastion Raid non finalise. Idem, hors perimetre de ce modele.",
+      "sprite_levels": {
+        "1": "assets/buildings/raid/niveau1.png",
+        "2": "assets/buildings/raid/niveau2.png",
+        "3": "assets/buildings/raid/niveau3.png",
+        "4": "assets/buildings/raid/niveau4.png",
+        "5": "assets/buildings/raid/niveau5.png"
+      },
+      "levels": {}
+    }
+  },
+  "resources": {
+    "energie": {
+      "name": "Points d'energie",
+      "kind": "externe_habitude",
+      "spendable_on_buildings": false,
+      "note": "Genere par le suivi d'habitudes reel (Day Strike). Sert aux boosts temporaires, pas au cout de construction."
+    },
+    "vitalite": {
+      "name": "Points de Vitalite",
+      "kind": "meta_prestige",
+      "spendable_on_buildings": true,
+      "note": "Produit passivement par le Noyau. Utilise uniquement comme cout partiel du Centre de mutation (capstone)."
+    },
+    "adn": {
+      "name": "ADN",
+      "kind": "productible",
+      "spendable_on_buildings": true,
+      "producer": "adn"
+    },
+    "proteine": {
+      "name": "Proteines",
+      "kind": "productible",
+      "spendable_on_buildings": true,
+      "producer": "proteine"
+    },
+    "biomasse": {
+      "name": "Biomasse",
+      "kind": "productible",
+      "spendable_on_buildings": true,
+      "producer": "biomasse"
+    },
+    "enzyme": {
+      "name": "Enzymes",
+      "kind": "productible",
+      "spendable_on_buildings": true,
+      "producer": "enzyme"
+    },
+    "lipide": {
+      "name": "Lipides",
+      "kind": "productible",
+      "spendable_on_buildings": true,
+      "producer": "lipide"
+    },
+    "signaux": {
+      "name": "Signaux chimiques",
+      "kind": "productible",
+      "spendable_on_buildings": true,
+      "producer": "signaux"
+    },
+    "combat": {
+      "name": "Monnaie de combat",
+      "kind": "hors_perimetre",
+      "spendable_on_buildings": false,
+      "note": "Liee a Bastion Defense/Raid, non definie ici."
+    },
+    "rubis": {
+      "name": "Rubis",
+      "kind": "hors_perimetre",
+      "spendable_on_buildings": false,
+      "note": "Monnaie premium, hors perimetre economique de ce document."
+    },
+    "age": {
+      "name": "Points d'age",
+      "kind": "hors_perimetre",
+      "spendable_on_buildings": false,
+      "note": "Monnaie de transition d'Age, hors perimetre de ce document."
+    }
+  },
+  "storage": {
+    "formula": "cap(resource) = BASE_CAP * (1 + 0.5*(noyau_level-1) + 0.5*(biomasse_level-1))",
+    "base_cap": 600,
+    "applies_to": [
+      "adn",
+      "proteine",
+      "biomasse",
+      "enzyme",
+      "lipide",
+      "signaux"
+    ],
+    "note": "Le plafond de stockage global (partage par les 6 ressources productibles) croit avec le niveau du Noyau ET du Producteur de biomasse (fiction etablie). Si la biomasse n'est pas encore construite (niveau 0), seul le bonus du Noyau s'applique.",
+    "table_noyau_x_biomasse": {
+      "noyau1_biomasse0": 600.0,
+      "noyau1_biomasse1": 600.0,
+      "noyau1_biomasse2": 900.0,
+      "noyau1_biomasse3": 1200.0,
+      "noyau1_biomasse4": 1500.0,
+      "noyau1_biomasse5": 1800.0,
+      "noyau2_biomasse0": 900.0,
+      "noyau2_biomasse1": 900.0,
+      "noyau2_biomasse2": 1200.0,
+      "noyau2_biomasse3": 1500.0,
+      "noyau2_biomasse4": 1800.0,
+      "noyau2_biomasse5": 2100.0,
+      "noyau3_biomasse0": 1200.0,
+      "noyau3_biomasse1": 1200.0,
+      "noyau3_biomasse2": 1500.0,
+      "noyau3_biomasse3": 1800.0,
+      "noyau3_biomasse4": 2100.0,
+      "noyau3_biomasse5": 2400.0,
+      "noyau4_biomasse0": 1500.0,
+      "noyau4_biomasse1": 1500.0,
+      "noyau4_biomasse2": 1800.0,
+      "noyau4_biomasse3": 2100.0,
+      "noyau4_biomasse4": 2400.0,
+      "noyau4_biomasse5": 2700.0,
+      "noyau5_biomasse0": 1800.0,
+      "noyau5_biomasse1": 1800.0,
+      "noyau5_biomasse2": 2100.0,
+      "noyau5_biomasse3": 2400.0,
+      "noyau5_biomasse4": 2700.0,
+      "noyau5_biomasse5": 3000.0
+    }
+  },
+  "pacing_validation": {
+    "strategy_simulated": "greedy_fastest_upgrade_first (le joueur construit toujours la prochaine amelioration la moins longue disponible ; file de construction a 1 slot)",
+    "target_days": 90,
+    "target_hours": 2160,
+    "simulated_total_hours": 2229.7,
+    "simulated_total_days": 92.9,
+    "construction_hours": 2160.0,
+    "resource_wait_hours": 69.7,
+    "resource_wait_pct_of_total": 3.1,
+    "deviation_vs_target_pct": 3.2,
+    "conclusion": "Le temps de construction est le levier de pacing dominant (>96% du temps total) ; les couts en ressources ne bloquent la progression que marginalement (~3% de temps d'attente supplementaire) lorsque le joueur alterne les batiments de facon equilibree."
+  },
+  "envelope_stages_ref": "cf. assets/manifest.json -> envelope_stages (trigger = nombre de batiments construits, inchange par ce document)",
+  "related_docs": {
+    "charte_graphique": "Charte Graphique - Age 1 Cellulaire.dc.html",
+    "assets_manifest": "assets/manifest.json",
+    "background_lore_notion": "https://app.notion.com/p/3a6e0615d7f281b4b3abd2499c50727c",
+    "conception_technique_notion": "https://app.notion.com/p/3a6e0615d7f281529b83e2fcb70fcdf2"
+  }
+}
