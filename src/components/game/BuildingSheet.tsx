@@ -48,7 +48,7 @@ function CostLine({
               draggable={false}
             />
             {fmtInt(amount)}
-            <span className="text-[9px] opacity-60">/ {fmtInt(have)}</span>
+            <span className="text-[10px] opacity-60">/ {fmtInt(have)}</span>
           </span>
         );
       })}
@@ -59,9 +59,9 @@ function CostLine({
 function ProdLine({ prod, empty }: { prod: Record<string, number>; empty: string }) {
   const entries = Object.entries(prod);
   if (entries.length === 0)
-    return <span className="text-[10px] text-cell-teal/50">{empty}</span>;
+    return <span className="text-[11px] text-cell-teal/50">{empty}</span>;
   return (
-    <div className="flex flex-wrap gap-x-3 text-[11px] text-cell-lime/90">
+    <div className="flex flex-wrap gap-x-3 text-xs text-cell-lime/90">
       {entries.map(([res, rate]) => (
         <span key={res}>
           +{fmtRate(rate)}/h {resourceName(res as ResourceId)}
@@ -128,16 +128,16 @@ export function BuildingSheet({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm tracking-wide" style={{ color: accent }}>
+              <div className="truncate text-base tracking-wide" style={{ color: accent }}>
                 {cfg.name}
               </div>
               {designed ? (
-                <div className="text-[10px] text-cell-teal/70">
+                <div className="text-[11px] text-cell-teal/70">
                   Niveau {level}/{max}
                   {level === 0 && " — non construit"}
                 </div>
               ) : (
-                <div className="text-[10px] text-cell-teal/50">Mini-jeu en préparation</div>
+                <div className="text-[11px] text-cell-teal/50">Mini-jeu en préparation</div>
               )}
             </div>
             <button
@@ -151,7 +151,7 @@ export function BuildingSheet({
 
           {/* Corps selon l'état */}
           {!designed ? (
-            <p className="mt-2 text-[11px] leading-relaxed text-cell-teal/60">
+            <p className="mt-2 text-xs leading-relaxed text-cell-teal/60">
               Ce proto-organe s&apos;éveillera avec son propre mini-jeu dans une
               future mise à jour. <span className="text-cell-teal">À venir.</span>
             </p>
@@ -159,7 +159,7 @@ export function BuildingSheet({
             <div className="mt-2 space-y-2">
               {/* Production actuelle */}
               <div>
-                <div className="text-[9px] uppercase tracking-[0.25em] text-cell-teal/50">
+                <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">
                   Production
                 </div>
                 <ProdLine
@@ -178,7 +178,7 @@ export function BuildingSheet({
 
               {inConstruction && task ? (
                 <div className="space-y-1">
-                  <div className="text-[9px] uppercase tracking-[0.25em] text-cell-teal/50">
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">
                     Chantier en cours → Nv {task.targetLevel}
                   </div>
                   <ResourceBar
@@ -190,7 +190,7 @@ export function BuildingSheet({
                   />
                 </div>
               ) : maxed ? (
-                <div className="text-[11px] tracking-widest text-cell-magenta">
+                <div className="text-xs tracking-widest text-cell-magenta">
                   ✦ NIVEAU MAX — cet organe a atteint sa forme finale
                 </div>
               ) : (
@@ -198,11 +198,11 @@ export function BuildingSheet({
                   <>
                     {/* Prochain niveau */}
                     <div>
-                      <div className="text-[9px] uppercase tracking-[0.25em] text-cell-teal/50">
+                      <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">
                         {level === 0 ? "Construction" : `Amélioration → Nv ${nextLevel}`}
                       </div>
                       <CostLine cost={cost} resources={resources} />
-                      <div className="mt-1 text-[10px] text-cell-teal/60">
+                      <div className="mt-1 text-[11px] text-cell-teal/60">
                         ⏱ {fmtDuration(buildTimeMs(id, nextLevel))}
                         {Object.entries(nextProd).map(([res, rate]) => (
                           <span key={res} className="text-cell-lime/80">
@@ -215,7 +215,7 @@ export function BuildingSheet({
 
                     <div className="flex items-center gap-2 pt-1">
                       <PixelButton
-                        className="flex-1 text-[11px]"
+                        className="flex-1 text-xs"
                         disabled={queueBusy || !affordable}
                         onClick={() => startUpgrade(id)}
                       >
@@ -223,12 +223,12 @@ export function BuildingSheet({
                       </PixelButton>
                     </div>
                     {queueBusy && !inConstruction && (
-                      <p className="text-center text-[10px] text-cell-teal/50">
+                      <p className="text-center text-[11px] text-cell-teal/50">
                         File de construction occupée — 1 chantier à la fois.
                       </p>
                     )}
                     {!queueBusy && !affordable && (
-                      <p className="text-center text-[10px] text-red-400/80">
+                      <p className="text-center text-[11px] text-red-400/80">
                         Ressources insuffisantes.
                       </p>
                     )}

@@ -43,23 +43,25 @@ export interface Socket {
   y: number;
   size: number;
   accent: string;
+  /** Nom court affiché sous le bâtiment dans la scène (lisibilité). */
+  label: string;
 }
 
 export const SOCKETS: Record<BuildingId, Socket> = {
-  noyau: { x: 0.5, y: 0.5, size: 1.5, accent: "#6df6ff" },
-  membrane: { x: 0.5, y: 0.16, size: 1.0, accent: "#3fe0d8" },
-  // Producteurs — arc gauche, du haut vers le bas
-  adn: { x: 0.3, y: 0.24, size: 1.0, accent: "#35e7ff" },
-  proteine: { x: 0.19, y: 0.37, size: 1.0, accent: "#58ff9e" },
-  biomasse: { x: 0.15, y: 0.53, size: 1.0, accent: "#a6ff3d" },
-  enzyme: { x: 0.19, y: 0.69, size: 1.0, accent: "#ff9a3d" },
-  lipide: { x: 0.3, y: 0.81, size: 1.0, accent: "#7cf0c0" },
-  signaux: { x: 0.45, y: 0.87, size: 1.0, accent: "#35d6ff" },
+  noyau: { x: 0.5, y: 0.5, size: 1.5, accent: "#6df6ff", label: "Noyau" },
+  membrane: { x: 0.5, y: 0.15, size: 1.0, accent: "#3fe0d8", label: "Membrane" },
+  // Producteurs — arc gauche, du haut vers le bas (aérés pour les labels)
+  adn: { x: 0.29, y: 0.21, size: 1.0, accent: "#35e7ff", label: "ADN" },
+  proteine: { x: 0.15, y: 0.35, size: 1.0, accent: "#58ff9e", label: "Protéines" },
+  biomasse: { x: 0.12, y: 0.58, size: 1.0, accent: "#a6ff3d", label: "Biomasse" },
+  enzyme: { x: 0.21, y: 0.76, size: 1.0, accent: "#ff9a3d", label: "Enzymes" },
+  lipide: { x: 0.35, y: 0.85, size: 1.0, accent: "#7cf0c0", label: "Lipides" },
+  signaux: { x: 0.52, y: 0.88, size: 1.0, accent: "#35d6ff", label: "Signaux" },
   // Centres spécialisés — arc droit
-  mutation: { x: 0.7, y: 0.24, size: 1.05, accent: "#ff54d6" },
-  defense: { x: 0.82, y: 0.4, size: 1.0, accent: "#8f7bff" },
-  raid: { x: 0.82, y: 0.62, size: 1.0, accent: "#ff3d5e" },
-  peche: { x: 0.68, y: 0.79, size: 1.0, accent: "#b06bff" },
+  mutation: { x: 0.71, y: 0.22, size: 1.05, accent: "#ff54d6", label: "Mutation" },
+  defense: { x: 0.85, y: 0.4, size: 1.0, accent: "#8f7bff", label: "Défense" },
+  raid: { x: 0.85, y: 0.62, size: 1.0, accent: "#ff3d5e", label: "Raid" },
+  peche: { x: 0.69, y: 0.8, size: 1.0, accent: "#b06bff", label: "Pêche" },
 };
 
 /* ---------- Échelles par stade ----------

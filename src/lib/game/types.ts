@@ -82,9 +82,17 @@ export interface Profile {
   createdAt: number;
 }
 
+/** Micro-tutoriel 3 étapes (Phase 4) :
+ *  0 = valider une habitude · 1 = lancer une construction ·
+ *  2 = comprendre le timer · 3 = terminé (TUTORIAL_DONE).
+ *  Les sauvegardes antérieures à la Phase 4 migrent directement à 3. */
+export const TUTORIAL_DONE = 3;
+
 export interface GameState {
   /** Version du schéma de sauvegarde (migrations futures). */
   saveVersion: number;
+  /** Étape du micro-tutoriel (cf. TUTORIAL_DONE). */
+  tutorialStep: number;
   /** Stocks courants de ressources. */
   resources: Record<ResourceId, number>;
   /** Niveau de chaque bâtiment (0 = non construit ; noyau démarre à 1). */

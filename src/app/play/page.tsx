@@ -12,6 +12,7 @@ import { HabitsPanel } from "@/components/game/HabitsPanel";
 import { Hud } from "@/components/game/Hud";
 import { ProfileCreate, portraitSrc } from "@/components/game/ProfileCreate";
 import { QueueBanner } from "@/components/game/QueueBanner";
+import { TutorialCoach } from "@/components/game/TutorialCoach";
 import { useGame } from "@/lib/game/store";
 import type { BuildingId } from "@/lib/game/types";
 
@@ -78,6 +79,9 @@ export default function PlayPage() {
           <div className="sticky top-0 z-10 -mx-2 bg-abyss/85 px-2 py-1 backdrop-blur-sm">
             <Hud />
           </div>
+
+          {/* Micro-tutoriel (nouveau joueur uniquement) */}
+          <TutorialCoach />
 
           {/* File de construction (1 slot) */}
           <QueueBanner />

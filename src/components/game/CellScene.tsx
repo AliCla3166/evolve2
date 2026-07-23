@@ -45,6 +45,14 @@ function ready(img: HTMLImageElement): boolean {
   return img.complete && img.naturalWidth > 0;
 }
 
+/** "#rrggbb" -> "rgba(r, g, b, a)" (liserés/textes aux couleurs d'accent). */
+function hexA(hex: string, a: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
 /** Variante désaturée (bâtiments verrouillés/ghost) — précalculée une fois,
  *  sans ctx.filter (support Safari incertain) : luminance par pixel. */
 function getGrayscale(src: string): HTMLCanvasElement | null {
@@ -261,6 +269,17 @@ export function CellScene({
         drawEnvelope(anim.stage, 1);
       }
 
+      // Voile intérieur : repousse l'enveloppe en arrière-plan pour que les
+      // bâtiments restent lisibles même sur les stades les plus denses.
+      const veil = ctx.createRadialGradient(S / 2, S / 2, envSize * 0.06, S / 2, S / 2, envSize * 0.52);
+      veil.addColorStop(0, "rgba(5, 11, 20, 0.5)");
+      veil.addColorStop(0.8, "rgba(5, 11, 20, 0.34)");
+      veil.addColorStop(1, "rgba(5, 11, 20, 0)");
+      ctx.fillStyle = veil;
+      ctx.beginPath();
+      ctx.arc(S / 2, S / 2, envSize * 0.52, 0, Math.PI * 2);
+      ctx.fill();
+
       /* --- Plancton (couche 2 : densité ∝ bâtiments construits) --- */
       const built = BUILDING_ORDER.filter(
         (id) => id !== "noyau" && (buildings[id] ?? 0) > 0,
@@ -285,7 +304,17 @@ export function CellScene({
 
       /* --- Bâtiments sur leurs sockets --- */
       const zones: { id: BuildingId; x: number; y: number; r: number }[] = [];
-      const baseSize = S * 0.135;
+      // Labels + badges dessinés en 2e passe, AU-DESSUS de tous les sprites
+      // (sinon le bâtiment voisin recouvre le texte -> illisible).
+      const overlays: {
+        id: BuildingId;
+        cx: number;
+        cy: number;
+        padR: number;
+        level: number;
+        designed: boolean;
+      }[] = [];
+      const baseSize = S * 0.14;
       const queueFree = buildQueue === null;
 
       const drawBuilding = (id: BuildingId) => {
@@ -325,6 +354,18 @@ export function CellScene({
         const src = `/assets/buildings/${id}/niveau${spriteLevel}.png`;
         const img = getImage(src);
         const d = size * scale;
+        const padR = size * 0.52;
+
+        // Socle : disque sombre + liseré accent — détache le sprite du décor
+        if (id !== "noyau") {
+          ctx.fillStyle = "rgba(5, 11, 20, 0.55)";
+          ctx.beginPath();
+          ctx.arc(cx, cy, padR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = hexA(socket.accent, designed && level > 0 ? 0.6 : 0.22);
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
 
         // Halo du Noyau (respire avec le battement)
         if (id === "noyau") {
@@ -391,7 +432,7 @@ export function CellScene({
           ctx.strokeStyle = "rgba(166, 255, 61, 0.9)";
           ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.arc(cx, cy, d * 0.58, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+          ctx.arc(cx, cy, padR + 4, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
           ctx.stroke();
         }
 
@@ -403,36 +444,65 @@ export function CellScene({
           ctx.setLineDash([6, 5]);
           ctx.lineDashOffset = -((nowMs / 40) % 11);
           ctx.beginPath();
-          ctx.arc(cx, cy, d * 0.62, 0, Math.PI * 2);
+          ctx.arc(cx, cy, (id === "noyau" ? d * 0.62 : padR) + 3, 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
         }
 
-        // Badge de niveau (bâtiments construits)
-        if (designed && level > 0 && id !== "noyau") {
-          const bx = cx + d * 0.3;
-          const by = cy + d * 0.34;
-          ctx.fillStyle = "rgba(5, 11, 20, 0.8)";
-          ctx.beginPath();
-          ctx.arc(bx, by, 8, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = socket.accent;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.fillStyle = socket.accent;
-          ctx.font = "9px ui-monospace, monospace";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(String(level), bx, by + 0.5);
-        }
-
-        zones.push({ id, x: cx, y: cy, r: Math.max(d * 0.55, 24) });
+        overlays.push({ id, cx, cy, padR, level, designed });
+        zones.push({ id, x: cx, y: cy, r: Math.max(padR + 6, 26) });
       };
 
       // Couche 3 : tous sauf le Noyau… puis couche 4 : le Noyau au-dessus
       for (const id of BUILDING_ORDER) if (id !== "noyau") drawBuilding(id);
       drawBuilding("noyau");
       hitZonesRef.current = zones;
+
+      // 2e passe : badges de niveau + noms courts, au-dessus de tous les sprites
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (const o of overlays) {
+        const accent = SOCKETS[o.id].accent;
+        // Nom court (le Noyau aussi : lève l'ambiguïté avec ses voisins)
+        const text = SOCKETS[o.id].label;
+        const ly = o.cy + o.padR + 9;
+        ctx.font = "600 10px ui-monospace, monospace";
+        const w = ctx.measureText(text).width;
+        ctx.fillStyle = "rgba(5, 11, 20, 0.78)";
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(o.cx - w / 2 - 5, ly - 8, w + 10, 16, 6);
+        } else {
+          ctx.rect(o.cx - w / 2 - 5, ly - 8, w + 10, 16);
+        }
+        ctx.fill();
+        ctx.fillStyle = !o.designed
+          ? "rgba(140, 170, 180, 0.85)"
+          : o.level > 0
+            ? accent
+            : "rgba(207, 232, 242, 0.8)";
+        ctx.fillText(text, o.cx, ly + 0.5);
+
+        // Badge de niveau (bâtiments construits)
+        if (o.designed && o.level > 0) {
+          const br = o.id === "noyau" ? 11 : 10;
+          // Badge maintenu À L'INTÉRIEUR du socle : jamais de collision
+          // avec le label d'un bâtiment voisin.
+          const off = o.id === "noyau" ? o.padR * 0.5 : o.padR * 0.55;
+          const bx = o.cx + off;
+          const by = o.cy - off;
+          ctx.fillStyle = "rgba(5, 11, 20, 0.85)";
+          ctx.beginPath();
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.fillStyle = accent;
+          ctx.font = "bold 11px ui-monospace, monospace";
+          ctx.fillText(String(o.level), bx, by + 0.5);
+        }
+      }
 
       /* --- VFX de mue : burst + flash radial --- */
       anim.burst = anim.burst.filter((b) => nowMs - b.born < 750);

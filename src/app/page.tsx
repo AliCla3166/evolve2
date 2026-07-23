@@ -1,5 +1,13 @@
+/* Écran titre (Phase 4) — logo, océan primordial, plancton, Noyau pulsant.
+   Lit la sauvegarde locale : nouveau joueur -> COMMENCER, sinon CONTINUER
+   avec l'aperçu de l'organisme. Sync cloud : à venir (Firebase, décision actée). */
 /* eslint-disable @next/next/no-img-element */
+"use client";
+
+import { useEffect } from "react";
 import { PixelButton } from "@/components/ui/Pixel";
+import { portraitSrc } from "@/components/game/ProfileCreate";
+import { useGame } from "@/lib/game/store";
 
 const PLANKTON = [
   { left: "8%", size: 3, dur: 26, delay: 0 },
@@ -12,8 +20,15 @@ const PLANKTON = [
 ];
 
 export default function Home() {
+  const hasHydrated = useGame((s) => s.hasHydrated);
+  const profile = useGame((s) => s.profile);
+
+  useEffect(() => {
+    useGame.persist.rehydrate();
+  }, []);
+
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center gap-8 px-6 text-center">
+    <main className="relative flex min-h-screen flex-col items-center justify-center gap-7 px-6 text-center">
       {/* Plancton dérivant */}
       {PLANKTON.map((p, i) => (
         <span
@@ -29,15 +44,20 @@ export default function Home() {
         />
       ))}
 
-      <h1
-        className="text-5xl font-bold tracking-[0.35em] text-cell-cyan sm:text-7xl"
-        style={{ textShadow: "0 0 24px rgba(109,246,255,0.5)" }}
-      >
-        EVOLVE
-      </h1>
-      <p className="text-sm uppercase tracking-[0.5em] text-cell-teal/80">
-        Âge 1 — Cellule
-      </p>
+      <div>
+        <h1
+          className="text-5xl font-bold tracking-[0.35em] text-cell-cyan sm:text-7xl"
+          style={{
+            textShadow:
+              "0 0 24px rgba(109,246,255,0.55), 0 0 80px rgba(109,246,255,0.25)",
+          }}
+        >
+          EVOLVE
+        </h1>
+        <p className="mt-3 text-sm uppercase tracking-[0.5em] text-cell-teal/80">
+          Âge 1 — Cellule
+        </p>
+      </div>
 
       <img
         src="/assets/buildings/noyau/niveau3.png"
@@ -53,12 +73,39 @@ export default function Home() {
         cellule au divin.
       </p>
 
-      <PixelButton href="/play" className="px-10 py-3 text-sm">
-        COMMENCER
-      </PixelButton>
+      {!hasHydrated ? (
+        <div className="h-[76px]" aria-hidden /* réserve l'espace des boutons */ />
+      ) : profile ? (
+        <div className="flex flex-col items-center gap-2">
+          <PixelButton href="/play" className="px-10 py-3 text-sm">
+            CONTINUER
+          </PixelButton>
+          <span className="flex items-center gap-2 text-xs text-cell-teal/80">
+            <img
+              src={portraitSrc(profile.portraitId)}
+              alt=""
+              width={22}
+              height={22}
+              className="pixelated rounded border border-cell-cyan/40"
+              draggable={false}
+            />
+            {profile.nomOrganisme}
+            {" — ta cellule t'attend"}
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          <PixelButton href="/play" className="px-10 py-3 text-sm">
+            COMMENCER
+          </PixelButton>
+          <span className="text-[11px] text-cell-teal/50">
+            Première vie : tu choisiras ton organisme.
+          </span>
+        </div>
+      )}
 
       <span className="rounded-full border border-cell-cyan/30 px-4 py-1 text-xs tracking-widest text-cell-cyan/60">
-        Phase 2 — moteur de jeu · jouable
+        Sauvegarde locale sur cet appareil · sync cloud à venir
       </span>
     </main>
   );

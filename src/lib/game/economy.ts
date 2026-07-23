@@ -221,7 +221,8 @@ export function resourceName(res: ResourceId): string {
 
 export function freshGameState(now: number): GameState {
   return {
-    saveVersion: 1,
+    saveVersion: 2,
+    tutorialStep: 0, // nouveau joueur : micro-tutoriel actif après création du profil
     resources: startingResources(),
     buildings: startingBuildings(),
     buildQueue: null,

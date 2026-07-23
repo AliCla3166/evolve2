@@ -25,10 +25,10 @@ import {
   STREAK_MILESTONES,
 } from "./habits";
 import { applyTick } from "./tick";
-import type { BuildingId, GameState, HabitDayEntry } from "./types";
+import { TUTORIAL_DONE, type BuildingId, type GameState, type HabitDayEntry } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
 export type HabitPatch = Partial<
@@ -49,6 +49,8 @@ interface GameActions {
   updateHabitToday: (patch: HabitPatch) => void;
   setCalorieGoal: (goal: number) => void;
   createProfile: (portraitId: string, nomOrganisme: string) => void;
+  /** Avance le micro-tutoriel (monotone : jamais de retour en arrière). */
+  advanceTutorial: (step: number) => void;
 }
 
 export type GameStore = GameState & GameActions;
@@ -57,6 +59,7 @@ export type GameStore = GameState & GameActions;
 function gameSlice(s: GameStore): GameState {
   return {
     saveVersion: s.saveVersion,
+    tutorialStep: s.tutorialStep,
     resources: s.resources,
     buildings: s.buildings,
     buildQueue: s.buildQueue,
@@ -195,6 +198,11 @@ export const useGame = create<GameStore>()(
         if (!portraitId || !name) return;
         set({ profile: { portraitId, nomOrganisme: name, createdAt: Date.now() } });
       },
+
+      advanceTutorial: (step) => {
+        const clamped = Math.min(TUTORIAL_DONE, Math.max(0, Math.round(step)));
+        if (clamped > get().tutorialStep) set({ tutorialStep: clamped });
+      },
     }),
     {
       name: SAVE_KEY,
@@ -202,8 +210,16 @@ export const useGame = create<GameStore>()(
       storage: createJSONStorage(() => localStorage),
       // Next.js App Router : on réhydrate manuellement côté client (useGame.persist.rehydrate()).
       skipHydration: true,
-      // Migration no-op v1 (les futures versions transformeront la sauvegarde ici).
-      migrate: (persisted) => persisted as GameState,
+      // v1 -> v2 : les sauvegardes d'avant la Phase 4 n'ont pas de tutorialStep —
+      // leurs joueurs connaissent déjà le jeu, le tutoriel est marqué terminé.
+      migrate: (persisted, version) => {
+        const state = persisted as GameState;
+        if (version < 2 || state.tutorialStep === undefined) {
+          state.tutorialStep = TUTORIAL_DONE;
+          state.saveVersion = 2;
+        }
+        return state;
+      },
       partialize: gameSlice,
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);

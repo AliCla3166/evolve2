@@ -47,3 +47,14 @@
 - Vérification Playwright (Chromium préinstallé, sauvegardes seedées en localStorage) : stade 1 nu + chantier membrane, stade 3 dense avec badges/verrous, panneau ADN, débit des coûts, mue réelle 3→4 à la FIN du chantier du 8e organe (screenshots mobile 390px + desktop 1280px). Build + eslint verts.
 - Reste connu : mue seulement à la hausse (pas de régression de stade possible en v2.0), assets PixelLab placeholders de la Phase 1 toujours à régénérer (crédits), Firebase toujours non branché (prévu avec l'écran de connexion).
 - Point de reprise suivant — Phase 4 : perso & onboarding (écran titre soigné, création de perso avec les 20 portraits, tutoriel 3 étapes, connexion Google/sync Firebase).
+
+## 2026-07-23 — Lisibilité de la scène + Phase 4 : perso & onboarding
+- **Lisibilité** (retour d'Ali : "pas lisible") : socles sombres circulaires sous chaque bâtiment avec liseré à la couleur d'accent, noms courts sous chacun des 12 bâtiments (pills opaques, `label` ajouté aux SOCKETS), voile intérieur qui repousse l'enveloppe en arrière-plan, badges de niveau agrandis et maintenus À L'INTÉRIEUR de leur socle (zéro collision), labels/badges dessinés en 2e passe au-dessus de tous les sprites, arc gauche aéré (Protéines/Biomasse écartés), tailles de texte du panneau bâtiment et des barres remontées d'un cran. Vérifié par screenshots : plus aucun chevauchement.
+- **Phase 4** :
+  - Écran titre refait en client : lit la sauvegarde locale — COMMENCER (nouveau) ou CONTINUER avec aperçu portrait+nom ; mention honnête "Sauvegarde locale sur cet appareil · sync cloud à venir".
+  - Création de personnage soignée : aperçu en grand dans un CardFrame avec le nom d'espèce des 20 créatures (fiction de la charte), bouton 🎲 de suggestion de nom (pool tournant, déterministe).
+  - Micro-tutoriel 3 étapes (`TutorialCoach`) : 1) valider une habitude → 2) lancer une construction → 3) comprendre le timer (bouton COMPRIS). Auto-avance en OBSERVANT l'état du jeu (l'état est la validation), `tutorialStep` persisté, monotone.
+  - Sauvegarde : SAVE_VERSION 2 (clé localStorage inchangée) — migration v1→v2 : les sauvegardes existantes reçoivent tutorialStep=TERMINÉ (leurs joueurs connaissent le jeu). `freshGameState` démarre à 0.
+- Vérification Playwright complète : titre neuf/continuer, création (portrait+dé), tutoriel étapes 1→2 (auto-avance après habitude validée) et 3 (chantier + COMPRIS), scène lisible, panneau. Build + eslint verts.
+- **Hors périmètre de cette passe** : branchement Firebase réel (auth Google + Firestore). Décision inchangée (réutiliser le projet v1 `evolve-game-ebc60`, config via `NEXT_PUBLIC_FIREBASE_*` sur Vercel — variables à créer avec Ali). L'écran titre affiche le statut local en attendant.
+- Point de reprise suivant — au choix : **Phase 5** (couche militaire : recrutement au Noyau, expéditions, pathogènes, événements) ou **branchement Firebase** (nécessite Ali pour les variables Vercel + config du projet v1).

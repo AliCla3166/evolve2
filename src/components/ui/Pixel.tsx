@@ -112,7 +112,7 @@ export function ResourceBar({
         draggable={false}
       />
       {label && (
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] tracking-wider text-white/90">
+        <span className="absolute inset-0 flex items-center justify-center text-[11px] tracking-wider text-white/90">
           {label}
         </span>
       )}
