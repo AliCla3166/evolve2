@@ -1,0 +1,167 @@
+/* Composants UI pixel art de base — Âge 1 Cellule.
+   Tous consomment les assets de public/assets/ui/ (kit PixelLab). */
+/* eslint-disable @next/next/no-img-element */
+import type { CSSProperties, ReactNode } from "react";
+
+const UI = "/assets/ui";
+
+/** Panneau membrane 9-slice (variant standard, noyau, tooltip). */
+export function Panel({
+  variant = "membrane",
+  children,
+  className = "",
+  style,
+}: {
+  variant?: "membrane" | "noyau" | "tooltip";
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const slice = variant === "tooltip" ? 20 : 30;
+  return (
+    <div
+      className={`pixelated ${className}`}
+      style={{
+        borderStyle: "solid",
+        borderWidth: slice / 2,
+        borderImage: `url(${UI}/age01_cell_ui_panel_${variant}_v001.png) ${slice} fill round`,
+        imageRendering: "pixelated",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Bouton organique 4 états (normal / hover / pressed / disabled). */
+export function PixelButton({
+  children,
+  onClick,
+  disabled = false,
+  className = "",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`pixel-btn pixelated relative select-none px-6 py-2 text-xs tracking-widest text-cell-cyan ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Barre de ressource : cadre organique + remplissage CSS. */
+export function ResourceBar({
+  value,
+  max,
+  color = "var(--cyan)",
+  large = false,
+  label,
+}: {
+  value: number;
+  max: number;
+  color?: string;
+  large?: boolean;
+  label?: string;
+}) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const frame = large ? "bar_frame_large" : "bar_frame";
+  const h = large ? 24 : 16;
+  return (
+    <div className="relative inline-block" style={{ width: large ? 256 : 192, height: h * 2 }}>
+      <div
+        className="absolute rounded-full"
+        style={{
+          left: "6%",
+          right: "6%",
+          top: "28%",
+          bottom: "28%",
+          background: `linear-gradient(90deg, ${color}, ${color}cc ${pct}%, transparent ${pct}%)`,
+          boxShadow: `0 0 8px ${color}55 inset`,
+        }}
+      />
+      <img
+        src={`${UI}/age01_cell_ui_${frame}_v001.png`}
+        alt=""
+        className="pixelated absolute inset-0 h-full w-full"
+        draggable={false}
+      />
+      {label && (
+        <span className="absolute inset-0 flex items-center justify-center text-[10px] tracking-wider text-white/90">
+          {label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export type Rarity =
+  | "commune"
+  | "peucommune"
+  | "rare"
+  | "epique"
+  | "legendaire"
+  | "mythique";
+
+export const RARITY_LABEL: Record<Rarity, string> = {
+  commune: "Commune",
+  peucommune: "Peu commune",
+  rare: "Rare",
+  epique: "Épique",
+  legendaire: "Légendaire",
+  mythique: "Mythique",
+};
+
+/** Cadre de carte d'unité (6 raretés) avec contenu (ex. portrait). */
+export function CardFrame({
+  rarity,
+  children,
+  scale = 1,
+}: {
+  rarity: Rarity;
+  children?: ReactNode;
+  scale?: number;
+}) {
+  return (
+    <div className="relative" style={{ width: 96 * scale, height: 128 * scale }}>
+      <div className="absolute flex items-center justify-center" style={{ inset: 10 * scale }}>
+        {children}
+      </div>
+      <img
+        src={`${UI}/age01_cell_ui_card_${rarity}_v001.png`}
+        alt={RARITY_LABEL[rarity]}
+        className="pixelated pointer-events-none absolute inset-0 h-full w-full"
+        draggable={false}
+      />
+    </div>
+  );
+}
+
+/** Icône de navigation du HUD. */
+export function NavIcon({
+  id,
+  size = 32,
+  active = false,
+}: {
+  id: "base" | "habits" | "mare" | "units" | "mutation" | "reports" | "settings";
+  size?: number;
+  active?: boolean;
+}) {
+  return (
+    <img
+      src={`${UI}/age01_cell_ui_icon_${id}_v001.png`}
+      alt={id}
+      width={size}
+      height={size}
+      className={`pixelated ${active ? "drop-shadow-[0_0_6px_rgba(109,246,255,0.9)]" : "opacity-80"}`}
+      draggable={false}
+    />
+  );
+}

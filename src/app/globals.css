@@ -45,3 +45,24 @@ body {
   100% { transform: translateY(-105vh) translateX(4vw); opacity: 0; }
 }
 .plankton { animation: drift linear infinite; }
+
+/* Bouton pixel art 4 états */
+.pixel-btn {
+  border: none;
+  background: url("/assets/ui/age01_cell_ui_btn_normal_v001.png") center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  min-width: 128px;
+  min-height: 40px;
+}
+.pixel-btn:hover:not(:disabled) {
+  background-image: url("/assets/ui/age01_cell_ui_btn_hover_v001.png");
+}
+.pixel-btn:active:not(:disabled) {
+  background-image: url("/assets/ui/age01_cell_ui_btn_pressed_v001.png");
+  transform: translateY(1px);
+}
+.pixel-btn:disabled {
+  background-image: url("/assets/ui/age01_cell_ui_btn_disabled_v001.png");
+  color: #6a8a96;
+  cursor: not-allowed;
+}
