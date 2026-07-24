@@ -85,7 +85,8 @@ function advanceCapture(c: Capture, hit: boolean): Capture {
     round: c.round + 1,
     hits: c.hits + (hit ? 1 : 0),
     zoneCenter: 0.2 + Math.random() * 0.6,
-    zoneSize: c.zoneSize * MARE.tension.zone_shrink_per_round,
+    // Plancher d'équité : jamais sous zone_min, même Mythique au dernier tap.
+    zoneSize: Math.max(MARE.tension.zone_min, c.zoneSize * MARE.tension.zone_shrink_per_round),
     startedAt: performance.now(),
     last: hit ? "hit" : "miss",
   };
@@ -94,6 +95,42 @@ function advanceCapture(c: Capture, hit: boolean): Capture {
 function tapIsHit(c: Capture): boolean {
   const pos = cursorPos(c, performance.now());
   return Math.abs(pos - c.zoneCenter) <= c.zoneSize / 2;
+}
+
+/** Barre de tension isolée : son rAF ne re-rend que la barre (60 fps),
+ *  jamais le panneau entier — important pour la batterie mobile. */
+function TensionBar({ capture }: { capture: Capture }) {
+  const [cursor, setCursor] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      setCursor(cursorPos(capture, performance.now()));
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [capture]);
+
+  return (
+    <span className="relative block h-6 w-full max-w-[300px] overflow-hidden rounded-full border border-cell-cyan/50 bg-abyss/90">
+      <span
+        data-testid="tension-zone"
+        className="absolute top-0 h-full"
+        style={{
+          left: `${(capture.zoneCenter - capture.zoneSize / 2) * 100}%`,
+          width: `${capture.zoneSize * 100}%`,
+          background: "rgba(166, 255, 61, 0.45)",
+          borderLeft: "1px solid #a6ff3d",
+          borderRight: "1px solid #a6ff3d",
+        }}
+      />
+      <span
+        data-testid="tension-cursor"
+        className="absolute top-0 h-full w-[3px] bg-white"
+        style={{ left: `calc(${cursor * 100}% - 1px)`, boxShadow: "0 0 8px #6df6ff" }}
+      />
+    </span>
+  );
 }
 
 export function MarePanel({ onClose }: { onClose: () => void }) {
@@ -112,7 +149,6 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   const [sparkles, setSparkles] = useState<Sparkle[]>([]);
   const [capture, setCapture] = useState<Capture | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [cursor, setCursor] = useState(0); // affichage seulement (rAF)
   const nextKey = useRef(1);
   const captureRef = useRef<Capture | null>(null);
   useEffect(() => {
@@ -143,18 +179,6 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
     }, 1400);
     return () => clearInterval(id);
   }, [tab]);
-
-  // Curseur de tension : rAF d'affichage (la précision du tap vient de cursorPos).
-  useEffect(() => {
-    if (!capture) return;
-    let raf = 0;
-    const loop = () => {
-      raf = requestAnimationFrame(loop);
-      setCursor(cursorPos(capture, performance.now()));
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [capture]);
 
   const startCapture = (sp: Sparkle) => {
     if (capture) return;
@@ -289,25 +313,8 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                   <span className="text-xs uppercase tracking-[0.3em]" style={{ color: rarityConfig(capture.rarity).color }}>
                     {rarityConfig(capture.rarity).name} — prise {capture.round + 1}/{MARE.tension.rounds}
                   </span>
-                  {/* Barre de tension */}
-                  <span className="relative block h-6 w-full max-w-[300px] overflow-hidden rounded-full border border-cell-cyan/50 bg-abyss/90">
-                    <span
-                      data-testid="tension-zone"
-                      className="absolute top-0 h-full"
-                      style={{
-                        left: `${(capture.zoneCenter - capture.zoneSize / 2) * 100}%`,
-                        width: `${capture.zoneSize * 100}%`,
-                        background: "rgba(166, 255, 61, 0.45)",
-                        borderLeft: "1px solid #a6ff3d",
-                        borderRight: "1px solid #a6ff3d",
-                      }}
-                    />
-                    <span
-                      data-testid="tension-cursor"
-                      className="absolute top-0 h-full w-[3px] bg-white"
-                      style={{ left: `calc(${cursor * 100}% - 1px)`, boxShadow: "0 0 8px #6df6ff" }}
-                    />
-                  </span>
+                  {/* Barre de tension (composant isolé : rAF local) */}
+                  <TensionBar capture={capture} />
                   <span className="text-[11px] text-cell-cyan">
                     TAPE quand le curseur est dans la zone verte !
                   </span>

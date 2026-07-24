@@ -387,17 +387,16 @@ export const useGame = create<GameStore>()(
       toggleCardAssign: (speciesId, slot) => {
         const state = get();
         if (!state.collection[speciesId] || !SPECIES_IDS.includes(speciesId)) return false;
-        const other: "defense" | "expedition" = slot === "defense" ? "expedition" : "defense";
         const inSlot = state.cardAssignments[slot].includes(speciesId);
+        // On retire la carte des deux listes, puis on la replace si c'était un ajout.
         const next = {
           defense: state.cardAssignments.defense.filter((id) => id !== speciesId),
           expedition: state.cardAssignments.expedition.filter((id) => id !== speciesId),
         };
         if (!inSlot) {
           if (next[slot].length >= MARE.assign_slots[slot]) return false; // slot plein
-          next[slot] = [...next[slot], speciesId]; // (retirée de l'autre slot au passage)
+          next[slot] = [...next[slot], speciesId];
         }
-        void other;
         set({ cardAssignments: next });
         return true;
       },

@@ -15,9 +15,10 @@
     { "id": "mythique", "name": "Mythique", "weight": 1, "zone": 0.075, "speed": 2.55, "color": "#ff8bd0", "power_mult": 4.5 }
   ],
   "tension": {
-    "$comment": "3 taps de timing (curseur oscillant) ; la zone verte vient de la rareté ; quality = nombre de réussites. 0 réussite = la prise s'échappe (le jeton est consommé au ferrage, comme en v1).",
+    "$comment": "3 taps de timing (curseur oscillant) ; la zone verte vient de la rareté ; quality = nombre de réussites. 0 réussite = la prise s'échappe (le jeton est consommé au ferrage, comme en v1). zone_min : plancher d'équité — sans lui, une Mythique au 3e tap descendait à ~5 % de barre (fenêtre ~15 ms), imprenable sur mobile.",
     "rounds": 3,
     "zone_shrink_per_round": 0.82,
+    "zone_min": 0.06,
     "base_period_ms": 1500,
     "quality_luck": [0, 0.06, 0.14, 0.24]
   },

@@ -40,6 +40,8 @@ export interface MareConfig {
   tension: {
     rounds: number;
     zone_shrink_per_round: number;
+    /** Plancher de taille de zone (équité mobile, cf. $comment du JSON). */
+    zone_min: number;
     base_period_ms: number;
     /** Bonus de chance de rareté par quality (0..rounds). */
     quality_luck: number[];
