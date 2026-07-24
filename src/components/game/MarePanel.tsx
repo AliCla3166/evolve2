@@ -142,9 +142,11 @@ function qualityTier(overlapRatio: number): number {
 }
 
 /** Composant isolé : son rAF ne re-rend que lui-même (60 fps), jamais le
- *  panneau entier — important pour la batterie mobile. Possède aussi la
- *  zone tactile (maintenir = monter), capturée au pointeur pour ne jamais
- *  perdre l'appui même si le doigt glisse hors de la zone. */
+ *  panneau entier — important pour la batterie mobile. Il occupe TOUT le
+ *  bassin (`absolute inset-0`) et c'est cette surface entière qui sert de
+ *  zone de maintien : inutile de viser les barres au pixel près, un appui
+ *  n'importe où dans le bassin fait monter la canne. L'appui est capturé au
+ *  pointeur pour ne jamais être perdu même si le doigt glisse. */
 function FishingBar({
   rarity,
   onDone,
@@ -190,7 +192,7 @@ function FishingBar({
   return (
     <div
       data-testid="fish-hold-area"
-      className="relative flex touch-none select-none items-center justify-center gap-4"
+      className="absolute inset-0 flex touch-none cursor-pointer select-none flex-col items-center justify-center gap-3 bg-abyss/70 px-6"
       onPointerDown={(e) => {
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -198,7 +200,13 @@ function FishingBar({
       }}
       onPointerUp={() => setHolding(false)}
       onPointerCancel={() => setHolding(false)}
+      onLostPointerCapture={() => setHolding(false)}
     >
+      <span className="text-xs uppercase tracking-[0.3em]" style={{ color: rc.color }}>
+        {rc.name}
+      </span>
+
+      <div className="flex items-center justify-center gap-4">
       {/* Piste principale : poisson + barre du joueur */}
       <div
         data-testid="fish-track"
@@ -237,6 +245,12 @@ function FishingBar({
           }}
         />
       </div>
+      </div>
+
+      <span className="max-w-[240px] text-center text-[11px] text-cell-cyan">
+        MAINTIENS n&apos;importe où dans le bassin pour faire monter la canne, relâche pour
+        la laisser retomber — garde-la sur le poisson !
+      </span>
     </div>
   );
 }
@@ -318,11 +332,21 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   const defBonus = cardsDefenseBonus({ collection, cardAssignments: assignments });
   const expBonus = cardsExpeditionExpBonus({ collection, cardAssignments: assignments });
 
+  // Pendant le mini-jeu : le panneau passe au-dessus de la barre de navigation
+  // (z-40) et tout ce qui n'est pas le bassin devient inerte — un appui égaré
+  // ne peut plus changer d'onglet, acheter un jeton ou fermer La Mare.
+  const capturing = captureRarity !== null;
+  const inertWhileFishing = capturing ? "pointer-events-none opacity-40" : "";
+
   return (
-    <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
+    <div
+      className={`fixed inset-0 overflow-y-auto overscroll-contain bg-abyss/95 backdrop-blur-sm ${
+        capturing ? "z-50" : "z-30"
+      }`}
+    >
       <div className="mx-auto max-w-md space-y-3 px-2 pb-24 pt-3 sm:max-w-lg">
         {/* En-tête */}
-        <div className="flex items-center gap-3">
+        <div className={`flex items-center gap-3 ${inertWhileFishing}`}>
           <div className="flex-1">
             <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">La Mare</h1>
             <p className="text-[11px] text-cell-teal/60">
@@ -335,7 +359,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Jetons + fragments */}
-        <Panel variant="tooltip" className="px-3 py-2" style={{ background: "rgba(5, 11, 20, 0.85)" }}>
+        <Panel variant="tooltip" className={`px-3 py-2 ${inertWhileFishing}`} style={{ background: "rgba(5, 11, 20, 0.85)" }}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-cell-cyan">🎣 {jetons} jeton{jetons > 1 ? "s" : ""}</span>
             <PixelButton
@@ -359,7 +383,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
         </Panel>
 
         {/* Onglets */}
-        <div className="flex gap-2">
+        <div className={`flex gap-2 ${inertWhileFishing}`}>
           {(["peche", "collection"] as const).map((t) => (
             <button
               key={t}
@@ -414,18 +438,9 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 </>
               )}
 
-              {captureRarity !== null && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-abyss/70 px-6">
-                  <span className="text-xs uppercase tracking-[0.3em]" style={{ color: rarityConfig(captureRarity).color }}>
-                    {rarityConfig(captureRarity).name}
-                  </span>
-                  {/* Mini-jeu isolé : rAF local, ne re-rend jamais le panneau entier */}
-                  <FishingBar rarity={captureRarity} onDone={handleFishDone} />
-                  <span className="max-w-[220px] text-center text-[11px] text-cell-cyan">
-                    MAINTIENS pour faire monter la canne, relâche pour la laisser retomber — garde-la sur le poisson !
-                  </span>
-                </div>
-              )}
+              {/* Mini-jeu isolé : rAF local, ne re-rend jamais le panneau entier.
+                  Il couvre tout le bassin → toute la surface est zone de maintien. */}
+              {captureRarity !== null && <FishingBar rarity={captureRarity} onDone={handleFishDone} />}
             </div>
             {notice && (
               <p className="text-center text-[11px] text-cell-magenta">{notice}</p>

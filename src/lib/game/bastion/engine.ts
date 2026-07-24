@@ -57,16 +57,32 @@ export interface LiveWavePlan {
   isBoss: boolean;
 }
 
+/** PRNG local (mulberry32) semé par le NUMÉRO de vague : la COMPOSITION d'une vague est
+ *  donc stable — la vague 7 contient toujours les mêmes espèces, quel que soit le moment
+ *  où on la génère. C'est ce qui rend l'aperçu de la Vigie (previewWave) exact et non pas
+ *  seulement indicatif. Le déroulé du combat, lui, reste non déterministe (Math.random
+ *  dans stepBattle) : seul le contenu annoncé est garanti. */
+function waveRng(waveN: number): () => number {
+  let s = (waveN * 0x9e3779b1) ^ 0x5bf03635;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), s | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export function genLiveWave(waveN: number): LiveWavePlan {
   const w = BASTION.wave;
   const p = BASTION.pathogens;
+  const rng = waveRng(waveN);
   const isBoss = waveN % p.boss_every === 0;
   const pool = p.roster.filter((e) => e.unlock <= waveN);
   const numTypes = Math.max(w.num_types_base, Math.min(w.num_types_max, w.num_types_base + Math.floor(waveN / w.num_types_per_waves)));
   const chosen: PathogenDef[] = [];
   const copy = pool.slice();
   for (let i = 0; i < numTypes && copy.length; i++) {
-    const idx = Math.floor(Math.random() * copy.length);
+    const idx = Math.floor(rng() * copy.length);
     chosen.push(copy.splice(idx, 1)[0]);
   }
   if (chosen.length === 0 && pool.length) chosen.push(pool[0]);
@@ -83,6 +99,60 @@ export function genLiveWave(waveN: number): LiveWavePlan {
   }
   spawnQueue.sort((a, b) => a.t - b.t);
   return { spawnQueue, hpMult, dmgMult, isBoss };
+}
+
+/* ---------- Aperçu de vague (Vigie) ---------- */
+
+export interface WavePreview {
+  waveN: number;
+  isBoss: boolean;
+  total: number;
+  hpMult: number;
+  dmgMult: number;
+  /** Effectif par espèce, du plus nombreux au moins nombreux (boss exclu). */
+  types: { id: EnemyId; name: string; count: number; hp: number; dmg: number; ranged: boolean }[];
+  boss: { id: EnemyId; name: string; hp: number; dmg: number } | null;
+}
+
+/** Contenu EXACT de la vague `waveN` — dérivé de genLiveWave lui-même (jamais réécrit
+ *  en parallèle) pour que l'aperçu ne puisse pas diverger du combat réellement joué. */
+export function previewWave(waveN: number): WavePreview {
+  const plan = genLiveWave(waveN);
+  const counts = new Map<EnemyId, number>();
+  for (const s of plan.spawnQueue) {
+    if (s.isBoss) continue;
+    counts.set(s.typeId, (counts.get(s.typeId) ?? 0) + 1);
+  }
+  const types = [...counts.entries()]
+    .map(([id, count]) => {
+      const def = pathogenDef(id, false);
+      return {
+        id,
+        name: def.name,
+        count,
+        hp: Math.round(def.hp * plan.hpMult),
+        dmg: Math.round(def.dmg * plan.dmgMult),
+        ranged: !!def.ranged,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+  const bossDef = BASTION.pathogens.boss;
+  return {
+    waveN,
+    isBoss: plan.isBoss,
+    total: plan.spawnQueue.length,
+    hpMult: plan.hpMult,
+    dmgMult: plan.dmgMult,
+    types,
+    boss: plan.isBoss
+      ? {
+          id: bossDef.id,
+          name: bossDef.name,
+          hp: Math.round(bossDef.hp * plan.hpMult),
+          dmg: Math.round(bossDef.dmg * plan.dmgMult),
+        }
+      : null,
+  };
 }
 
 function pathogenDef(typeId: EnemyId, isBoss: boolean): PathogenDef {

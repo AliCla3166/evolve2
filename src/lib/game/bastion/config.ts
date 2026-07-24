@@ -97,7 +97,9 @@ interface BastionConfig {
     num_types_per_waves: number;
     combat_reward_base: number;
     combat_reward_per_wave: number;
+    lead_window_h: number;
   };
+  scouting: { max_level: number; cost_base: number; cost_growth: number };
 }
 
 export const BASTION = rawConfig as unknown as BastionConfig;
@@ -167,6 +169,7 @@ export function freshBastionState(): BastionState {
     maxTreeLevel: BASTION.tree_cap.base_level,
     slotBonusLevel: 0,
     inWaveRespawnUnlocked: false,
+    scoutLevel: 0,
     liveWaveCount: 0,
     liveBattleActive: false,
     liveBattleStartedAt: 0,
@@ -305,6 +308,12 @@ export function foundationsCost(currentLevel: number): number {
   const c = BASTION.foundations;
   return geometric(c.cost_base, c.cost_growth, currentLevel);
 }
+export function scoutCost(currentLevel: number): number {
+  const c = BASTION.scouting;
+  return geometric(c.cost_base, c.cost_growth, currentLevel);
+}
+/** Fenêtre d'avance : jusqu'à quand une vague planifiée peut être jouée manuellement. */
+export const WAVE_LEAD_WINDOW_MS = BASTION.wave.lead_window_h * 3_600_000;
 export function recruitBuildingCost(ownedCount: number): number {
   const c = BASTION.recruit_building_cost;
   return geometric(c.base, c.growth, ownedCount);

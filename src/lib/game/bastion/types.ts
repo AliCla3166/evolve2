@@ -87,6 +87,9 @@ export interface BastionState {
   /** "Fondations renforcées" — bonus passif global dégâts/PV, jusqu'à 3 niveaux. */
   slotBonusLevel: number;
   inWaveRespawnUnlocked: boolean;
+  /** "Vigie" — niveau de dévoilement de la vague suivante (0 = aveugle, cf.
+   *  bastion_config.json.scouting et engine.previewWave). */
+  scoutLevel: number;
   /** Nombre de vagues jouées EN DIRECT (indépendant de waveCount du militaire, qui compte
    *  aussi les vagues auto-résolues hors-ligne). Sert à calibrer la difficulté affichée. */
   liveWaveCount: number;

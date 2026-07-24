@@ -17,6 +17,7 @@ import {
   recruitBuildingCost,
   reserveCapCost,
   rollBuildingDef,
+  scoutCost,
   specCapCost,
   turretSlotUnlockCost,
 } from "./config";
@@ -288,6 +289,15 @@ export function buyFoundations(state: GameState): boolean {
   if (b.slotBonusLevel >= BASTION.foundations.max_level) return false;
   if (!spend(state, foundationsCost(b.slotBonusLevel))) return false;
   b.slotBonusLevel += 1;
+  return true;
+}
+
+/** "Vigie" — chaque niveau dévoile un cran de plus du contenu de la vague suivante. */
+export function buyScouting(state: GameState): boolean {
+  const b = state.bastion;
+  if (b.scoutLevel >= BASTION.scouting.max_level) return false;
+  if (!spend(state, scoutCost(b.scoutLevel))) return false;
+  b.scoutLevel += 1;
   return true;
 }
 

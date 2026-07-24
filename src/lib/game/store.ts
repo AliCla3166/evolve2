@@ -17,6 +17,7 @@ import { freshBastionState } from "./bastion/config";
 import {
   buyFoundations,
   buyInWaveRespawn,
+  buyScouting,
   buyReserveCap,
   buySlotUnlock,
   buySpecCap,
@@ -77,7 +78,7 @@ import {
 } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
@@ -180,6 +181,8 @@ interface GameActions {
   buyBastionSpecCap: () => boolean;
   buyBastionFoundations: () => boolean;
   buyBastionInWaveRespawn: () => boolean;
+  /** Monte la "Vigie" d'un niveau (aperçu de la vague suivante). */
+  buyBastionScouting: () => boolean;
   /** Choisit la branche a/b au palier suivant de l'arborescence d'une barracks. */
   chooseBastionTreeOption: (slotId: string, choice: "a" | "b") => boolean;
   /** À appeler QUAND le combat en direct démarre (avant BastionScene.startBattle) : pose
@@ -703,6 +706,13 @@ export const useGame = create<GameStore>()(
         return true;
       },
 
+      buyBastionScouting: () => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!buyScouting(s)) return false;
+        set(s);
+        return true;
+      },
+
       chooseBastionTreeOption: (slotId, choice) => {
         const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
         if (!chooseTreeOption(s, slotId, choice)) return false;
@@ -806,6 +816,10 @@ export const useGame = create<GameStore>()(
         if (version < 6 || state.bastion.liveBattleActive === undefined) {
           state.bastion.liveBattleActive = false;
           state.bastion.liveBattleStartedAt = 0;
+        }
+        // v6 -> v7 : "Vigie" (aperçu de la vague suivante, achetable en Boutique).
+        if (version < 7 || state.bastion.scoutLevel === undefined) {
+          state.bastion.scoutLevel = 0;
         }
         state.saveVersion = SAVE_VERSION;
         return state;

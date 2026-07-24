@@ -5,7 +5,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CardFrame, Panel, PixelButton, RARITY_LABEL, type Rarity } from "@/components/ui/Pixel";
 import {
   cardArt,
@@ -28,9 +28,12 @@ import {
   mortarSlotUnlockCost,
   recruitBuildingCost,
   reserveCapCost,
+  scoutCost,
   specCapCost,
   turretSlotUnlockCost,
+  WAVE_LEAD_WINDOW_MS,
 } from "@/lib/game/bastion/config";
+import { previewWave } from "@/lib/game/bastion/engine";
 import type { BastionSceneHandle } from "./BastionScene";
 import { BastionScene } from "./BastionScene";
 import type { BastionSlotTarget, LiveWaveResult } from "@/lib/game/bastion/types";
@@ -39,7 +42,71 @@ import { fmtDuration, fmtInt } from "@/lib/game/format";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
 
-const IMMINENT_WINDOW_MS = 12 * 3_600_000; // même fenêtre que WaveWarning (/play)
+/** Ce que chaque niveau de Vigie dévoile (index = bastion.scoutLevel). */
+const SCOUT_LEVEL_LABEL: string[] = [
+  "aucun renseignement",
+  "effectif total + présence d'un boss",
+  "+ espèces présentes",
+  "+ effectif et stats par espèce",
+];
+
+/** Aperçu de la vague suivante — exact (genLiveWave est déterministe par numéro de vague),
+ *  mais dévoilé par paliers selon le niveau de Vigie acheté en Boutique. */
+function WavePreview({ waveN, level }: { waveN: number; level: number }) {
+  const preview = useMemo(() => previewWave(waveN), [waveN]);
+  if (level <= 0) {
+    return (
+      <p className="text-[10px] text-cell-teal/50">
+        🔭 Aucune vigie : tu défendras à l&apos;aveugle. (Boutique → Améliorations → Vigie)
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-1 rounded-lg border border-cell-teal/20 bg-black/30 p-2">
+      <div className="flex items-center justify-between text-[10px] text-cell-cyan">
+        <span>🔭 Vigie — vague {preview.waveN}</span>
+        <span className="text-cell-teal/60">
+          {preview.total} ennemi{preview.total > 1 ? "s" : ""}
+          {preview.isBoss ? " · 👑 BOSS" : ""}
+        </span>
+      </div>
+      {level >= 2 && (
+        <div className="flex flex-wrap gap-1">
+          {preview.types.map((t) => (
+            <span
+              key={t.id}
+              className="rounded border border-cell-teal/30 px-1.5 py-0.5 text-[10px] text-cell-teal/80"
+            >
+              {t.ranged ? "🏹" : "🦠"} {t.name}
+              {level >= 3 && (
+                <span className="text-cell-teal/50">
+                  {" "}
+                  ×{t.count} · {t.hp} PV · {t.dmg} dgt
+                </span>
+              )}
+            </span>
+          ))}
+          {preview.boss && (
+            <span className="rounded border border-cell-magenta/50 px-1.5 py-0.5 text-[10px] text-cell-magenta">
+              👑 {preview.boss.name}
+              {level >= 3 && (
+                <span className="opacity-70">
+                  {" "}
+                  · {preview.boss.hp} PV · {preview.boss.dmg} dgt
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+      )}
+      {level >= 3 && (
+        <p className="text-[9px] text-cell-teal/50">
+          Multiplicateurs de vague : PV ×{preview.hpMult.toFixed(2)} · dégâts ×{preview.dmgMult.toFixed(2)}
+        </p>
+      )}
+    </div>
+  );
+}
 
 type ArmedItem =
   | { type: "creature"; speciesId: string; role: "defense" | "assaut" }
@@ -82,6 +149,7 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
   const buyBastionSpecCap = useGame((s) => s.buyBastionSpecCap);
   const buyBastionFoundations = useGame((s) => s.buyBastionFoundations);
   const buyBastionInWaveRespawn = useGame((s) => s.buyBastionInWaveRespawn);
+  const buyBastionScouting = useGame((s) => s.buyBastionScouting);
   const chooseBastionTreeOption = useGame((s) => s.chooseBastionTreeOption);
   const beginBastionBattle = useGame((s) => s.beginBastionBattle);
   const finishBastionBattle = useGame((s) => s.finishBastionBattle);
@@ -106,7 +174,7 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
   void cardAssignments;
   const reserveSpecies = availableDefenseSpecies(useGame.getState());
   const waveIn = nextAttackAt - now;
-  const canPlayLive = nextAttackAt > 0 && waveIn <= IMMINENT_WINDOW_MS && !inBattle && !banner;
+  const canPlayLive = nextAttackAt > 0 && waveIn <= WAVE_LEAD_WINDOW_MS && !inBattle && !banner;
 
   const armedRange = (() => {
     if (armed?.type !== "building") return undefined;
@@ -232,23 +300,38 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
             )}
           </Panel>
         )}
-        {!banner && !inBattle && canPlayLive && (
-          <Panel variant="tooltip" className="flex items-center justify-between gap-2 p-2" style={{ background: "rgba(30,5,20,0.85)" }}>
-            <span className="text-[11px] text-red-400">
-              🦠 Vague {waveCount + 1} dans {fmtDuration(Math.max(0, waveIn))} — puissance ≈ {fmtInt(estimatedWavePower(useGame.getState(), now))}
-            </span>
-            <PixelButton
-              className="shrink-0 text-[10px]"
-              onClick={() => {
-                cancelModes();
-                // Pose le verrou anti-double-résolution AVANT de démarrer la simulation
-                // locale — cf. store.beginBastionBattle.
-                beginBastionBattle();
-                sceneRef.current?.startBattle(waveCount + 1);
-              }}
-            >
-              ⚔️ DÉFENDRE
-            </PixelButton>
+        {/* Lancement manuel — TOUJOURS visible hors bataille : la vague planifiée peut être
+            jouée en avance (cf. WAVE_LEAD_WINDOW_MS). Le bouton n'est grisé que si la
+            prochaine vague est encore trop loin dans le calendrier. */}
+        {!banner && !inBattle && (
+          <Panel variant="tooltip" className="space-y-2 p-2" style={{ background: "rgba(30,5,20,0.85)" }}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-red-400">
+                🦠 Vague {waveCount + 1} · puissance ≈ {fmtInt(estimatedWavePower(useGame.getState(), now))}
+                {waveIn > 0 ? ` · planifiée dans ${fmtDuration(waveIn)}` : " · échue"}
+              </span>
+              <PixelButton
+                className="shrink-0 text-[10px]"
+                disabled={!canPlayLive}
+                onClick={() => {
+                  cancelModes();
+                  // Pose le verrou anti-double-résolution AVANT de démarrer la simulation
+                  // locale — cf. store.beginBastionBattle.
+                  beginBastionBattle();
+                  sceneRef.current?.startBattle(waveCount + 1);
+                }}
+              >
+                ⚔️ LANCER LA VAGUE
+              </PixelButton>
+            </div>
+            {!canPlayLive && (
+              <p className="text-[10px] text-cell-teal/60">
+                Les pathogènes ne sont pas encore en approche : une vague se joue jusqu&apos;à{" "}
+                {Math.round(WAVE_LEAD_WINDOW_MS / 3_600_000)} h à l&apos;avance. Fenêtre ouverte dans{" "}
+                {fmtDuration(Math.max(0, waveIn - WAVE_LEAD_WINDOW_MS))}.
+              </p>
+            )}
+            <WavePreview waveN={waveCount + 1} level={bastion.scoutLevel} />
           </Panel>
         )}
 
@@ -490,6 +573,21 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
               ) : (
                 <PixelButton className="text-[10px]" disabled={(resources.combat ?? 0) < foundationsCost(bastion.slotBonusLevel)} onClick={() => buyBastionFoundations() && vibrate(20)}>
                   +1 — <CombatCost amount={foundationsCost(bastion.slotBonusLevel)} have={resources.combat ?? 0} />
+                </PixelButton>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 p-2">
+              <div>
+                <div className="text-[11px] text-cell-cyan">🔭 Vigie</div>
+                <div className="text-[10px] text-cell-teal/60">
+                  Niv {bastion.scoutLevel}/{BASTION.scouting.max_level} · {SCOUT_LEVEL_LABEL[bastion.scoutLevel] ?? SCOUT_LEVEL_LABEL[0]}
+                </div>
+              </div>
+              {bastion.scoutLevel >= BASTION.scouting.max_level ? (
+                <span className="text-[10px] text-cell-magenta">MAX</span>
+              ) : (
+                <PixelButton className="text-[10px]" disabled={(resources.combat ?? 0) < scoutCost(bastion.scoutLevel)} onClick={() => buyBastionScouting() && vibrate(20)}>
+                  +1 — <CombatCost amount={scoutCost(bastion.scoutLevel)} have={resources.combat ?? 0} />
                 </PixelButton>
               )}
             </div>
