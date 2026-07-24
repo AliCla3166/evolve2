@@ -13,10 +13,14 @@ export interface RarityConfig {
   id: string;
   name: string;
   weight: number;
-  /** Taille de la zone verte de tension (fraction de barre). */
-  zone: number;
-  /** Vitesse du curseur (multiplicateur). */
-  speed: number;
+  /** Multiplicateur de hauteur de la fenêtre de capture (1 = pleine taille, plus petit = plus dur). */
+  bar_mult: number;
+  /** Vitesse d'approche du poisson vers sa cible (fraction de piste / seconde). */
+  fish_speed: number;
+  /** Fréquence moyenne de changement de cap du poisson (Hz — plus haut = plus erratique). */
+  fish_retarget_hz: number;
+  /** Multiplicateur de la vitesse de vidage de la jauge de succès hors chevauchement. */
+  drain_mult: number;
   color: string;
   power_mult: number;
 }
@@ -37,13 +41,18 @@ export interface MareConfig {
   fragments_per_card: number;
   fragment_card_rarity_floor: number;
   rarities: RarityConfig[];
-  tension: {
-    rounds: number;
-    zone_shrink_per_round: number;
-    /** Plancher de taille de zone (équité mobile, cf. $comment du JSON). */
-    zone_min: number;
-    base_period_ms: number;
-    /** Bonus de chance de rareté par quality (0..rounds). */
+  fishing: {
+    bar_height: number;
+    /** Plancher d'équité de la hauteur de fenêtre (cf. $comment du JSON). */
+    bar_height_min: number;
+    gravity: number;
+    rise_accel: number;
+    drag: number;
+    max_velocity: number;
+    fill_rate: number;
+    drain_rate: number;
+    start_progress: number;
+    /** Bonus de chance de rareté selon le palier de qualité (0..3). */
     quality_luck: number[];
   };
   level_thresholds: number[];

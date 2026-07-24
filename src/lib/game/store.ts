@@ -432,10 +432,10 @@ export const useGame = create<GameStore>()(
         const now = Date.now();
         const s = applyTick(gameSlice(get()), now);
         let rarity = Math.min(MARE.rarities.length - 1, Math.max(0, Math.round(rarityIndex)));
-        // Tension parfaite : chance d'améliorer la rareté d'un cran (quality_luck).
+        // Ferrage précis (peu de temps hors chevauchement) : chance d'améliorer la rareté d'un cran (quality_luck).
         const luck =
-          MARE.tension.quality_luck[
-            Math.min(MARE.tension.quality_luck.length - 1, Math.max(0, quality))
+          MARE.fishing.quality_luck[
+            Math.min(MARE.fishing.quality_luck.length - 1, Math.max(0, quality))
           ] ?? 0;
         let [roll, seed] = rand(s.rngSeed);
         if (roll < luck) rarity = Math.min(MARE.rarities.length - 1, rarity + 1);

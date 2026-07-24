@@ -1,5 +1,5 @@
 {
-  "$comment": "Tuning v1 de la Mare & des cartes (Phase 6) — gameplay de pêche porté du prototype v1 (RARITIES : poids 46/26/15/8/3.5/1, paillette colorée = rareté, zone de tension rétrécissant avec la rareté). Les 12 espèces réutilisent les portraits PixelLab de la charte (art officiel) ; sprites dédiés à régénérer via PixelLab quand les crédits reviendront. À recalibrer en Phase 7. Aucune valeur en dur dans le code.",
+  "$comment": "Tuning v2 de la Mare & des cartes (Phase 6, refonte pêche 24/07) — mini-jeu façon Stardew Valley : une barre canne à pêche montée par pression maintenue et qui retombe seule (gravité), à garder alignée sur un poisson qui se déplace de façon erratique (vitesse/fréquence de changement de cap dépendent de la rareté). Les 12 espèces réutilisent les portraits PixelLab de la charte (art officiel) ; sprites dédiés à régénérer via PixelLab quand les crédits reviendront. À recalibrer en Phase 7. Aucune valeur en dur dans le code.",
   "jetons": {
     "cost_energie": 30,
     "max_stock": 20
@@ -7,19 +7,24 @@
   "fragments_per_card": 8,
   "fragment_card_rarity_floor": 2,
   "rarities": [
-    { "id": "commune", "name": "Commune", "weight": 46, "zone": 0.3, "speed": 1.0, "color": "#7fd7c4", "power_mult": 1.0 },
-    { "id": "peucommune", "name": "Peu commune", "weight": 26, "zone": 0.24, "speed": 1.2, "color": "#5bd06a", "power_mult": 1.3 },
-    { "id": "rare", "name": "Rare", "weight": 15, "zone": 0.18, "speed": 1.45, "color": "#4ea8ff", "power_mult": 1.7 },
-    { "id": "epique", "name": "Épique", "weight": 8, "zone": 0.14, "speed": 1.75, "color": "#c48bff", "power_mult": 2.3 },
-    { "id": "legendaire", "name": "Légendaire", "weight": 3.5, "zone": 0.1, "speed": 2.1, "color": "#ffcf5c", "power_mult": 3.2 },
-    { "id": "mythique", "name": "Mythique", "weight": 1, "zone": 0.075, "speed": 2.55, "color": "#ff8bd0", "power_mult": 4.5 }
+    { "id": "commune", "name": "Commune", "weight": 46, "bar_mult": 1.0, "fish_speed": 0.32, "fish_retarget_hz": 0.45, "drain_mult": 0.8, "color": "#7fd7c4", "power_mult": 1.0 },
+    { "id": "peucommune", "name": "Peu commune", "weight": 26, "bar_mult": 0.88, "fish_speed": 0.46, "fish_retarget_hz": 0.65, "drain_mult": 0.9, "color": "#5bd06a", "power_mult": 1.3 },
+    { "id": "rare", "name": "Rare", "weight": 15, "bar_mult": 0.76, "fish_speed": 0.62, "fish_retarget_hz": 0.9, "drain_mult": 1.0, "color": "#4ea8ff", "power_mult": 1.7 },
+    { "id": "epique", "name": "Épique", "weight": 8, "bar_mult": 0.65, "fish_speed": 0.8, "fish_retarget_hz": 1.2, "drain_mult": 1.12, "color": "#c48bff", "power_mult": 2.3 },
+    { "id": "legendaire", "name": "Légendaire", "weight": 3.5, "bar_mult": 0.55, "fish_speed": 1.0, "fish_retarget_hz": 1.6, "drain_mult": 1.25, "color": "#ffcf5c", "power_mult": 3.2 },
+    { "id": "mythique", "name": "Mythique", "weight": 1, "bar_mult": 0.48, "fish_speed": 1.25, "fish_retarget_hz": 2.1, "drain_mult": 1.4, "color": "#ff8bd0", "power_mult": 4.5 }
   ],
-  "tension": {
-    "$comment": "3 taps de timing (curseur oscillant) ; la zone verte vient de la rareté ; quality = nombre de réussites. 0 réussite = la prise s'échappe (le jeton est consommé au ferrage, comme en v1). zone_min : plancher d'équité — sans lui, une Mythique au 3e tap descendait à ~5 % de barre (fenêtre ~15 ms), imprenable sur mobile.",
-    "rounds": 3,
-    "zone_shrink_per_round": 0.82,
-    "zone_min": 0.06,
-    "base_period_ms": 1500,
+  "fishing": {
+    "$comment": "Physique de la barre (position/vitesse en fractions 0..1 de la piste par seconde) : maintenir = accélération vers le haut (rise_accel + gravity, net positif), relâcher = seule la gravité agit (négative). drag amortit la vitesse (exp(-drag*dt), indépendant du framerate). bar_height/bar_height_min : hauteur de la fenêtre de capture, réduite par bar_mult (plancher d'équité comme l'ex zone_min). fill_rate/drain_rate : progression du succès par seconde de chevauchement/non-chevauchement (drain_rate scalé par drain_mult de la rareté). start_progress : 0.5 pour ne pas punir/favoriser le tout début. quality_luck (inchangé de la v1) : bonus de chance de rareté selon le ratio de temps passé en chevauchement, discrétisé en 4 paliers (0..3).",
+    "bar_height": 0.26,
+    "bar_height_min": 0.13,
+    "gravity": 2.4,
+    "rise_accel": 6.2,
+    "drag": 3.0,
+    "max_velocity": 2.4,
+    "fill_rate": 0.56,
+    "drain_rate": 0.34,
+    "start_progress": 0.5,
     "quality_luck": [0, 0.06, 0.14, 0.24]
   },
   "level_thresholds": [1, 2, 4, 7, 11],

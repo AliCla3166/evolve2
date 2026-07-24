@@ -44,92 +44,199 @@ function rollSparkleRarity(): number {
 
 const ROLE_LABEL = { defense: "🛡️ Défense", exploration: "🧭 Exploration", assaut: "⚔️ Assaut" } as const;
 
-/* ---------- Phase de tension ---------- */
+/* ---------- Mini-jeu de pêche (refonte 24/07, façon Stardew Valley) ----------
+   Une barre "canne" montée par pression maintenue (accélération vers le haut),
+   qui retombe seule par gravité dès qu'on relâche. Un poisson se déplace de
+   façon erratique (vitesse + fréquence de changement de cap dépendent de sa
+   rareté, cf. mare_config.json). Rester chevauché remplit une jauge de succès
+   (jauge pleine = ferré, jauge vide = échappé). La qualité du ferrage (ratio
+   de temps passé en chevauchement) peut remonter la rareté d'un cran, comme
+   l'ancienne mécanique de tension — cf. quality_luck, inchangé. */
 
-interface Capture {
-  rarity: number;
-  round: number; // 0..rounds-1
-  hits: number;
-  zoneCenter: number; // 0..1
-  zoneSize: number;
-  startedAt: number;
-  /** feedback du dernier tap ("hit" | "miss" | null) */
-  last: "hit" | "miss" | null;
-}
-
-/** Position du curseur 0..1 : onde triangulaire, précise au tap (pas de state 60 fps). */
-function cursorPos(capture: Capture, nowMs: number): number {
-  const period = MARE.tension.base_period_ms / rarityConfig(capture.rarity).speed;
-  const t = ((nowMs - capture.startedAt) % period) / period;
-  return t < 0.5 ? t * 2 : 2 - t * 2;
+interface FishSim {
+  barPos: number; // 0..1, centre de la barre du joueur
+  barVel: number;
+  fishPos: number; // 0..1
+  fishTarget: number; // 0..1, cap courant du poisson
+  progress: number; // 0..1, jauge de succès
+  overlapAccum: number; // secondes passées en chevauchement
+  totalAccum: number; // secondes écoulées
+  lastT: number; // performance.now() du dernier pas
+  holding: boolean;
+  done: "caught" | "escaped" | null;
 }
 
 /* Helpers impurs (performance.now / Math.random) hors du corps du composant —
-   appelés uniquement depuis des gestionnaires d'événements. */
+   appelés uniquement depuis l'effet du rAF ou les gestionnaires d'événements. */
 
-function newCapture(rarity: number): Capture {
+function barHalfHeight(rarity: number): number {
+  const F = MARE.fishing;
+  return Math.max(F.bar_height_min, F.bar_height * rarityConfig(rarity).bar_mult) / 2;
+}
+
+function initFishSim(rarity: number): FishSim {
+  const half = barHalfHeight(rarity);
   return {
-    rarity,
-    round: 0,
-    hits: 0,
-    zoneCenter: 0.3 + Math.random() * 0.4,
-    zoneSize: rarityConfig(rarity).zone,
-    startedAt: performance.now(),
-    last: null,
+    barPos: 0.5,
+    barVel: 0,
+    fishPos: Math.max(half, Math.min(1 - half, 0.5 + (Math.random() - 0.5) * 0.4)),
+    fishTarget: Math.random(),
+    progress: MARE.fishing.start_progress,
+    overlapAccum: 0,
+    totalAccum: 0,
+    lastT: performance.now(),
+    holding: false,
+    done: null,
   };
 }
 
-function advanceCapture(c: Capture, hit: boolean): Capture {
-  return {
-    ...c,
-    round: c.round + 1,
-    hits: c.hits + (hit ? 1 : 0),
-    zoneCenter: 0.2 + Math.random() * 0.6,
-    // Plancher d'équité : jamais sous zone_min, même Mythique au dernier tap.
-    zoneSize: Math.max(MARE.tension.zone_min, c.zoneSize * MARE.tension.zone_shrink_per_round),
-    startedAt: performance.now(),
-    last: hit ? "hit" : "miss",
-  };
+function stepFishSim(sim: FishSim, rarity: number, now: number): FishSim {
+  const F = MARE.fishing;
+  const rc = rarityConfig(rarity);
+  const dt = Math.min(0.05, Math.max(0, (now - sim.lastT) / 1000));
+  if (dt <= 0) return sim;
+
+  // Physique de la barre du joueur : monte quand on maintient, gravité sinon.
+  const half = barHalfHeight(rarity);
+  const accel = (sim.holding ? F.rise_accel : 0) - F.gravity;
+  let vel = (sim.barVel + accel * dt) * Math.exp(-F.drag * dt);
+  vel = Math.max(-F.max_velocity, Math.min(F.max_velocity, vel));
+  let barPos = sim.barPos + vel * dt;
+  if (barPos < half) {
+    barPos = half;
+    vel = 0;
+  } else if (barPos > 1 - half) {
+    barPos = 1 - half;
+    vel = 0;
+  }
+
+  // IA du poisson : changement de cap stochastique (processus de Poisson),
+  // approche à vitesse plafonnée — crée un mouvement en zigzag plus ou moins
+  // erratique selon fish_retarget_hz / fish_speed de la rareté.
+  let fishTarget = sim.fishTarget;
+  if (Math.random() < 1 - Math.exp(-rc.fish_retarget_hz * dt)) fishTarget = Math.random();
+  const maxStep = rc.fish_speed * dt;
+  const diff = Math.max(-maxStep, Math.min(maxStep, fishTarget - sim.fishPos));
+  const fishPos = Math.max(0, Math.min(1, sim.fishPos + diff));
+
+  // Jauge de succès : monte en chevauchement, descend sinon (plus vite pour les raretés hautes).
+  const overlap = Math.abs(fishPos - barPos) <= half;
+  const delta = (overlap ? F.fill_rate : -F.drain_rate * rc.drain_mult) * dt;
+  const progress = Math.max(0, Math.min(1, sim.progress + delta));
+
+  const totalAccum = sim.totalAccum + dt;
+  const overlapAccum = sim.overlapAccum + (overlap ? dt : 0);
+  const done: FishSim["done"] = progress >= 1 ? "caught" : progress <= 0 ? "escaped" : null;
+
+  return { barPos, barVel: vel, fishPos, fishTarget, progress, overlapAccum, totalAccum, lastT: now, holding: sim.holding, done };
 }
 
-function tapIsHit(c: Capture): boolean {
-  const pos = cursorPos(c, performance.now());
-  return Math.abs(pos - c.zoneCenter) <= c.zoneSize / 2;
+/** Palier de qualité (0..3) à partir du ratio de temps passé en chevauchement —
+ *  remplace les "hits/3" de l'ancienne mécanique, même usage en aval (quality_luck). */
+function qualityTier(overlapRatio: number): number {
+  if (overlapRatio >= 0.85) return 3;
+  if (overlapRatio >= 0.65) return 2;
+  if (overlapRatio >= 0.45) return 1;
+  return 0;
 }
 
-/** Barre de tension isolée : son rAF ne re-rend que la barre (60 fps),
- *  jamais le panneau entier — important pour la batterie mobile. */
-function TensionBar({ capture }: { capture: Capture }) {
-  const [cursor, setCursor] = useState(0);
+/** Composant isolé : son rAF ne re-rend que lui-même (60 fps), jamais le
+ *  panneau entier — important pour la batterie mobile. Possède aussi la
+ *  zone tactile (maintenir = monter), capturée au pointeur pour ne jamais
+ *  perdre l'appui même si le doigt glisse hors de la zone. */
+function FishingBar({
+  rarity,
+  onDone,
+}: {
+  rarity: number;
+  onDone: (result: "caught" | "escaped", quality: number) => void;
+}) {
+  const [sim, setSim] = useState<FishSim>(() => initFishSim(rarity));
+  const simRef = useRef(sim);
+  const doneRef = useRef(false);
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
   useEffect(() => {
     let raf = 0;
     const loop = () => {
       raf = requestAnimationFrame(loop);
-      setCursor(cursorPos(capture, performance.now()));
+      if (doneRef.current) return;
+      const next = stepFishSim(simRef.current, rarity, performance.now());
+      simRef.current = next;
+      setSim(next);
+      if (next.done && !doneRef.current) {
+        doneRef.current = true;
+        const ratio = next.totalAccum > 0 ? next.overlapAccum / next.totalAccum : 0;
+        onDoneRef.current(next.done, qualityTier(ratio));
+      }
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [capture]);
+    // rarity ne change jamais en cours de prise (composant remonté à chaque tentative) ;
+    // onDone est lu via onDoneRef (toujours à jour, cf. effet ci-dessus).
+  }, [rarity]);
+
+  const setHolding = (holding: boolean) => {
+    simRef.current = { ...simRef.current, holding };
+  };
+
+  const rc = rarityConfig(rarity);
+  const half = barHalfHeight(rarity);
 
   return (
-    <span className="relative block h-6 w-full max-w-[300px] overflow-hidden rounded-full border border-cell-cyan/50 bg-abyss/90">
-      <span
-        data-testid="tension-zone"
-        className="absolute top-0 h-full"
-        style={{
-          left: `${(capture.zoneCenter - capture.zoneSize / 2) * 100}%`,
-          width: `${capture.zoneSize * 100}%`,
-          background: "rgba(166, 255, 61, 0.45)",
-          borderLeft: "1px solid #a6ff3d",
-          borderRight: "1px solid #a6ff3d",
-        }}
-      />
-      <span
-        data-testid="tension-cursor"
-        className="absolute top-0 h-full w-[3px] bg-white"
-        style={{ left: `calc(${cursor * 100}% - 1px)`, boxShadow: "0 0 8px #6df6ff" }}
-      />
-    </span>
+    <div
+      data-testid="fish-hold-area"
+      className="relative flex touch-none select-none items-center justify-center gap-4"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setHolding(true);
+      }}
+      onPointerUp={() => setHolding(false)}
+      onPointerCancel={() => setHolding(false)}
+    >
+      {/* Piste principale : poisson + barre du joueur */}
+      <div
+        data-testid="fish-track"
+        className="relative h-[240px] w-[68px] overflow-hidden rounded-full border border-cell-cyan/50 bg-abyss/90"
+      >
+        <span
+          data-testid="fish-player-bar"
+          className="absolute inset-x-0 rounded-full"
+          style={{
+            bottom: `${(sim.barPos - half) * 100}%`,
+            height: `${half * 2 * 100}%`,
+            background: `${rc.color}33`,
+            boxShadow: `inset 0 0 0 2px ${rc.color}`,
+          }}
+        />
+        <span
+          data-testid="fish-marker"
+          className="absolute inset-x-0 flex justify-center text-base leading-none"
+          style={{ bottom: `calc(${sim.fishPos * 100}% - 9px)` }}
+        >
+          🐟
+        </span>
+      </div>
+
+      {/* Jauge de succès */}
+      <div
+        data-testid="fish-progress-track"
+        className="relative h-[240px] w-[14px] overflow-hidden rounded-full border border-cell-teal/40 bg-abyss/90"
+      >
+        <span
+          data-testid="fish-progress"
+          className="absolute inset-x-0 bottom-0 rounded-full"
+          style={{
+            height: `${sim.progress * 100}%`,
+            background: sim.progress > 0.66 ? "#a6ff3d" : sim.progress > 0.33 ? "#ffcf5c" : "#ff5c5c",
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -147,13 +254,14 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
 
   const [tab, setTab] = useState<"peche" | "collection">("peche");
   const [sparkles, setSparkles] = useState<Sparkle[]>([]);
-  const [capture, setCapture] = useState<Capture | null>(null);
+  /** Rareté de la prise en cours (null = pas de mini-jeu actif). */
+  const [captureRarity, setCaptureRarity] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const nextKey = useRef(1);
-  const captureRef = useRef<Capture | null>(null);
+  const captureRef = useRef<number | null>(null);
   useEffect(() => {
-    captureRef.current = capture;
-  }, [capture]);
+    captureRef.current = captureRarity;
+  }, [captureRarity]);
 
   // Spawn/expiration des paillettes (3 max, durée de vie ~6 s).
   useEffect(() => {
@@ -162,7 +270,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
       setSparkles((prev) => {
         const now = performance.now();
         let next = prev.filter((s) => now - s.bornAt < 6000);
-        if (next.length < 3 && !captureRef.current) {
+        if (next.length < 3 && captureRef.current === null) {
           next = [
             ...next,
             {
@@ -181,32 +289,26 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   }, [tab]);
 
   const startCapture = (sp: Sparkle) => {
-    if (capture) return;
+    if (captureRarity !== null) return;
     if (!spendJeton()) {
       setNotice(`Il te faut un jeton — achète-en un (${MARE.jetons.cost_energie} ⚡).`);
       return;
     }
     setNotice(null);
     setSparkles([]);
-    setCapture(newCapture(sp.rarity));
+    setCaptureRarity(sp.rarity);
   };
 
-  const tapTension = () => {
-    const c = captureRef.current;
-    if (!c) return;
-    const hit = tapIsHit(c);
-    const hits = c.hits + (hit ? 1 : 0);
-    if (c.round + 1 >= MARE.tension.rounds) {
-      setCapture(null);
-      if (hits === 0) {
-        setNotice("💨 Elle s'est échappée ! La paillette valait le coup pourtant…");
-      } else {
-        landCatch(c.rarity, hits); // → lastCatch → modal de révélation
-        setNotice(null);
-      }
-      return;
+  const handleFishDone = (result: "caught" | "escaped", quality: number) => {
+    const rarity = captureRef.current;
+    setCaptureRarity(null);
+    if (rarity === null) return;
+    if (result === "escaped") {
+      setNotice("💨 Elle s'est échappée ! La paillette valait le coup pourtant…");
+    } else {
+      landCatch(rarity, quality); // → lastCatch → modal de révélation
+      setNotice(null);
     }
-    setCapture(advanceCapture(c, hit));
   };
 
   const defBonus = cardsDefenseBonus({ collection, cardAssignments: assignments });
@@ -281,7 +383,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 imageRendering: "pixelated",
               }}
             >
-              {!capture && (
+              {captureRarity === null && (
                 <>
                   {sparkles.map((sp) => {
                     const rc = rarityConfig(sp.rarity);
@@ -308,22 +410,17 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 </>
               )}
 
-              {capture && (
-                <button data-testid="tension-tap" onClick={tapTension} className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-abyss/60 px-6">
-                  <span className="text-xs uppercase tracking-[0.3em]" style={{ color: rarityConfig(capture.rarity).color }}>
-                    {rarityConfig(capture.rarity).name} — prise {capture.round + 1}/{MARE.tension.rounds}
+              {captureRarity !== null && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-abyss/70 px-6">
+                  <span className="text-xs uppercase tracking-[0.3em]" style={{ color: rarityConfig(captureRarity).color }}>
+                    {rarityConfig(captureRarity).name}
                   </span>
-                  {/* Barre de tension (composant isolé : rAF local) */}
-                  <TensionBar capture={capture} />
-                  <span className="text-[11px] text-cell-cyan">
-                    TAPE quand le curseur est dans la zone verte !
+                  {/* Mini-jeu isolé : rAF local, ne re-rend jamais le panneau entier */}
+                  <FishingBar rarity={captureRarity} onDone={handleFishDone} />
+                  <span className="max-w-[220px] text-center text-[11px] text-cell-cyan">
+                    MAINTIENS pour faire monter la canne, relâche pour la laisser retomber — garde-la sur le poisson !
                   </span>
-                  <span className="text-[11px] text-cell-teal/80">
-                    {capture.last === "hit" && "✅ Bien ferré !"}
-                    {capture.last === "miss" && "❌ Raté — elle se débat…"}
-                    {capture.hits > 0 && ` (${capture.hits} réussite${capture.hits > 1 ? "s" : ""})`}
-                  </span>
-                </button>
+                </div>
               )}
             </div>
             {notice && (
