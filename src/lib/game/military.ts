@@ -11,7 +11,7 @@ import {
   cardsExpeditionAtkBonus,
   cardsExpeditionExpBonus,
 } from "./cards";
-import { resourceCap, totalProductionPerHour } from "./economy";
+import { getBuildingConfig, resourceCap, totalProductionPerHour } from "./economy";
 import { dayKey, ENERGY_CAP } from "./habits";
 import { liveWaveCombatReward } from "./bastion/config";
 import type { LiveWaveResult } from "./bastion/types";
@@ -22,6 +22,33 @@ import type {
   ResourceId,
   UnitId,
 } from "./types";
+
+/* ---------- Aide : accélération de chantier ----------
+   Depuis la file multi-slots (v8), un bonus d'accélération doit choisir SA cible.
+   Règle : le chantier dont il reste le plus de temps — c'est celui qui bloque
+   réellement la progression, et c'est le choix le plus gratifiant pour le joueur.
+   Retourne le nom du bâtiment accéléré, ou null si la file est vide. */
+export function speedUpLongestBuild(
+  state: GameState,
+  ratio: number,
+  at: number,
+): string | null {
+  let bestIndex = -1;
+  let bestRemaining = 0;
+  state.buildQueue.forEach((task, i) => {
+    const remaining = Math.max(0, task.endsAt - at);
+    if (remaining > bestRemaining) {
+      bestRemaining = remaining;
+      bestIndex = i;
+    }
+  });
+  if (bestIndex < 0 || bestRemaining <= 0) return null;
+  const target = state.buildQueue[bestIndex];
+  const queue = [...state.buildQueue];
+  queue[bestIndex] = { ...target, endsAt: target.endsAt - bestRemaining * ratio };
+  state.buildQueue = queue;
+  return getBuildingConfig(target.buildingId).name;
+}
 
 /* ---------- Typage de la config ---------- */
 
@@ -354,14 +381,10 @@ function resolveExpedition(state: GameState, exp: Expedition): void {
       lines.push(`+${frags} fragment${frags > 1 ? "s" : ""} de carte`);
     }
     // Boost : accélération du chantier en cours.
-    if (state.buildQueue && drawUnit(state) < exp.boostChance) {
+    if (state.buildQueue.length > 0 && drawUnit(state) < exp.boostChance) {
       const ratio = draw(state, cfg.boost_reduction_range);
-      const remaining = Math.max(0, state.buildQueue.endsAt - exp.endsAt);
-      state.buildQueue = {
-        ...state.buildQueue,
-        endsAt: state.buildQueue.endsAt - remaining * ratio,
-      };
-      lines.push(`⚡ Chantier accéléré de ${Math.round(ratio * 100)} %`);
+      const name = speedUpLongestBuild(state, ratio, exp.endsAt);
+      if (name) lines.push(`⚡ ${name} accéléré de ${Math.round(ratio * 100)} %`);
     }
   } else {
     // Pertes légères, plafonnées.
@@ -491,15 +514,16 @@ function applyAutoEvent(state: GameState, ev: EventDef, at: number): void {
     }
     if (lines.length === 0) lines.push("Le courant est passé sans rien déposer.");
   } else if (ev.id === "mutation_spontanee") {
-    if (state.buildQueue && ev.build_time_reduction) {
-      const ratio = draw(state, ev.build_time_reduction);
-      const remaining = Math.max(0, state.buildQueue.endsAt - at);
-      state.buildQueue = {
-        ...state.buildQueue,
-        endsAt: state.buildQueue.endsAt - remaining * ratio,
-      };
-      lines.push(`Chantier en cours accéléré de ${Math.round(ratio * 100)} %`);
-    } else {
+    const boosted =
+      state.buildQueue.length > 0 && ev.build_time_reduction
+        ? (() => {
+            const ratio = draw(state, ev.build_time_reduction);
+            const name = speedUpLongestBuild(state, ratio, at);
+            if (name) lines.push(`${name} accéléré de ${Math.round(ratio * 100)} %`);
+            return name;
+          })()
+        : null;
+    if (!boosted) {
       addResource(state, "energie", ev.fallback_energie ?? 10);
       lines.push(`+${ev.fallback_energie ?? 10} energie`);
     }

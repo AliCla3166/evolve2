@@ -8,7 +8,9 @@
 import { useEffect, useRef } from "react";
 import {
   BUILDING_ORDER,
+  buildTimeHours,
   canAfford,
+  findFreeSlot,
   isDesigned,
   levelCost,
   maxLevel,
@@ -126,9 +128,17 @@ interface SceneAnim {
   moltFrom: number; // stade quitté
   plankton: Plankton[];
   burst: BurstParticle[];
+  /** Niveaux vus à la frame précédente : une hausse = un chantier vient de se
+   *  terminer sous les yeux du joueur ⇒ gerbe de particules sur SON socket
+   *  (piste 5 du diagnostic : la fin de chantier doit être un événement visuel). */
+  levels: Partial<Record<BuildingId, number>>;
+  /** Ondes de choc "organe terminé" (coordonnées normalisées). */
+  rings: { x: number; y: number; born: number; color: string }[];
 }
 
 const MOLT_MS = 900;
+/** Durée de l'onde de choc de fin de chantier. */
+const RING_MS = 1100;
 
 export function CellScene({
   selected,
@@ -166,6 +176,8 @@ export function CellScene({
       moltFrom: initialStage,
       plankton: [],
       burst: [],
+      levels: { ...useGame.getState().buildings },
+      rings: [],
     };
 
     let cssSize = 0;
@@ -195,6 +207,30 @@ export function CellScene({
 
       const state = useGame.getState();
       const { buildings, resources, buildQueue } = state;
+
+      /* --- Détection de fin de chantier (un niveau qui monte) --- */
+      for (const id of BUILDING_ORDER) {
+        const lvl = buildings[id] ?? 0;
+        const prev = anim.levels[id] ?? 0;
+        if (lvl > prev) {
+          anim.levels[id] = lvl;
+          const p = socketPos(id, anim.spread);
+          const accent = SOCKETS[id].accent;
+          anim.rings.push({ x: p.x, y: p.y, born: nowMs, color: accent });
+          for (let i = 0; i < 22; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const v = 0.06 + Math.random() * 0.16;
+            anim.burst.push({
+              x: p.x,
+              y: p.y,
+              vx: Math.cos(a) * v,
+              vy: Math.sin(a) * v - 0.03, // léger biais vers le haut : ça "éclot"
+              born: nowMs,
+              color: i % 3 === 0 ? "#a6ff3d" : accent,
+            });
+          }
+        }
+      }
 
       /* --- Détection de mue (changement de stade) --- */
       const targetStage = envelopeStage(buildings);
@@ -315,14 +351,14 @@ export function CellScene({
         designed: boolean;
       }[] = [];
       const baseSize = S * 0.14;
-      const queueFree = buildQueue === null;
 
       const drawBuilding = (id: BuildingId) => {
         const socket = SOCKETS[id];
         const pos = socketPos(id, anim.spread);
         const level = buildings[id] ?? 0;
         const designed = isDesigned(id);
-        const inBuild = buildQueue?.buildingId === id;
+        const task = buildQueue.find((b) => b.buildingId === id) ?? null;
+        const inBuild = task !== null;
         const phase = animPhase(id);
         const size = baseSize * socket.size;
 
@@ -378,8 +414,14 @@ export function CellScene({
           ctx.fill();
         }
 
-        // Halo lime "amélioration possible" (file libre + coût payable)
-        if (designed && queueFree && level < maxLevel(id)) {
+        // Halo lime "amélioration possible" (un slot compatible est libre + coût payable)
+        // v8 : le slot dépend de la durée du chantier (les auxiliaires refusent les longs).
+        if (
+          designed &&
+          !inBuild &&
+          level < maxLevel(id) &&
+          findFreeSlot(buildings, buildQueue, buildTimeHours(id, level + 1)) >= 0
+        ) {
           const cost = levelCost(id, level + 1);
           if (cost && canAfford(resources, cost)) {
             const pulse = 0.16 + 0.1 * Math.sin((nowMs / (HEARTBEAT_MS / 2)) * Math.PI * 2 + phase);
@@ -426,9 +468,10 @@ export function CellScene({
         ctx.restore();
 
         // Arc de progression du chantier
-        if (inBuild && buildQueue) {
-          const total = buildQueue.endsAt - buildQueue.startedAt;
-          const p = Math.max(0, Math.min(1, (Date.now() - buildQueue.startedAt) / Math.max(1, total)));
+        if (task) {
+          const total = task.endsAt - task.startedAt;
+          // Date.now() est légitime ici : boucle rAF (canvas), pas un rendu React.
+          const p = Math.max(0, Math.min(1, (Date.now() - task.startedAt) / Math.max(1, total)));
           ctx.strokeStyle = "rgba(166, 255, 61, 0.9)";
           ctx.lineWidth = 3;
           ctx.beginPath();
@@ -502,6 +545,21 @@ export function CellScene({
           ctx.font = "bold 11px ui-monospace, monospace";
           ctx.fillText(String(o.level), bx, by + 0.5);
         }
+      }
+
+      /* --- Ondes de choc "chantier terminé" --- */
+      anim.rings = anim.rings.filter((r) => nowMs - r.born < RING_MS);
+      for (const r of anim.rings) {
+        const age = (nowMs - r.born) / RING_MS;
+        const radius = S * (0.03 + 0.16 * age);
+        ctx.save();
+        ctx.globalAlpha = (1 - age) * 0.8;
+        ctx.strokeStyle = r.color;
+        ctx.lineWidth = 2.5 * (1 - age) + 0.5;
+        ctx.beginPath();
+        ctx.arc(r.x * S, r.y * S, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
 
       /* --- VFX de mue : burst + flash radial --- */

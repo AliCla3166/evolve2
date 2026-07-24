@@ -1,0 +1,31 @@
+{
+  "$comment": "Tuning de la SERIE d'habitudes (piste 6 du diagnostic UX). Le bareme quotidien des 5 habitudes reste dans src/lib/game/habits.ts (ce sont des regles de saisie, pas de l'equilibrage) ; ce fichier ne contient que ce qui FRAPPE MONNAIE : les paliers de serie et le filet de securite. Il est lu a la fois par le jeu (habits.ts) et par le simulateur d'equilibrage (tools/economy/simulate_full.py) : une seule table, pas de derive possible entre le TS et le Python.",
+  "streak": {
+    "$comment": "Paliers HEBDOMADAIRES. Avant la piste 6 il n'y en avait que trois (7 j / 30 j / 90 j) : entre le jour 8 et le jour 29 la regularite ne rapportait donc strictement rien, soit trois semaines de discipline sans le moindre accuse de reception. Un palier par semaine donne un rendez-vous tous les sept jours.",
+    "tiers_comment_1": "MONOTONIE STRICTEMENT CROISSANTE : c'est une contrainte de design, pas une esthetique. Un palier retombe redevient gagnable (cf. settleStreakTiers) ; si la table decroissait, casser volontairement sa serie pour re-encaisser un gros premier palier serait rentable, soit exactement l'inverse de ce que doit recompenser un jeu de discipline. Avec une table qui monte (10 -> 42, x4,2), continuer domine toujours. L'ancienne table 7/30/90 pechait justement par la : 50 energie pour la premiere semaine, puis rien pendant trois semaines.",
+    "tiers_comment_2": "CALIBRAGE (ne pas gonfler ces valeurs sans repasser le simulateur). L'energie se reconvertit en heures de chantier via le rachat d'heures : la table pese donc directement sur les 90 jours d'ascension. Budget retenu : les douze paliers hebdomadaires valent ensemble 291 energie, soit environ trois journees parfaites (95) etalees sur trois mois ; le palier final en vaut deux a lui seul, il marque la fin de l'Age. Volontairement modeste : le rendez-vous hebdomadaire tire sa valeur de l'accuse de reception (badge du HUD, echelle des paliers, grille des 90 jours), pas d'une prime qui deplacerait le pacing.",
+    "tiers_comment_3": "MESURE (simulate_full.py, 60 graines, jour 'tout Nv5' par archetype). Sans aucune serie modelisee : 84,4 / 88,0 / 94,7. Avec l'ancienne table 7/30/90 : 84,5 / 87,6 / 93,6. Avec celle-ci : 83,2 / 88,3 / 94,2. Les trois archetypes restent dans la fenetre 81-99 j et l'ecart maximal est de 1,3 j : la cadence change completement, la duree non. Rejouer la comparaison avec 'python3 tools/economy/simulate_full.py --seeds 60 --streak legacy|config|none'.",
+    "tiers": [
+      { "days": 7, "energy": 10 },
+      { "days": 14, "energy": 12 },
+      { "days": 21, "energy": 14 },
+      { "days": 28, "energy": 16 },
+      { "days": 35, "energy": 19 },
+      { "days": 42, "energy": 22 },
+      { "days": 49, "energy": 25 },
+      { "days": 56, "energy": 28 },
+      { "days": 63, "energy": 31 },
+      { "days": 70, "energy": 34 },
+      { "days": 77, "energy": 38 },
+      { "days": 84, "energy": 42 },
+      { "days": 90, "energy": 190 }
+    ],
+    "grace": {
+      "$comment": "Le filet de securite. Dans un jeu de discipline, une serie cassee par oubli technique (saisie oubliee a 23 h 59 apres trois semaines) est la premiere cause d'abandon. Une seconde chance RARE et EXPLICITE renforce l'engagement au lieu de le diluer : un seul jour repare par mois calendaire, et seulement si l'oubli remonte a moins de max_age_days jours et ne concerne qu'une seule journee isolee. Un jour repare ne rapporte AUCUNE energie : il repare la chaine, il ne paie pas.",
+      "per_month": 1,
+      "max_age_days": 2
+    },
+    "history_days": 90,
+    "history_comment": "Nombre de cases de la grille facon calendrier de contributions dans le panneau Habitudes : c'est la duree de l'Age 1, donc la grille pleine EST la partie terminee."
+  }
+}

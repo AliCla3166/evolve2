@@ -1,10 +1,11 @@
 {
-  "$comment": "Modele economique complet et modifiable de l'Age 1 'Cellule' d'EVOLVE. Genere par economy/export_json.py a partir de economy/model.py (source de verite). Perimetre : 9 batiments (hors mini-jeux Peche/Bastion-Defense/Bastion-Raid, marques designed:false). Pour retoucher le calibrage : modifier les constantes en tete de model.py (TIME_BUDGET_HOURS, TIME_RATIO, PROD_RATIO, COST_RATIO, COST_SCALE, STARTING_STOCK, BASE_CAP) puis relancer 'python3 export_json.py'.",
+  "$comment": "Modele economique complet et modifiable de l'Age 1 'Cellule' d'EVOLVE. Genere par economy/export_json.py a partir de economy/model.py (source de verite). Perimetre : 9 batiments (hors mini-jeux Peche/Bastion-Defense/Bastion-Raid, marques designed:false). Pour retoucher le calibrage : modifier les constantes en tete de model.py (PARALLEL_UPLIFT, TIME_BUDGET_SHARES, TIME_RATIO, PROD_RATIO, COST_RATIO, COST_SCALE, STARTING_STOCK, BASE_CAP) puis relancer 'python3 export_json.py' — le script reecrit src/data/economy_config.json en preservant les blocs regles a la main (build_slots, offline_report, energy_boost). Toute modification du calibrage doit etre revalidee par 'python3 simulate_full.py --seeds 12'.",
   "age": "age01_cellule",
   "global_params": {
     "total_target_days": 90,
     "total_target_hours": 2160,
-    "n_parallel_build_slots": 1,
+    "build_hours_budget": 2419,
+    "n_parallel_build_slots": 3,
     "time_ratio_per_level": 3.0,
     "production_ratio_per_level": 1.8,
     "cost_ratio_per_level": 2.1,
@@ -12,13 +13,46 @@
     "starting_stock_per_producible_resource": 260,
     "base_storage_cap": 600
   },
+  "build_slots": {
+    "$comment": "File de construction multi-slots (24/07/2026). Le slot principal accepte n'importe quel chantier. Les slots auxiliaires n'acceptent QUE les chantiers courts (max_hours) : c'est ce qui protege le calibrage 90 jours. Les chantiers de <=24h ne pesent que 203,9h sur les 2419h du budget de chantier cumule (8,4%), donc meme deux slots auxiliaires satures ne peuvent raccourcir l'Age 1 que de ~8 jours au maximum. Deblocage indexe sur builtCount (nombre de proto-organes construits, Noyau exclu) : les seuils coincident volontairement avec les mues de membrane (cf. scene.ts STAGE_MIN_BUILT), pour que la mue SOIT la recompense.",
+    "main": {
+      "label": "Chantier principal",
+      "max_hours": null
+    },
+    "aux": [
+      {
+        "label": "Chantier auxiliaire",
+        "requires_built": 3,
+        "max_hours": 24
+      },
+      {
+        "label": "Chantier auxiliaire II",
+        "requires_built": 5,
+        "max_hours": 24
+      }
+    ]
+  },
+  "offline_report": {
+    "$comment": "Rapport de retour (24/07/2026). Le tick de rattrapage est instrumente (tick.ts applyTickDetailed) : au retour du joueur on lui raconte ce qui s'est passe au lieu de le laisser devant un etat muet. min_absence_minutes = duree d'absence en dessous de laquelle on ne montre rien (une pause de 5 min ne merite pas une modale). waste_alert_ratio = part de la production perdue au plafond a partir de laquelle l'ecran passe en alerte (le stockage sature est LA fuite invisible du jeu). max_lines = nombre de lignes d'evenements listees avant le repli '+N autres'.",
+    "min_absence_minutes": 20,
+    "waste_alert_ratio": 0.25,
+    "max_lines": 4
+  },
+  "energy_boost": {
+    "$comment": "L'energie achete du temps (24/07/2026, dette PLAN.md 5.4). L'energie vient des habitudes REELLES du joueur : elle doit avoir une prise directe sur le seul veritable frein du jeu, le timer de chantier. Regle : chaque tap rachete step_ratio de la duree TOTALE du chantier, dans la limite cumulee de max_ratio_per_task (jamais au-dela : la lenteur savoureuse est un pilier, un joueur discipline ne doit pas pouvoir compresser les 90 jours). Le cout est DEGRESSIF au sens du rendement : energy_per_hour de base, multiplie par 1 + cost_growth_at_cap * (part de l'enveloppe deja consommee) — les premieres heures rachetees sont bon marche, les dernieres coutent 60 % de plus. Calibrage : une journee d'habitudes parfaite (~90 energie) rachete environ 9 h sur un chantier de 40 h, soit tout le quota. min_step_minutes evite les micro-achats sans interet en fin de chantier. Mesure sur 90 jours (simulate_full.py, 12 graines) : 39 h rachetees pour 329 energie chez le joueur regulier, soit ~1,6 % du budget de chantier — l'accelerateur se sent a l'echelle d'une journee sans jamais deformer l'Age 1.",
+    "max_ratio_per_task": 0.25,
+    "step_ratio": 0.05,
+    "energy_per_hour": 8,
+    "cost_growth_at_cap": 0.6,
+    "min_step_minutes": 5
+  },
   "buildings": {
     "noyau": {
       "name": "Noyau primordial",
       "family": "structure_centrale",
       "role": "meta",
       "designed": true,
-      "total_time_budget_hours": 300,
+      "total_time_budget_hours": 336.0,
       "cost_recipe_resources": [
         "biomasse",
         "signaux"
@@ -41,7 +75,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 7.5,
+          "build_time_hours": 8.4,
           "cost": {
             "biomasse": 130.0,
             "signaux": 130.0
@@ -52,7 +86,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 22.5,
+          "build_time_hours": 25.2,
           "cost": {
             "biomasse": 273.0,
             "signaux": 273.0
@@ -63,7 +97,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 67.5,
+          "build_time_hours": 75.6,
           "cost": {
             "biomasse": 573.3,
             "signaux": 573.3
@@ -74,7 +108,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 202.5,
+          "build_time_hours": 226.8,
           "cost": {
             "biomasse": 1203.9,
             "signaux": 1203.9
@@ -90,7 +124,7 @@
       "family": "structure_centrale",
       "role": "support",
       "designed": true,
-      "total_time_budget_hours": 260,
+      "total_time_budget_hours": 291.2,
       "cost_recipe_resources": [
         "lipide",
         "proteine"
@@ -105,7 +139,7 @@
       "levels": {
         "1": {
           "unlocked_at_start": false,
-          "build_time_hours": 2.15,
+          "build_time_hours": 2.41,
           "cost": {
             "lipide": 130.0,
             "proteine": 130.0
@@ -113,7 +147,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 6.45,
+          "build_time_hours": 7.22,
           "cost": {
             "lipide": 273.0,
             "proteine": 273.0
@@ -121,7 +155,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 19.34,
+          "build_time_hours": 21.66,
           "cost": {
             "lipide": 573.3,
             "proteine": 573.3
@@ -129,7 +163,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 58.02,
+          "build_time_hours": 64.98,
           "cost": {
             "lipide": 1203.9,
             "proteine": 1203.9
@@ -137,7 +171,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 174.05,
+          "build_time_hours": 194.94,
           "cost": {
             "lipide": 2528.3,
             "proteine": 2528.3
@@ -150,7 +184,7 @@
       "family": "producteur",
       "role": "producer",
       "designed": true,
-      "total_time_budget_hours": 200,
+      "total_time_budget_hours": 224.0,
       "cost_recipe_resources": [
         "enzyme",
         "biomasse"
@@ -165,7 +199,7 @@
       "levels": {
         "1": {
           "unlocked_at_start": false,
-          "build_time_hours": 1.65,
+          "build_time_hours": 1.85,
           "cost": {
             "enzyme": 130.0,
             "biomasse": 130.0
@@ -176,7 +210,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 4.96,
+          "build_time_hours": 5.55,
           "cost": {
             "enzyme": 273.0,
             "biomasse": 273.0
@@ -187,7 +221,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 14.88,
+          "build_time_hours": 16.66,
           "cost": {
             "enzyme": 573.3,
             "biomasse": 573.3
@@ -198,7 +232,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 44.63,
+          "build_time_hours": 49.98,
           "cost": {
             "enzyme": 1203.9,
             "biomasse": 1203.9
@@ -209,7 +243,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 133.88,
+          "build_time_hours": 149.95,
           "cost": {
             "enzyme": 2528.3,
             "biomasse": 2528.3
@@ -225,7 +259,7 @@
       "family": "producteur",
       "role": "producer",
       "designed": true,
-      "total_time_budget_hours": 220,
+      "total_time_budget_hours": 246.4,
       "cost_recipe_resources": [
         "adn",
         "enzyme"
@@ -240,7 +274,7 @@
       "levels": {
         "1": {
           "unlocked_at_start": false,
-          "build_time_hours": 1.82,
+          "build_time_hours": 2.04,
           "cost": {
             "adn": 130.0,
             "enzyme": 130.0
@@ -251,7 +285,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 5.45,
+          "build_time_hours": 6.11,
           "cost": {
             "adn": 273.0,
             "enzyme": 273.0
@@ -262,7 +296,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 16.36,
+          "build_time_hours": 18.33,
           "cost": {
             "adn": 573.3,
             "enzyme": 573.3
@@ -273,7 +307,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 49.09,
+          "build_time_hours": 54.98,
           "cost": {
             "adn": 1203.9,
             "enzyme": 1203.9
@@ -284,7 +318,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 147.27,
+          "build_time_hours": 164.95,
           "cost": {
             "adn": 2528.3,
             "enzyme": 2528.3
@@ -300,7 +334,7 @@
       "family": "producteur",
       "role": "producer",
       "designed": true,
-      "total_time_budget_hours": 220,
+      "total_time_budget_hours": 246.4,
       "cost_recipe_resources": [
         "lipide",
         "signaux"
@@ -315,7 +349,7 @@
       "levels": {
         "1": {
           "unlocked_at_start": false,
-          "build_time_hours": 1.82,
+          "build_time_hours": 2.04,
           "cost": {
             "lipide": 130.0,
             "signaux": 130.0
@@ -326,7 +360,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 5.45,
+          "build_time_hours": 6.11,
           "cost": {
             "lipide": 273.0,
             "signaux": 273.0
@@ -337,7 +371,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 16.36,
+          "build_time_hours": 18.33,
           "cost": {
             "lipide": 573.3,
             "signaux": 573.3
@@ -348,7 +382,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 49.09,
+          "build_time_hours": 54.98,
           "cost": {
             "lipide": 1203.9,
             "signaux": 1203.9
@@ -359,7 +393,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 147.27,
+          "build_time_hours": 164.95,
           "cost": {
             "lipide": 2528.3,
             "signaux": 2528.3
@@ -375,7 +409,7 @@
       "family": "producteur",
       "role": "producer",
       "designed": true,
-      "total_time_budget_hours": 200,
+      "total_time_budget_hours": 224.0,
       "cost_recipe_resources": [
         "proteine",
         "adn"
@@ -390,7 +424,7 @@
       "levels": {
         "1": {
           "unlocked_at_start": false,
-          "build_time_hours": 1.65,
+          "build_time_hours": 1.85,
           "cost": {
             "proteine": 130.0,
             "adn": 130.0
@@ -401,7 +435,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 4.96,
+          "build_time_hours": 5.55,
           "cost": {
             "proteine": 273.0,
             "adn": 273.0
@@ -412,7 +446,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 14.88,
+          "build_time_hours": 16.66,
           "cost": {
             "proteine": 573.3,
             "adn": 573.3
@@ -423,7 +457,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 44.63,
+          "build_time_hours": 49.98,
           "cost": {
             "proteine": 1203.9,
             "adn": 1203.9
@@ -434,7 +468,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 133.88,
+          "build_time_hours": 149.95,
           "cost": {
             "proteine": 2528.3,
             "adn": 2528.3
@@ -450,7 +484,7 @@
       "family": "producteur",
       "role": "producer",
       "designed": true,
-      "total_time_budget_hours": 200,
+      "total_time_budget_hours": 224.0,
       "cost_recipe_resources": [
         "biomasse",
         "enzyme"
@@ -465,7 +499,7 @@
       "levels": {
         "1": {
           "unlocked_at_start": false,
-          "build_time_hours": 1.65,
+          "build_time_hours": 1.85,
           "cost": {
             "biomasse": 130.0,
             "enzyme": 130.0
@@ -476,7 +510,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 4.96,
+          "build_time_hours": 5.55,
           "cost": {
             "biomasse": 273.0,
             "enzyme": 273.0
@@ -487,7 +521,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 14.88,
+          "build_time_hours": 16.66,
           "cost": {
             "biomasse": 573.3,
             "enzyme": 573.3
@@ -498,7 +532,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 44.63,
+          "build_time_hours": 49.98,
           "cost": {
             "biomasse": 1203.9,
             "enzyme": 1203.9
@@ -509,7 +543,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 133.88,
+          "build_time_hours": 149.95,
           "cost": {
             "biomasse": 2528.3,
             "enzyme": 2528.3
@@ -525,7 +559,7 @@
       "family": "producteur",
       "role": "producer",
       "designed": true,
-      "total_time_budget_hours": 220,
+      "total_time_budget_hours": 246.4,
       "cost_recipe_resources": [
         "proteine",
         "adn"
@@ -540,7 +574,7 @@
       "levels": {
         "1": {
           "unlocked_at_start": false,
-          "build_time_hours": 1.82,
+          "build_time_hours": 2.04,
           "cost": {
             "proteine": 130.0,
             "adn": 130.0
@@ -551,7 +585,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 5.45,
+          "build_time_hours": 6.11,
           "cost": {
             "proteine": 273.0,
             "adn": 273.0
@@ -562,7 +596,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 16.36,
+          "build_time_hours": 18.33,
           "cost": {
             "proteine": 573.3,
             "adn": 573.3
@@ -573,7 +607,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 49.09,
+          "build_time_hours": 54.98,
           "cost": {
             "proteine": 1203.9,
             "adn": 1203.9
@@ -584,7 +618,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 147.27,
+          "build_time_hours": 164.95,
           "cost": {
             "proteine": 2528.3,
             "adn": 2528.3
@@ -600,7 +634,7 @@
       "family": "centre_specialise",
       "role": "sink",
       "designed": true,
-      "total_time_budget_hours": 340,
+      "total_time_budget_hours": 380.8,
       "cost_recipe_resources": [
         "signaux",
         "vitalite"
@@ -615,7 +649,7 @@
       "levels": {
         "1": {
           "unlocked_at_start": false,
-          "build_time_hours": 2.81,
+          "build_time_hours": 3.15,
           "cost": {
             "signaux": 130.0,
             "vitalite": 78.0
@@ -623,7 +657,7 @@
         },
         "2": {
           "unlocked_at_start": false,
-          "build_time_hours": 8.43,
+          "build_time_hours": 9.44,
           "cost": {
             "signaux": 273.0,
             "vitalite": 163.8
@@ -631,7 +665,7 @@
         },
         "3": {
           "unlocked_at_start": false,
-          "build_time_hours": 25.29,
+          "build_time_hours": 28.32,
           "cost": {
             "signaux": 573.3,
             "vitalite": 344.0
@@ -639,7 +673,7 @@
         },
         "4": {
           "unlocked_at_start": false,
-          "build_time_hours": 75.87,
+          "build_time_hours": 84.97,
           "cost": {
             "signaux": 1203.9,
             "vitalite": 722.4
@@ -647,7 +681,7 @@
         },
         "5": {
           "unlocked_at_start": false,
-          "build_time_hours": 227.6,
+          "build_time_hours": 254.92,
           "cost": {
             "signaux": 2528.3,
             "vitalite": 1517.0
@@ -815,16 +849,69 @@
     }
   },
   "pacing_validation": {
-    "strategy_simulated": "greedy_fastest_upgrade_first (le joueur construit toujours la prochaine amelioration la moins longue disponible ; file de construction a 1 slot)",
+    "$comment": "Ce bloc mesure le SOCLE : simulate.py, un joueur greedy sur UNE seule file, sans habitudes, sans peche, sans rachat d'heures. Depuis la v8 ce n'est plus la duree que vivra un vrai joueur — la file multi-slots et le rachat d'heures a l'energie compressent le temps reel. Le budget de chantiers cumulees a donc ete releve de PARALLEL_UPLIFT (cf. model.py) au-dessus de la cible wall-clock de 90 jours : ce socle vise BUILD_HOURS_BUDGET, pas 2160 h. La duree reellement vecue est mesuree par simulate_full.py (multi-systemes, par archetype) et reportee dans multi_system_validation ci-dessous.",
+    "strategy_simulated": "greedy_fastest_upgrade_first (le joueur construit toujours la prochaine amelioration la moins longue disponible ; file de construction a 1 slot, aucun autre systeme)",
     "target_days": 90,
     "target_hours": 2160,
-    "simulated_total_hours": 2229.7,
-    "simulated_total_days": 92.9,
-    "construction_hours": 2160.0,
-    "resource_wait_hours": 69.7,
-    "resource_wait_pct_of_total": 3.1,
-    "deviation_vs_target_pct": 3.2,
-    "conclusion": "Le temps de construction est le levier de pacing dominant (>96% du temps total) ; les couts en ressources ne bloquent la progression que marginalement (~3% de temps d'attente supplementaire) lorsque le joueur alterne les batiments de facon equilibree."
+    "build_hours_budget": 2419,
+    "parallel_uplift": 1.12,
+    "simulated_total_hours": 2482.6,
+    "simulated_total_days": 103.4,
+    "construction_hours": 2419.2,
+    "resource_wait_hours": 63.4,
+    "resource_wait_pct_of_total": 2.6,
+    "deviation_vs_build_budget_pct": 2.6,
+    "conclusion": "Le temps de construction est le levier de pacing dominant (>96% du temps total) ; les couts en ressources ne bloquent la progression que marginalement (~3% de temps d'attente supplementaire) lorsque le joueur alterne les batiments de facon equilibree.",
+    "multi_system_validation": {
+      "$comment": "Duree REELLEMENT VECUE, mesuree par tools/economy/simulate_full.py (30 graines par archetype). Simule les habitudes, la serie et son jour de grace, la file multi-slots, le rachat d'heures a l'energie, la peche, les expeditions, les vagues et les evenements. C'est ce bloc qui valide la cible de 90 jours +/-10 % ; le bloc parent ne mesure que le socle mono-slot. Regenerer avec 'python3 simulate_full.py --seeds 30 --write' apres toute retouche du calibrage.",
+      "seeds": 30,
+      "streak_table": "config",
+      "target_days": 90,
+      "tolerance_pct": 10,
+      "accepted_band_days": [
+        81.0,
+        99.0
+      ],
+      "all_archetypes_in_band": true,
+      "by_archetype": {
+        "assidu": {
+          "day_all3": 10.8,
+          "day_all5": 82.7,
+          "runs_finished": "30/30",
+          "expedition_income_pct": 35.4,
+          "boost_hours_bought": 98.9,
+          "boost_energy_spent": 849,
+          "streak_max_days": 83.0,
+          "streak_energy_earned": 269,
+          "streak_breaks": 0.0,
+          "grace_days_used": 0.0
+        },
+        "regulier": {
+          "day_all3": 10.4,
+          "day_all5": 88.4,
+          "runs_finished": "30/30",
+          "expedition_income_pct": 21.0,
+          "boost_hours_bought": 54.7,
+          "boost_energy_spent": 455,
+          "streak_max_days": 45.4,
+          "streak_energy_earned": 150,
+          "streak_breaks": 4.2,
+          "grace_days_used": 2.7
+        },
+        "dilettante": {
+          "day_all3": 13.3,
+          "day_all5": 93.8,
+          "runs_finished": "30/30",
+          "expedition_income_pct": 15.4,
+          "boost_hours_bought": 83.7,
+          "boost_energy_spent": 681,
+          "streak_max_days": 15.6,
+          "streak_energy_earned": 50,
+          "streak_breaks": 20.2,
+          "grace_days_used": 3.7
+        }
+      }
+    }
   },
   "envelope_stages_ref": "cf. assets/manifest.json -> envelope_stages (trigger = nombre de batiments construits, inchange par ce document)",
   "related_docs": {

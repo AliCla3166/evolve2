@@ -18,7 +18,8 @@
    locale), modifiable uniquement le jour même — le store refuse toute écriture
    sur une autre clé que celle du jour courant. */
 
-import type { HabitDayEntry, HabitId } from "./types";
+import rawHabitsConfig from "@/data/habits_config.json";
+import type { HabitDayEntry, HabitId, HabitsState } from "./types";
 
 /* ---------- Définition des 5 habitudes ---------- */
 
@@ -101,16 +102,51 @@ export const HABITS: HabitDef[] = [
  *  L'énergie n'est pas soumise au stockage cellulaire du JSON (kind externe_habitude). */
 export const ENERGY_CAP = 9999;
 
-/** Jalons de série (jours consécutifs avec ≥1 habitude validée) → bonus d'énergie immédiat.
- *  Valeurs volontairement douces (choix Phase 2) :
- *  - 7 j  : +50 ⚡  (~une demi-journée parfaite)
- *  - 30 j : +200 ⚡ (~deux journées parfaites)
- *  - 90 j : +500 ⚡ (~une semaine parfaite — clôture de l'Âge 1) */
-export const STREAK_MILESTONES: ReadonlyArray<{ days: number; energy: number }> = [
-  { days: 7, energy: 50 },
-  { days: 30, energy: 200 },
-  { days: 90, energy: 500 },
-];
+/* ---------- Série : paliers hebdomadaires, grâce, historique ----------
+   Tout le tuning vit dans src/data/habits_config.json — c'est la MÊME table que
+   lit le simulateur d'équilibrage (tools/economy/simulate_full.py), donc le TS
+   et le Python ne peuvent pas diverger. */
+
+interface StreakTier {
+  days: number;
+  energy: number;
+}
+
+interface HabitsConfig {
+  streak: {
+    tiers: StreakTier[];
+    grace: { per_month: number; max_age_days: number };
+    history_days: number;
+  };
+}
+
+export const HABITS_CFG = rawHabitsConfig as unknown as HabitsConfig;
+
+/** Paliers de série (jours consécutifs avec ≥1 habitude validée) → bonus d'énergie.
+ *  Un palier par semaine : la régularité doit accuser réception chaque semaine,
+ *  pas trois fois en trois mois. */
+export const STREAK_TIERS: ReadonlyArray<StreakTier> = HABITS_CFG.streak.tiers;
+
+/** Un jour de grâce par mois calendaire, sur un oubli de moins de N jours. */
+export const STREAK_GRACE = HABITS_CFG.streak.grace;
+
+/** Nombre de cases de la grille d'historique (= durée de l'Âge 1). */
+export const HISTORY_DAYS = HABITS_CFG.streak.history_days;
+
+/** Énergie totale que vaut une série parfaite de 90 jours (affiché dans l'UI). */
+export const TOTAL_STREAK_ENERGY = STREAK_TIERS.reduce((sum, t) => sum + t.energy, 0);
+
+/** Prochain palier à viser (null quand tout est atteint). */
+export function nextStreakTier(streak: number): StreakTier | null {
+  return STREAK_TIERS.find((t) => t.days > streak) ?? null;
+}
+
+/** Palier le plus haut déjà franchi (null avant le premier). */
+export function currentStreakTier(streak: number): StreakTier | null {
+  let best: StreakTier | null = null;
+  for (const t of STREAK_TIERS) if (streak >= t.days) best = t;
+  return best;
+}
 
 /** Bornes de saisie (mêmes ordres de grandeur que le prototype v1). */
 export const CALORIE_INPUT_MAX = 6000;
@@ -140,6 +176,116 @@ export function addDaysToKey(key: string, n: number): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${mm}-${dd}`;
+}
+
+/** Mois calendaire d'une clé de jour (« 2026-07-24 » → « 2026-07 »). */
+export function monthKey(key: string): string {
+  return key.slice(0, 7);
+}
+
+/** Indice du jour de la semaine, lundi = 0 (pour aligner la grille d'historique). */
+export function weekdayIndex(key: string): number {
+  const [y, m, d] = key.split("-").map(Number);
+  return (new Date(y, m - 1, d).getDay() + 6) % 7;
+}
+
+/* ---------- Série : moteur pur, DÉRIVÉ de l'historique ----------
+   Avant la piste 6, la série était tenue en comptabilité incrémentale
+   (« si hier était le dernier jour compté, alors +1 »). Ça marchait, mais ça
+   rendait impossible tout ce que le diagnostic demandait : un jour de grâce
+   rétroactif et une grille de 90 cases exigent de pouvoir RELIRE le passé, pas
+   seulement un compteur. On recalcule donc la série à partir des jours saisis —
+   la seule source de vérité — et le compteur stocké n'est plus qu'un cache. */
+
+/** Ce jour-là compte-t-il dans la série ? (≥1 habitude validée, ou jour réparé) */
+export function dayHoldsStreak(
+  days: Record<string, HabitDayEntry>,
+  graceDays: ReadonlySet<string>,
+  key: string,
+): boolean {
+  return (days[key]?.validatedCount ?? 0) > 0 || graceDays.has(key);
+}
+
+/** Garde-fou : on ne remonte jamais plus loin que 10 ans d'historique. */
+const MAX_STREAK_SCAN = 3660;
+
+/** Longueur de la série au jour `todayKey`, remontée depuis l'historique.
+ *
+ *  Subtilité qui compte : si la journée en cours n'est pas encore validée, on
+ *  part de la VEILLE. Une série ne se casse pas à 00 h 01 — le joueur a jusqu'à
+ *  minuit pour saisir, donc tant que la journée court, elle ne peut pas
+ *  compter comme un échec. */
+export function computeStreak(
+  days: Record<string, HabitDayEntry>,
+  graceDays: readonly string[],
+  todayKey: string,
+): number {
+  const grace = new Set(graceDays);
+  let cursor = dayHoldsStreak(days, grace, todayKey) ? todayKey : addDaysToKey(todayKey, -1);
+  let n = 0;
+  while (n < MAX_STREAK_SCAN && dayHoldsStreak(days, grace, cursor)) {
+    n += 1;
+    cursor = addDaysToKey(cursor, -1);
+  }
+  return n;
+}
+
+/** Le jour de grâce est-il encore disponible ce mois-ci ? */
+export function graceAvailable(habits: HabitsState, todayKey: string): boolean {
+  if (STREAK_GRACE.per_month <= 0) return false;
+  return habits.graceUsedMonth !== monthKey(todayKey);
+}
+
+/** Quel jour un jour de grâce pourrait-il réparer ? `null` si rien à réparer.
+ *
+ *  Trois conditions, toutes nécessaires : l'oubli remonte à moins de
+ *  `max_age_days` jours, il ne concerne qu'UNE journée isolée, et la veille de
+ *  cette journée tenait la série. Autrement dit la grâce ne sert qu'à recoller
+ *  une chaîne réelle — elle ne fabrique pas une série à partir de rien, et on
+ *  ne laisse pas le joueur gâcher sa seule réparation du mois sur un trou
+ *  qu'elle ne bouchera pas. */
+export function repairableDay(habits: HabitsState, todayKey: string): string | null {
+  if (!graceAvailable(habits, todayKey)) return null;
+  const grace = new Set(habits.graceDays);
+  for (let age = 1; age <= STREAK_GRACE.max_age_days; age++) {
+    const key = addDaysToKey(todayKey, -age);
+    if (dayHoldsStreak(habits.days, grace, key)) continue; // ce jour-là tient déjà
+    // Premier trou trouvé : réparable seulement s'il est isolé.
+    const before = addDaysToKey(key, -1);
+    return dayHoldsStreak(habits.days, grace, before) ? key : null;
+  }
+  return null;
+}
+
+/** Solde les paliers de série : verse ceux qui viennent d'être franchis, rouvre
+ *  ceux qui sont retombés. Renvoie la nouvelle table et le delta d'énergie.
+ *
+ *  Un palier redevient gagnable après une rupture — c'est volontaire : le
+ *  re-farm coûte alors sept jours pleins, et comme la table MONTE, casser sa
+ *  série pour re-encaisser le palier 1 est toujours perdant. On ne reprend
+ *  l'énergie que si le palier a été payé le jour même (le joueur annule une
+ *  saisie du jour) : reprendre un bonus versé il y a trois semaines serait du
+ *  vol pur et simple. */
+export function settleStreakTiers(
+  awards: Record<string, string>,
+  streak: number,
+  todayKey: string,
+): { awards: Record<string, string>; energyDelta: number } {
+  const next = { ...awards };
+  let energyDelta = 0;
+  for (const t of STREAK_TIERS) {
+    const k = String(t.days);
+    if (streak >= t.days) {
+      if (!next[k]) {
+        next[k] = todayKey;
+        energyDelta += t.energy;
+      }
+    } else if (next[k]) {
+      if (next[k] === todayKey) energyDelta -= t.energy;
+      delete next[k];
+    }
+  }
+  return { awards: next, energyDelta };
 }
 
 /* ---------- Calculs d'énergie ---------- */

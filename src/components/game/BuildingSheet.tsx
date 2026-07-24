@@ -5,17 +5,21 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { BoostButton } from "@/components/game/BoostButton";
 import { Panel, PixelButton, ResourceBar } from "@/components/ui/Pixel";
 import { buildingPurpose } from "@/lib/game/buildingInfo";
 import {
   buildingProductionPerHour,
+  buildTimeHours,
   buildTimeMs,
   canAfford,
+  findFreeSlot,
   getBuildingConfig,
   isDesigned,
   levelCost,
   maxLevel,
   resourceName,
+  unlockedSlotCount,
 } from "@/lib/game/economy";
 import { fmtDuration, fmtInt, fmtRate } from "@/lib/game/format";
 import { SOCKETS } from "@/lib/game/scene";
@@ -86,7 +90,7 @@ export function BuildingSheet({
 }) {
   const resources = useGame((s) => s.resources);
   const buildings = useGame((s) => s.buildings);
-  const task = useGame((s) => s.buildQueue);
+  const queue = useGame((s) => s.buildQueue);
   const startUpgrade = useGame((s) => s.startUpgrade);
   // "now" du rendu = dernier tick appliqué (pas de Date.now() en rendu).
   const now = useGame((s) => s.lastTick);
@@ -98,12 +102,19 @@ export function BuildingSheet({
   const accent = SOCKETS[id].accent;
   const sprite = `/assets/buildings/${id}/niveau${Math.max(1, level)}.png`;
 
-  const inConstruction = task?.buildingId === id;
+  const task = queue.find((t) => t.buildingId === id) ?? null;
+  const inConstruction = task !== null;
   const maxed = designed && level >= max;
   const nextLevel = level + 1;
   const cost = designed && !maxed ? levelCost(id, nextLevel) : null;
   const affordable = cost !== null && canAfford(resources, cost);
-  const queueBusy = task !== null;
+  // File multi-slots (v8) : on cherche un slot LIBRE et COMPATIBLE avec la durée
+  // du chantier (les slots auxiliaires refusent les gros chantiers, cf. build_slots).
+  const nextHours = designed && !maxed ? buildTimeHours(id, nextLevel) : 0;
+  const freeSlot = designed && !maxed ? findFreeSlot(buildings, queue, nextHours) : -1;
+  const queueBusy = freeSlot < 0;
+  // Distinguer "tous les slots occupés" de "aucun slot n'accepte un chantier si long".
+  const anySlotFree = queue.length < unlockedSlotCount(buildings);
   const prod = buildingProductionPerHour(id, level);
   const nextProd = designed && !maxed ? buildingProductionPerHour(id, nextLevel) : {};
 
@@ -210,6 +221,8 @@ export function BuildingSheet({
                     width={180}
                     label={fmtDuration(task.endsAt - now)}
                   />
+                  {/* L'énergie gagnée sur les habitudes rachète du temps (piste 4). */}
+                  <BoostButton task={task} size="sheet" />
                 </div>
               ) : maxed ? (
                 <div className="text-xs tracking-widest text-cell-magenta">
@@ -248,7 +261,9 @@ export function BuildingSheet({
                     </div>
                     {queueBusy && !inConstruction && (
                       <p className="text-center text-[11px] text-cell-teal/50">
-                        File de construction occupée — 1 chantier à la fois.
+                        {anySlotFree
+                          ? "Chantier trop long pour un slot auxiliaire — libère le chantier principal."
+                          : "Tous les chantiers sont occupés."}
                       </p>
                     )}
                     {!queueBusy && !affordable && (

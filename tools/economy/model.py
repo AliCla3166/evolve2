@@ -7,9 +7,11 @@ Signaux, Mutation). Les 3 batiments lies aux mini-jeux non finalises (Peche/
 Collection, Bastion-Defense, Bastion-Raid) sont exclus du design economique ici
 (stubs uniquement, cf. economy_config.json -> "designed": false).
 
-Cible de pacing : ~90 jours (2160h) de temps de construction cumule pour un
-joueur qui enchaine les ameliorations sans interruption sur une seule file de
-construction (N_PARALLEL_BUILD_SLOTS = 1). Le TEMPS est le levier de pacing
+Cible de pacing : ~90 jours de duree REELLEMENT VECUE. Depuis la v8, cette cible
+wall-clock ne se confond plus avec la somme des heures de chantier : la file
+multi-slots et le rachat d'heures a l'energie compressent le temps reel, donc le
+budget cumule (BUILD_HOURS_BUDGET) est releve de PARALLEL_UPLIFT au-dessus des
+2160 h. Le TEMPS reste le levier de pacing
 principal ; les couts en ressources sont calibres pour rester "confortables"
 (la simulation plus bas verifie qu'ils ne bloquent pas significativement la
 progression au-dela du budget temps).
@@ -26,9 +28,29 @@ import math
 
 TOTAL_DAYS = 90
 HOURS_PER_DAY = 24
-TOTAL_HOURS = TOTAL_DAYS * HOURS_PER_DAY  # 2160h -> cible de duree totale de l'Age 1
+TOTAL_HOURS = TOTAL_DAYS * HOURS_PER_DAY  # 2160h -> cible WALL-CLOCK de l'Age 1
 
-N_PARALLEL_BUILD_SLOTS = 1  # une seule construction active a la fois sur toute la base
+# ---- v8 (24/07/2026) : wall-clock et heures de chantier ne sont plus la meme chose
+# Jusqu'a la v7, un seul chantier tournait a la fois et sans aucun moyen de
+# l'accelerer : la somme des heures de chantier ETAIT la duree vecue. La v8 casse
+# cette equivalence sur deux fronts :
+#   - la file multi-slots (2 slots auxiliaires debloques a 3 et 5 proto-organes,
+#     limites aux chantiers <= 24 h) fait tourner des chantiers en parallele ;
+#   - le rachat d'heures a l'energie rogne jusqu'a 25 % de chaque chantier.
+# Mesure (simulate_full.py, 12 graines, jour du "tout Nv5") avant correction :
+#   assidu 77,0 j · regulier 80,9 j · dilettante 84,2 j — soit 6 a 17 % sous la
+#   cible, avec assidu et regulier hors de la fenetre de tolerance +/-10 %.
+# On releve donc le budget d'heures CUMULEES du meme ordre de grandeur, pour que
+# la duree REELLEMENT VECUE retombe sur 90 jours. C'est le bon levier : il rend
+# le parallelisme et le rachat d'heures gratifiants (ils rattrapent un budget
+# plus lourd) au lieu de les rendre obligatoires (ils compenseraient un budget
+# calibre sans eux). Revalider avec 'python3 simulate_full.py --seeds 12' apres
+# toute retouche : la cible reste 90 jours +/-10 % (81-99) pour les 3 archetypes.
+PARALLEL_UPLIFT = 1.12
+BUILD_HOURS_BUDGET = round(TOTAL_HOURS * PARALLEL_UPLIFT)  # 2419 h de chantier cumulees
+
+N_PARALLEL_BUILD_SLOTS = 3  # 1 principal (illimite) + 2 auxiliaires (<= 24 h),
+                            # cf. economy_config.json -> build_slots
 
 TIME_RATIO = 3.0     # croissance du temps de construction par niveau
 PROD_RATIO = 1.8     # croissance de la production par niveau
@@ -47,10 +69,13 @@ BASE_CAP = 600        # capacite de stockage de base (avant bonus Noyau/Biomasse
 # ============================================================
 # 1. BATIMENTS DANS LE PERIMETRE (9) + budgets de temps (heures)
 # ============================================================
-# Repartition qui somme exactement a TOTAL_HOURS (2160h). Ajuster librement
-# tant que la somme reste egale a TOTAL_HOURS (assert plus bas).
+# Poids RELATIFS du budget de chantier. Seule leur proportion compte : ils sont
+# normalises sur BUILD_HOURS_BUDGET juste en dessous. (Historiquement ces
+# nombres etaient des heures sommant a 2160 ; ils sont conserves tels quels pour
+# que le calibrage relatif de la v7 — Noyau et Mutation les plus lourds, ADN le
+# plus leger — reste lisible et intact.)
 
-TIME_BUDGET_HOURS = {
+TIME_BUDGET_SHARES = {
     "noyau":    300,
     "membrane": 260,
     "adn":      200,
@@ -61,7 +86,14 @@ TIME_BUDGET_HOURS = {
     "signaux":  220,
     "mutation": 340,
 }
-assert sum(TIME_BUDGET_HOURS.values()) == TOTAL_HOURS, "Les budgets temps doivent sommer a TOTAL_HOURS"
+
+_SHARE_TOTAL = sum(TIME_BUDGET_SHARES.values())
+TIME_BUDGET_HOURS = {
+    b: round(BUILD_HOURS_BUDGET * s / _SHARE_TOTAL, 1)
+    for b, s in TIME_BUDGET_SHARES.items()
+}
+assert abs(sum(TIME_BUDGET_HOURS.values()) - BUILD_HOURS_BUDGET) < 1.0, \
+    "Les budgets temps doivent sommer a BUILD_HOURS_BUDGET"
 
 BUILDING_META = {
     "noyau":    {"name": "Noyau primordial",            "family": "structure_centrale", "role": "meta"},

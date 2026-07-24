@@ -22,7 +22,7 @@ export function TutorialCoach() {
   // Auto-avance : l'état du jeu EST la validation de l'étape.
   useEffect(() => {
     if (step === 0 && todayValidated) advanceTutorial(1);
-    else if (step === 1 && buildQueue !== null) advanceTutorial(2);
+    else if (step === 1 && buildQueue.length > 0) advanceTutorial(2);
   }, [step, todayValidated, buildQueue, advanceTutorial]);
 
   if (step >= TUTORIAL_DONE) return null;

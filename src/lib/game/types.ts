@@ -33,13 +33,19 @@ export type BuildingId =
   | "defense"
   | "raid";
 
-/** Slot unique de file de construction (règle stricte : 1 seul chantier à la fois). */
+/** Un chantier en cours. Depuis la v8 la file compte plusieurs slots :
+ *  slot 0 = chantier principal (accepte tout), slots 1+ = chantiers auxiliaires
+ *  (limités aux chantiers courts, cf. economy_config.json → build_slots). */
 export interface BuildTask {
+  /** Index du slot occupé (0 = principal). */
+  slot: number;
   buildingId: BuildingId;
   targetLevel: number;
   /** Timestamps réels (Date.now, ms). */
   startedAt: number;
   endsAt: number;
+  /** Heures de chantier déjà rachetées en énergie (piste 4) — pour l'affichage et le plafond. */
+  boostedMs: number;
 }
 
 /** Identifiants des 5 habitudes réelles (repris du prototype v1). */
@@ -70,14 +76,22 @@ export interface HabitsState {
   days: Record<string, HabitDayEntry>;
   /** Objectif calorique personnel du joueur (modifiable). */
   calorieGoal: number;
-  /** Série en cours de jours consécutifs avec >=1 habitude validée. */
+  /** Série en cours de jours consécutifs avec >=1 habitude validée.
+   *  CACHE : la vérité est `days` (+ `graceDays`) — cf. computeStreak(). */
   streak: number;
-  /** Dernier jour compté dans la série (YYYY-MM-DD) — null si série vide. */
-  lastStreakDate: string | null;
+  /** Jour (YYYY-MM-DD) pour lequel `streak` a été calculé. Le tick ne recalcule
+   *  qu'au passage de minuit au lieu de rebalayer l'historique chaque seconde. */
+  streakDay: string | null;
   /** Meilleure série atteinte (stat). */
   bestStreak: number;
-  /** Jalon (7/30/90) -> date de dernière attribution du bonus (anti re-farm le même jour). */
-  milestoneAwards: Record<string, string>;
+  /** Palier de série (jours) -> date d'attribution du bonus. Un palier retombé
+   *  est retiré de la table, donc redevenu gagnable (cf. settleStreakTiers). */
+  streakAwards: Record<string, string>;
+  /** Jours réparés par un « jour de grâce » — ils comptent comme validés pour
+   *  la série mais ne rapportent aucune énergie (piste 6 : le filet de sécurité). */
+  graceDays: string[];
+  /** Mois calendaire (YYYY-MM) où le jour de grâce a déjà été consommé. */
+  graceUsedMonth: string | null;
 }
 
 /** Profil du joueur (création simple en Phase 2, écran soigné en Phase 4). */
@@ -114,7 +128,7 @@ export interface Expedition {
 export interface Report {
   id: number;
   ts: number;
-  type: "expedition" | "pathogene" | "evenement";
+  type: "expedition" | "pathogene" | "evenement" | "chantier";
   title: string;
   lines: string[];
   success?: boolean;
@@ -174,8 +188,8 @@ export interface GameState {
   resources: Record<ResourceId, number>;
   /** Niveau de chaque bâtiment (0 = non construit ; noyau démarre à 1). */
   buildings: Record<BuildingId, number>;
-  /** File de construction : un seul slot, null si libre. */
-  buildQueue: BuildTask | null;
+  /** File de construction : un chantier par slot occupé (tableau vide = tout est libre). */
+  buildQueue: BuildTask[];
   /** Habitudes réelles -> Points d'énergie. */
   habits: HabitsState;
   /** Dernier tick appliqué (Date.now, ms) — 0 = jamais tické. */
@@ -219,4 +233,10 @@ export interface GameState {
 
   /* ----- Bastion-Défense jouable (intégration profonde, 24/07) ----- */
   bastion: BastionState;
+
+  /* ----- Jalons & Points d'Âge (piste 3 du diagnostic UX) ----- */
+  /** Ids des jalons déjà encaissés — la SEULE chose que le système persiste :
+   *  chaque condition est une fonction pure de l'état, rien d'autre à compter.
+   *  Voir src/data/milestones_config.json et src/lib/game/milestones.ts. */
+  claimedMilestones: string[];
 }

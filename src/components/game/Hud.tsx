@@ -16,7 +16,7 @@ import {
   totalProductionPerHour,
 } from "@/lib/game/economy";
 import { fmtInt, fmtRate } from "@/lib/game/format";
-import { ENERGY_CAP } from "@/lib/game/habits";
+import { dayKey, ENERGY_CAP, nextStreakTier } from "@/lib/game/habits";
 import { useGame } from "@/lib/game/store";
 import type { ResourceId } from "@/lib/game/types";
 
@@ -55,7 +55,57 @@ function vitaliteTarget(mutationLevel: number, value: number): number {
   return Math.max(1, value);
 }
 
-export function Hud() {
+/** Badge de série, visible en permanence (piste 6 du diagnostic).
+ *
+ *  La série était jusqu'ici enterrée dans le panneau Habitudes : le joueur ne la
+ *  voyait qu'en allant la chercher, donc elle ne pesait rien dans sa décision
+ *  d'ouvrir le jeu. Ici elle est sous les yeux à chaque session, et surtout elle
+ *  change de couleur quand la journée n'est pas encore saisie — c'est ce rappel
+ *  ambré, et pas le total d'énergie, qui ramène le joueur le soir. */
+function StreakChip({ onOpen }: { onOpen?: () => void }) {
+  const habits = useGame((s) => s.habits);
+  // "now" du rendu = dernier tick (1 s) : suit minuit sans Date.now() en rendu.
+  const now = useGame((s) => s.lastTick);
+
+  const key = dayKey(now);
+  const todayOk = (habits.days[key]?.validatedCount ?? 0) > 0;
+  const streak = habits.streak;
+  const next = nextStreakTier(streak);
+
+  const nextLabel = next
+    ? `Prochain palier : ${next.days} j → +${next.energy} ⚡ (encore ${next.days - streak} j)`
+    : "Tous les paliers de série sont atteints.";
+
+  let cls: string;
+  let text: string;
+  let title: string;
+  if (streak === 0 && !todayOk) {
+    cls = "border-cell-teal/30 text-cell-teal/60";
+    text = "🔥 Démarrer";
+    title = `Aucune série en cours. Valide une habitude aujourd'hui pour la lancer. ${nextLabel}`;
+  } else if (!todayOk) {
+    cls = "animate-pulse border-amber-400/60 bg-amber-400/10 text-amber-300";
+    text = `🔥 ${streak} j · à saisir`;
+    title = `Série de ${streak} j — pas encore saisie aujourd'hui, elle tombe à minuit. ${nextLabel}`;
+  } else {
+    cls = "border-cell-lime/50 bg-cell-lime/10 text-cell-lime";
+    text = `🔥 ${streak} j`;
+    title = `Série de ${streak} j, journée validée. ${nextLabel}`;
+  }
+
+  return (
+    <button
+      onClick={onOpen}
+      title={title}
+      aria-label={title}
+      className={`rounded-full border px-2 py-0.5 text-[10px] tracking-wide transition active:translate-y-px ${cls}`}
+    >
+      {text}
+    </button>
+  );
+}
+
+export function Hud({ onOpenHabits }: { onOpenHabits?: () => void }) {
   const resources = useGame((s) => s.resources);
   const buildings = useGame((s) => s.buildings);
   const [info, setInfo] = useState<ResourceId | null>(null);
@@ -69,6 +119,7 @@ export function Hud() {
     <div className="space-y-1">
       {/* Énergie (habitudes réelles) + Vitalité (méta) */}
       <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+        <StreakChip onOpen={onOpenHabits} />
         <button className="flex items-center gap-1" onClick={() => setInfo("energie")}>
           {icon("energie")}
           <ResourceBar

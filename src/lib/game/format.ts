@@ -10,6 +10,19 @@ export function fmtRate(perHour: number): string {
   return perHour.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
 }
 
+/** Durée compacte, pour les libellés de boutons : "2j 4h", "1h 20m", "45m", "30s".
+ *  fmtDuration est trop bavard là où la place manque ("2h 00m 00s"). */
+export function fmtDurationShort(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const d = Math.floor(total / 86400);
+  const h = Math.floor((total % 86400) / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (d > 0) return h > 0 ? `${d}j ${h}h` : `${d}j`;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (m > 0) return `${m}m`;
+  return `${total}s`;
+}
+
 /** Durée lisible : "2j 3h 05m", "1h 04m 12s", "3m 09s", "42s". */
 export function fmtDuration(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));

@@ -6,12 +6,16 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import {
+  boostQuote,
+  buildTimeHours,
   buildTimeMs,
   canAfford,
+  findFreeSlot,
   freshGameState,
   isDesigned,
   levelCost,
   maxLevel,
+  OFFLINE_REPORT,
 } from "./economy";
 import { freshBastionState } from "./bastion/config";
 import {
@@ -39,15 +43,18 @@ import {
 } from "./bastion/actions";
 import type { FieldStructure, LiveWaveResult } from "./bastion/types";
 import {
-  addDaysToKey,
   clampHabitValue,
   CALORIE_GOAL_MAX,
   CALORIE_GOAL_MIN,
+  computeStreak,
   dayKey,
   emptyDayEntry,
   ENERGY_CAP,
   evaluateEntry,
-  STREAK_MILESTONES,
+  monthKey,
+  repairableDay,
+  settleStreakTiers,
+  STREAK_TIERS,
 } from "./habits";
 import {
   addCatch,
@@ -66,11 +73,14 @@ import {
   resolveChoiceEvent,
   resolveLiveWave,
 } from "./military";
-import { applyTick } from "./tick";
+import { applyMilestoneReward, MILESTONES, milestoneView } from "./milestones";
+import { applyTick, applyTickDetailed, totalGained } from "./tick";
+import type { FinishedBuild, TickSummary } from "./tick";
 import { getActiveSlot, setActiveSlot, slotHasSave, slotStorageKey, type SaveSlot } from "./slot";
 import {
   TUTORIAL_DONE,
   type BuildingId,
+  type BuildTask,
   type GameState,
   type HabitDayEntry,
   type ResourceId,
@@ -78,7 +88,7 @@ import {
 } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 10;
 export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
@@ -110,11 +120,32 @@ interface GameActions {
   /** Tick du moteur — appelé par un setInterval 1 s côté client,
    *  et une seule fois au chargement pour le gros tick de rattrapage offline. */
   collectTick: (now?: number) => void;
-  /** Lance l'amélioration d'un bâtiment (1 seul slot de file — règle stricte). */
+  /* ----- Compte rendu de session (pistes 1 & 5 du diagnostic UX) -----
+     État TRANSITOIRE : jamais dans gameSlice, donc jamais persisté ni synchronisé.
+     C'est de la mise en scène, pas de la donnée de partie. */
+  /** Rapport du dernier gros rattrapage (absence ≥ offline_report.min_absence_minutes). */
+  offlineSummary: TickSummary | null;
+  dismissOfflineSummary: () => void;
+  /** File des chantiers terminés SOUS LES YEUX du joueur (à célébrer un par un). */
+  buildCelebrations: FinishedBuild[];
+  dismissBuildCelebration: () => void;
+  /** Lance l'amélioration d'un bâtiment sur le premier slot libre compatible (v8). */
   startUpgrade: (id: BuildingId) => boolean;
+  /** Rachète un pas de temps sur un chantier en cours contre de l'énergie (v8).
+   *  `slot` identifie le chantier ; renvoie false si le devis n'est pas payable
+   *  ou si le quota de 25 % est épuisé. */
+  boostBuild: (slot: number) => boolean;
+  /** Encaisse un jalon atteint : verse sa récompense et l'inscrit dans
+   *  `claimedMilestones` (piste 3). Renvoie false si le jalon est inconnu,
+   *  déjà réclamé, ou pas encore atteint. */
+  claimMilestone: (id: string) => boolean;
   /** Édite la saisie d'habitudes DU JOUR uniquement (anti-triche : la clé est
    *  toujours dayKey(Date.now()), l'historique passé est en lecture seule). */
   updateHabitToday: (patch: HabitPatch) => void;
+  /** Consomme le « jour de grâce » du mois pour recoller une journée oubliée
+   *  (piste 6). Renvoie false s'il n'y a rien de réparable ou si la grâce du
+   *  mois est déjà partie. Le jour réparé ne rapporte AUCUNE énergie. */
+  repairStreak: () => boolean;
   setCalorieGoal: (goal: number) => void;
   createProfile: (portraitId: string, nomOrganisme: string) => void;
   /** Avance le micro-tutoriel (monotone : jamais de retour en arrière). */
@@ -251,6 +282,7 @@ function gameSlice(s: GameStore): GameState {
     cardAssignments: s.cardAssignments,
     lastCatch: s.lastCatch,
     bastion: s.bastion,
+    claimedMilestones: s.claimedMilestones,
   };
 }
 
@@ -310,19 +342,49 @@ export const useGame = create<GameStore>()(
         set(s);
       },
 
+      offlineSummary: null,
+      dismissOfflineSummary: () => set({ offlineSummary: null }),
+      buildCelebrations: [],
+      dismissBuildCelebration: () => set({ buildCelebrations: get().buildCelebrations.slice(1) }),
+
       collectTick: (now = Date.now()) => {
-        set(applyTick(gameSlice(get()), now));
+        const prev = get();
+        const { state, summary } = applyTickDetailed(gameSlice(prev), now);
+        // Une absence significative ET qui a produit quelque chose ⇒ rapport de retour.
+        // En dessous du seuil, un chantier terminé se célèbre tout seul (le joueur
+        // est devant l'écran : c'est une récompense, pas un bilan).
+        const worthTelling =
+          summary.finished.length > 0 ||
+          summary.newReports.length > 0 ||
+          totalGained(summary) > 0;
+        const isReturn =
+          summary.durationMs >= OFFLINE_REPORT.min_absence_minutes * 60_000 && worthTelling;
+        if (isReturn) {
+          set({ ...state, offlineSummary: summary, buildCelebrations: [] });
+        } else if (summary.finished.length > 0) {
+          set({
+            ...state,
+            buildCelebrations: [...prev.buildCelebrations, ...summary.finished],
+          });
+        } else {
+          set(state);
+        }
       },
 
       startUpgrade: (id) => {
         const now = Date.now();
         // On se met d'abord à jour (finalise un éventuel chantier échu, produit).
         const s = applyTick(gameSlice(get()), now);
-        if (s.buildQueue !== null) return false; // file pleine : 1 seul slot, strict
         if (!isDesigned(id)) return false; // peche / defense / raid : "À venir"
+        // Un même proto-organe ne peut pas être bâti deux fois en parallèle :
+        // les niveaux sont séquentiels (le coût du Nv N+1 suppose le Nv N acquis).
+        if (s.buildQueue.some((t) => t.buildingId === id)) return false;
         const current = s.buildings[id] ?? 0;
         const target = current + 1;
         if (target > maxLevel(id)) return false;
+        // Slot compatible ? (les slots auxiliaires n'acceptent que les chantiers courts)
+        const slot = findFreeSlot(s.buildings, s.buildQueue, buildTimeHours(id, target));
+        if (slot < 0) return false;
         const cost = levelCost(id, target);
         if (!cost || !canAfford(s.resources, cost)) return false;
 
@@ -330,16 +392,67 @@ export const useGame = create<GameStore>()(
         for (const [res, amount] of Object.entries(cost)) {
           resources[res as keyof typeof resources] -= amount;
         }
+        const task: BuildTask = {
+          slot,
+          buildingId: id,
+          targetLevel: target,
+          startedAt: now,
+          endsAt: now + buildTimeMs(id, target),
+          boostedMs: 0,
+        };
         set({
           ...s,
           resources,
-          buildQueue: {
-            buildingId: id,
-            targetLevel: target,
-            startedAt: now,
-            endsAt: now + buildTimeMs(id, target),
-          },
+          buildQueue: [...s.buildQueue, task].sort((a, b) => a.slot - b.slot),
         });
+        return true;
+      },
+
+      boostBuild: (slot) => {
+        const now = Date.now();
+        // Le tick d'abord : si le chantier vient d'échoir, il ne reste rien à
+        // racheter et on ne doit surtout pas facturer l'énergie du joueur.
+        const s = applyTick(gameSlice(get()), now);
+        const task = s.buildQueue.find((t) => t.slot === slot);
+        if (!task) return false;
+        const quote = boostQuote(task, now);
+        if (!quote) return false;
+        if ((s.resources.energie ?? 0) < quote.cost) return false;
+
+        // On rogne `endsAt` ET on mémorise le cumul racheté : sans `boostedMs`,
+        // le quota se recalculerait sur une durée qui rétrécit — donc infini.
+        const next: BuildTask = {
+          ...task,
+          endsAt: task.endsAt - quote.ms,
+          boostedMs: task.boostedMs + quote.ms,
+        };
+        set({
+          ...s,
+          resources: { ...s.resources, energie: s.resources.energie - quote.cost },
+          buildQueue: s.buildQueue.map((t) => (t.slot === slot ? next : t)),
+        });
+        return true;
+      },
+
+      claimMilestone: (id) => {
+        const now = Date.now();
+        // Tick d'abord : un jalon peut venir d'aboutir pendant que le joueur
+        // regardait le bandeau (un chantier qui s'achève, une vague encaissée).
+        const s = applyTick(gameSlice(get()), now);
+        const cfg = MILESTONES.find((m) => m.id === id);
+        if (!cfg) return false;
+        const view = milestoneView(s, cfg);
+        if (!view.achieved || view.claimed) return false;
+
+        // On repart d'une copie : applyMilestoneReward mute un draft, jamais
+        // l'objet vivant du store (règle d'immutabilité de Zustand).
+        const next: GameState = {
+          ...s,
+          resources: { ...s.resources },
+          claimedMilestones: [...s.claimedMilestones, id],
+        };
+        applyMilestoneReward(next, cfg.reward);
+        set(next);
         return true;
       },
 
@@ -371,37 +484,16 @@ export const useGame = create<GameStore>()(
         // ne crédite que la différence — jamais deux fois le total).
         let energyDelta = energy - prev.energy;
 
-        // ----- Streak : jours consécutifs avec au moins une habitude validée -----
-        let { streak, lastStreakDate, bestStreak } = habits;
-        const milestoneAwards = { ...habits.milestoneAwards };
-        const wasValidated = prev.validatedCount > 0;
-        const isValidated = validatedCount > 0;
-
-        if (!wasValidated && isValidated && lastStreakDate !== key) {
-          // La journée devient validée : elle prolonge la série (veille) ou en démarre une.
-          streak = lastStreakDate === addDaysToKey(key, -1) ? streak + 1 : 1;
-          lastStreakDate = key;
-          bestStreak = Math.max(bestStreak, streak);
-          // Jalons 7/30/90 : bonus d'énergie encaissé au moment où la série atteint le palier.
-          for (const m of STREAK_MILESTONES) {
-            if (streak === m.days && milestoneAwards[String(m.days)] !== key) {
-              energyDelta += m.energy;
-              milestoneAwards[String(m.days)] = key;
-            }
-          }
-        } else if (wasValidated && !isValidated && lastStreakDate === key) {
-          // La journée est entièrement dévalidée : on la retire de la série,
-          // et on reprend un éventuel bonus de jalon encaissé aujourd'hui
-          // (aller-retour neutre : re-valider le jour même re-créditera).
-          streak = Math.max(0, streak - 1);
-          lastStreakDate = streak > 0 ? addDaysToKey(key, -1) : null;
-          for (const m of STREAK_MILESTONES) {
-            if (milestoneAwards[String(m.days)] === key) {
-              energyDelta -= m.energy;
-              delete milestoneAwards[String(m.days)];
-            }
-          }
-        }
+        // ----- Série (piste 6) : DÉRIVÉE de l'historique, plus de comptabilité
+        // incrémentale. On réécrit la journée, puis on relit la chaîne. Toute la
+        // logique délicate (aller-retour de validation le jour même, jours de
+        // grâce, paliers retombés) tombe alors d'elle-même : il n'y a plus qu'un
+        // seul chemin de calcul, celui que lisent aussi le badge du HUD et la
+        // grille d'historique. -----
+        const days = { ...habits.days, [key]: entry };
+        const streak = computeStreak(days, habits.graceDays, key);
+        const settled = settleStreakTiers(habits.streakAwards, streak, key);
+        energyDelta += settled.energyDelta;
 
         const energie = Math.min(
           ENERGY_CAP,
@@ -412,13 +504,49 @@ export const useGame = create<GameStore>()(
           resources: { ...state.resources, energie },
           habits: {
             ...habits,
-            days: { ...habits.days, [key]: entry },
+            days,
             streak,
-            lastStreakDate,
-            bestStreak,
-            milestoneAwards,
+            streakDay: key,
+            bestStreak: Math.max(habits.bestStreak, streak),
+            streakAwards: settled.awards,
           },
         });
+      },
+
+      repairStreak: () => {
+        const now = Date.now();
+        const key = dayKey(now);
+        const state = get();
+        const habits = state.habits;
+
+        const day = repairableDay(habits, key);
+        if (!day) return false;
+
+        // Le jour réparé rejoint la chaîne mais ne rapporte rien par lui-même :
+        // la grâce répare, elle ne paie pas. En revanche, si recoller la chaîne
+        // fait franchir un palier, ce palier est légitimement dû — la série est
+        // réellement intacte, ce serait punir deux fois que de le retenir.
+        const graceDays = [...habits.graceDays, day];
+        const streak = computeStreak(habits.days, graceDays, key);
+        const settled = settleStreakTiers(habits.streakAwards, streak, key);
+        const energie = Math.min(
+          ENERGY_CAP,
+          Math.max(0, state.resources.energie + settled.energyDelta),
+        );
+
+        set({
+          resources: { ...state.resources, energie },
+          habits: {
+            ...habits,
+            graceDays,
+            graceUsedMonth: monthKey(key),
+            streak,
+            streakDay: key,
+            bestStreak: Math.max(habits.bestStreak, streak),
+            streakAwards: settled.awards,
+          },
+        });
+        return true;
       },
 
       setCalorieGoal: (goal) => {
@@ -820,6 +948,50 @@ export const useGame = create<GameStore>()(
         // v6 -> v7 : "Vigie" (aperçu de la vague suivante, achetable en Boutique).
         if (version < 7 || state.bastion.scoutLevel === undefined) {
           state.bastion.scoutLevel = 0;
+        }
+        // v7 -> v8 : file de construction multi-slots. L'ancien `buildQueue` était
+        // un objet unique ou null ; il devient un tableau (slot 0 = chantier principal).
+        if (version < 8 || !Array.isArray(state.buildQueue)) {
+          const legacy = state.buildQueue as unknown as
+            | (Omit<BuildTask, "slot" | "boostedMs"> & Partial<BuildTask>)
+            | null
+            | undefined;
+          state.buildQueue = legacy ? [{ ...legacy, slot: 0, boostedMs: 0 }] : [];
+        }
+        // v8 -> v9 : jalons & Points d'Âge. On repart d'une liste VIDE même pour
+        // une partie déjà avancée : les jalons déjà atteints deviennent donc
+        // immédiatement réclamables. C'est volontaire — un joueur de longue date
+        // ouvre le bandeau sur une pile de récompenses à encaisser plutôt que sur
+        // un tableau de cases grisées qu'il n'a pas vu se cocher.
+        if (version < 9 || !Array.isArray(state.claimedMilestones)) {
+          state.claimedMilestones = [];
+        }
+        // v9 -> v10 : série hebdomadaire + jour de grâce (piste 6). Trois choses :
+        //  - `milestoneAwards` (7/30/90) devient `streakAwards` ; on ne garde que
+        //    les clés qui correspondent encore à un palier, pour ne PAS re-payer
+        //    le palier 7 j à quelqu'un qui l'a déjà touché. Les paliers
+        //    intermédiaires nouvellement créés (14, 21, 28…) sont dus à un joueur
+        //    dont la série les dépasse déjà : le prochain tick les lui verse.
+        //  - `lastStreakDate` disparaît : la série est désormais dérivée de
+        //    l'historique. `streakDay: null` force ce recalcul au premier tick,
+        //    ce qui répare au passage les séries devenues fausses.
+        //  - le filet de sécurité démarre neuf (aucune grâce consommée).
+        if (version < 10 || state.habits.streakAwards === undefined) {
+          const legacy = state.habits as unknown as {
+            milestoneAwards?: Record<string, string>;
+            lastStreakDate?: string | null;
+          };
+          const known = new Set(STREAK_TIERS.map((t) => String(t.days)));
+          const kept: Record<string, string> = {};
+          for (const [k, v] of Object.entries(legacy.milestoneAwards ?? {})) {
+            if (known.has(k)) kept[k] = v;
+          }
+          delete legacy.milestoneAwards;
+          delete legacy.lastStreakDate;
+          state.habits.streakAwards = kept;
+          state.habits.streakDay = null;
+          state.habits.graceDays = [];
+          state.habits.graceUsedMonth = null;
         }
         state.saveVersion = SAVE_VERSION;
         return state;

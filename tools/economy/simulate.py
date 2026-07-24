@@ -9,14 +9,14 @@ n'est en cours ou pendant qu'une autre est en chantier -- seule la file de
 construction est serialisee a 1 slot), puis on construit.
 
 Objectif : verifier que le temps total reel (construction + attente ressource)
-reste proche de TOTAL_HOURS (2160h/90j) -- c'est-a-dire que les couts ne sont
+reste proche de BUILD_HOURS_BUDGET -- c'est-a-dire que les couts ne sont
 PAS le facteur limitant. Un depassement de quelques % est acceptable (aucun
 joueur ne joue de facon parfaitement optimale de toute facon) ; un depassement
 massif indiquerait que COST_SCALE ou STARTING_STOCK doivent etre ajustes.
 """
 from model import (
     TIME_BUDGET_HOURS, TIME_PER_LEVEL, _paid_levels, cost_for_level,
-    production_per_hour, PRODUCER_BASE, TOTAL_HOURS, STARTING_STOCK,
+    production_per_hour, PRODUCER_BASE, BUILD_HOURS_BUDGET, STARTING_STOCK,
     COST_SCALE, storage_cap,
 )
 
@@ -146,7 +146,8 @@ if __name__ == "__main__":
     print(f"Temps total simule      : {result['elapsed_hours']:.1f}h ({result['elapsed_days']:.1f} jours)")
     print(f"  dont construction     : {result['build_hours']:.1f}h")
     print(f"  dont attente ressource: {result['wait_hours']:.1f}h ({result['wait_pct']:.1f}%)")
-    print(f"Cible                  : {TOTAL_HOURS}h (90.0 jours)")
-    print(f"Ecart vs cible         : {result['elapsed_hours'] - TOTAL_HOURS:+.1f}h ({(result['elapsed_hours']/TOTAL_HOURS-1)*100:+.1f}%)")
+    print(f"Budget de chantier     : {BUILD_HOURS_BUDGET}h ({BUILD_HOURS_BUDGET/24:.1f} jours mono-slot)")
+    print(f"Ecart vs budget        : {result['elapsed_hours'] - BUILD_HOURS_BUDGET:+.1f}h ({(result['elapsed_hours']/BUILD_HOURS_BUDGET-1)*100:+.1f}%)")
+    print("(La duree wall-clock reellement vecue se mesure avec simulate_full.py.)")
     print(f"Niveaux finaux         : {result['final_levels']}")
     print(f"Stock final            : { {k: round(v,1) for k,v in result['final_stock'].items()} }")

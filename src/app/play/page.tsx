@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BastionPanel } from "@/components/game/BastionPanel";
+import { BuildCompleteModal } from "@/components/game/BuildCompleteModal";
 import { BuildingSheet } from "@/components/game/BuildingSheet";
 import { CardReveal } from "@/components/game/CardReveal";
 import { CellScene } from "@/components/game/CellScene";
@@ -17,10 +18,12 @@ import { Hud } from "@/components/game/Hud";
 import { MarePanel } from "@/components/game/MarePanel";
 import { NoyauHub } from "@/components/game/NoyauHub";
 import { ProfileCreate, portraitSrc } from "@/components/game/ProfileCreate";
+import { ObjectiveStrip } from "@/components/game/ObjectiveStrip";
 import { QueueBanner } from "@/components/game/QueueBanner";
 import { ReportsPanel } from "@/components/game/ReportsPanel";
 import { SettingsPanel } from "@/components/game/SettingsPanel";
 import { TutorialCoach } from "@/components/game/TutorialCoach";
+import { WelcomeBackModal } from "@/components/game/WelcomeBackModal";
 import { NavIcon, Panel } from "@/components/ui/Pixel";
 import { cloudConfigured } from "@/lib/cloud/firebase";
 import { useCloudSync } from "@/lib/cloud/useCloudSync";
@@ -149,8 +152,12 @@ export default function PlayPage() {
 
           {/* HUD ressources (sticky) */}
           <div className="sticky top-0 z-10 -mx-2 bg-abyss/85 px-2 py-1 backdrop-blur-sm">
-            <Hud />
+            <Hud onOpenHabits={() => setPanel("habits")} />
           </div>
+
+          {/* Objectif permanent (piste 3) — juste sous le HUD : la question
+              « et après ? » doit avoir une réponse visible en permanence. */}
+          <ObjectiveStrip />
 
           {/* Micro-tutoriel (nouveau joueur uniquement) */}
           <TutorialCoach />
@@ -191,6 +198,15 @@ export default function PlayPage() {
       {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
       <EventModal />
       <CardReveal />
+      {/* Comptes rendus (pistes 1 & 5) — le rapport de retour passe devant la
+          célébration de chantier : il englobe déjà les chantiers terminés. */}
+      <WelcomeBackModal />
+      <BuildCompleteModal
+        onNext={(id) => {
+          setPanel(null);
+          setSelected(id);
+        }}
+      />
 
       {/* Nav basse : Noyau (unités/expéditions) & Rapports */}
       {hasHydrated && profile && (

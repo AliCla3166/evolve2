@@ -4,20 +4,24 @@
    sur sockets → Noyau → VFX. L'enveloppe change par PALIERS discrets (jamais de
    déformation continue), le "vivant" (flottement, pulsation) est piloté en code. */
 
-import { BUILDING_ORDER } from "./economy";
+import { builtOrganCount } from "./economy";
 import type { BuildingId } from "./types";
 
 /* ---------- Stades d'enveloppe ----------
-   Seuils = nombre de proto-organes construits (Noyau exclu), copie exacte de
-   public/assets/manifest.json → envelope_stages :
-   stade 1 : 0 bâtiment · 2 : 1-3 · 3 : 4-7 · 4 : 8-10 · 5 : 11-12. */
-export const STAGE_MIN_BUILT = [0, 1, 4, 8, 11] as const;
+   Seuils = nombre de proto-organes construits (Noyau exclu).
+   CORRECTION 24/07/2026 : les anciens seuils [0, 1, 4, 8, 11] recopiaient
+   public/assets/manifest.json, qui supposait les 12 bâtiments constructibles.
+   Or peche/defense/raid sont designed:false — seuls 8 proto-organes existent
+   réellement (membrane, adn, proteine, biomasse, enzyme, lipide, signaux,
+   mutation). Le stade 5 était donc INATTEIGNABLE (sprite niveau5.png mort) et
+   le stade 4 n'arrivait qu'au tout dernier organe. Nouveaux seuils calés sur
+   8 organes : la mue finale récompense la cellule complète.
+   stade 1 : 0 · 2 : 1-2 · 3 : 3-4 · 4 : 5-7 · 5 : 8 (tous les organes). */
+export const STAGE_MIN_BUILT = [0, 1, 3, 5, 8] as const;
 
-/** Nombre de proto-organes construits (tout bâtiment ≥ Nv1, Noyau exclu). */
-export function builtCount(buildings: Record<BuildingId, number>): number {
-  return BUILDING_ORDER.filter((id) => id !== "noyau" && (buildings[id] ?? 0) > 0)
-    .length;
-}
+/** Nombre de proto-organes construits (tout bâtiment ≥ Nv1, Noyau exclu).
+ *  Règle partagée avec les déblocages de slots de chantier (cf. economy.ts). */
+export const builtCount = builtOrganCount;
 
 /** Stade d'enveloppe courant (1..5). */
 export function envelopeStage(buildings: Record<BuildingId, number>): number {

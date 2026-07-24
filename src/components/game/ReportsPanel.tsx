@@ -10,6 +10,7 @@ const TYPE_LABEL = {
   expedition: "Expédition",
   pathogene: "Pathogènes",
   evenement: "Événement",
+  chantier: "Chantier",
 } as const;
 
 function fmtTs(ts: number): string {

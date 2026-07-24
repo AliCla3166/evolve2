@@ -1,0 +1,289 @@
+{
+  "$comment": "Jalons de l'Age 1 et Points d'Age (24/07/2026, dette PLAN.md 5.8 / piste 3 du diagnostic UX). Probleme resolu : passe l'etape 3 du micro-tutoriel, le joueur n'avait plus AUCUN objectif affiche, et les mues de membrane — la plus belle animation du projet — arrivaient par surprise au lieu d'etre desirees. Chaque jalon est une condition PURE derivee du GameState (aucun compteur specifique a maintenir), une recompense modeste et un libelle. Les Points d'Age (PA) s'accumulent en reclamant les jalons et donnent enfin un horizon chiffre aux 90 jours : l'ascension vers l'Age 2 est atteinte quand tous les jalons sont reclames. Zero valeur en dur dans le code : ajouter/retirer un jalon ici suffit, milestones.ts ne fait que lire.",
+  "age": "age01_cellule",
+  "ui": {
+    "$comment": "Le bandeau d'objectif choisit tout seul quoi afficher : d'abord un jalon deja atteint et non reclame (le tap-recompense passe avant tout), sinon le jalon non reclame le plus proche d'aboutir. near_ratio est le seuil a partir duquel on chuchote 'presque'.",
+    "near_ratio": 0.75
+  },
+  "metrics": {
+    "$comment": "Documentation des metriques lisibles par milestones.ts. Chacune est une fonction pure de l'etat. 'param' precise la cible quand la metrique le demande (building_level). 'target_metric' remplace 'target' par une valeur derivee d'une autre config (evite qu'un jalon se desynchronise quand le contenu grandit).",
+    "built_organs": "Proto-organes construits (tout batiment >= Nv1, Noyau exclu) — meme regle que les mues et les slots de chantier.",
+    "min_building_level": "Niveau le plus bas parmi les 9 batiments concus (le 'tout Nv N').",
+    "building_level": "Niveau d'un batiment precis (param = son id).",
+    "species_collected": "Especes distinctes recensees dans la collection.",
+    "cards_caught": "Prises cumulees, doublons compris.",
+    "mythic_species": "Especes possedees en rarete mythique (indice 5).",
+    "streak": "Serie en cours de jours consecutifs avec au moins une habitude validee.",
+    "expeditions_sent": "Expeditions envoyees depuis le debut de la partie.",
+    "waves_survived": "Vagues de pathogenes affrontees (auto-resolues ou jouees).",
+    "bastion_waves": "Vagues jouees en direct au Bastion-Defense.",
+    "species_total": "(target_metric) Nombre total d'especes existantes, lu dans mare_config.json."
+  },
+  "milestones": [
+    {
+      "id": "premier_organe",
+      "category": "croissance",
+      "label": "Le premier proto-organe",
+      "hint": "Construis n'importe quel bâtiment : ta membrane changera de forme.",
+      "metric": "built_organs",
+      "target": 1,
+      "age_points": 20,
+      "reward": {
+        "adn": 120
+      }
+    },
+    {
+      "id": "premiere_carte",
+      "category": "collection",
+      "label": "La première prise",
+      "hint": "Achète un jeton à la Mare et lance ta ligne.",
+      "metric": "cards_caught",
+      "target": 1,
+      "age_points": 15,
+      "reward": {
+        "jetons": 2
+      }
+    },
+    {
+      "id": "premiere_expedition",
+      "category": "expansion",
+      "label": "Première sortie hors de la cellule",
+      "hint": "Recrute une sonde au Noyau, puis envoie-la en expédition.",
+      "metric": "expeditions_sent",
+      "target": 1,
+      "age_points": 15,
+      "reward": {
+        "signaux": 120
+      }
+    },
+    {
+      "id": "mue_2",
+      "category": "croissance",
+      "label": "Deuxième mue — la membrane s'épaissit",
+      "hint": "3 proto-organes débloquent aussi ton premier chantier auxiliaire.",
+      "metric": "built_organs",
+      "target": 3,
+      "age_points": 35,
+      "reward": {
+        "proteine": 200
+      }
+    },
+    {
+      "id": "premiere_vague",
+      "category": "defense",
+      "label": "Première vague repoussée",
+      "hint": "Les pathogènes reviennent régulièrement : garde une garnison.",
+      "metric": "waves_survived",
+      "target": 1,
+      "age_points": 20,
+      "reward": {
+        "combat": 50
+      }
+    },
+    {
+      "id": "serie_7",
+      "category": "discipline",
+      "label": "Sept jours d'affilée",
+      "hint": "Une seule habitude cochée suffit à tenir la série.",
+      "metric": "streak",
+      "target": 7,
+      "age_points": 40,
+      "reward": {
+        "energie": 60
+      }
+    },
+    {
+      "id": "mue_3",
+      "category": "croissance",
+      "label": "Troisième mue — la cellule prend corps",
+      "hint": "5 proto-organes : un second chantier auxiliaire s'ouvre.",
+      "metric": "built_organs",
+      "target": 5,
+      "age_points": 50,
+      "reward": {
+        "biomasse": 250
+      }
+    },
+    {
+      "id": "dix_especes",
+      "category": "collection",
+      "label": "Dix espèces recensées",
+      "hint": "Chaque espèce assignée en défense ou en expédition rend ta cellule plus forte.",
+      "metric": "species_collected",
+      "target": 10,
+      "age_points": 30,
+      "reward": {
+        "jetons": 3
+      }
+    },
+    {
+      "id": "dix_expeditions",
+      "category": "expansion",
+      "label": "Dix expéditions menées",
+      "hint": "Les destinations lointaines rapportent plus, mais coûtent des unités.",
+      "metric": "expeditions_sent",
+      "target": 10,
+      "age_points": 40,
+      "reward": {
+        "signaux": 300
+      }
+    },
+    {
+      "id": "tout_nv2",
+      "category": "croissance",
+      "label": "Toute la cellule au niveau 2",
+      "hint": "Aucun organe laissé en arrière.",
+      "metric": "min_building_level",
+      "target": 2,
+      "age_points": 70,
+      "reward": {
+        "enzyme": 300
+      }
+    },
+    {
+      "id": "cellule_complete",
+      "category": "croissance",
+      "label": "Quatrième mue — cellule complète",
+      "hint": "Les 8 proto-organes bâtis : la membrane atteint sa forme finale.",
+      "metric": "built_organs",
+      "target": 8,
+      "age_points": 90,
+      "reward": {
+        "lipide": 400
+      }
+    },
+    {
+      "id": "dix_vagues",
+      "category": "defense",
+      "label": "Dix vagues encaissées",
+      "hint": "Le Bastion récompense mieux les vagues jouées en direct.",
+      "metric": "waves_survived",
+      "target": 10,
+      "age_points": 50,
+      "reward": {
+        "combat": 200
+      }
+    },
+    {
+      "id": "premiere_mythique",
+      "category": "collection",
+      "label": "Une mythique au bout de la ligne",
+      "hint": "La rareté monte avec la qualité de ta prise, pas avec la chance seule.",
+      "metric": "mythic_species",
+      "target": 1,
+      "age_points": 80,
+      "reward": {
+        "fragments": 4
+      }
+    },
+    {
+      "id": "bastion_5",
+      "category": "defense",
+      "label": "Cinq batailles menées en personne",
+      "hint": "Défendre en direct rapporte plus que laisser l'auto-résolution décider.",
+      "metric": "bastion_waves",
+      "target": 5,
+      "age_points": 60,
+      "reward": {
+        "combat": 300
+      }
+    },
+    {
+      "id": "serie_30",
+      "category": "discipline",
+      "label": "Trente jours d'affilée",
+      "hint": "Un mois entier de discipline réelle.",
+      "metric": "streak",
+      "target": 30,
+      "age_points": 120,
+      "reward": {
+        "energie": 200
+      }
+    },
+    {
+      "id": "trente_especes",
+      "category": "collection",
+      "label": "Trente espèces recensées",
+      "hint": "La moitié du bestiaire de la Mare.",
+      "metric": "species_collected",
+      "target": 30,
+      "age_points": 60,
+      "reward": {
+        "jetons": 5
+      }
+    },
+    {
+      "id": "tout_nv3",
+      "category": "croissance",
+      "label": "Toute la cellule au niveau 3",
+      "hint": "Le palier où la production commence vraiment à porter.",
+      "metric": "min_building_level",
+      "target": 3,
+      "age_points": 110,
+      "reward": {
+        "adn": 600
+      }
+    },
+    {
+      "id": "noyau_5",
+      "category": "croissance",
+      "label": "Noyau primordial achevé",
+      "hint": "Le Noyau porte le plafond de stockage de toute la cellule.",
+      "metric": "building_level",
+      "param": "noyau",
+      "target": 5,
+      "age_points": 90,
+      "reward": {
+        "vitalite": 120
+      }
+    },
+    {
+      "id": "bestiaire_complet",
+      "category": "collection",
+      "label": "Bestiaire complet",
+      "hint": "Toutes les espèces de la Mare, au moins une fois chacune.",
+      "metric": "species_collected",
+      "target_metric": "species_total",
+      "age_points": 150,
+      "reward": {
+        "fragments": 8
+      }
+    },
+    {
+      "id": "tout_nv4",
+      "category": "croissance",
+      "label": "Toute la cellule au niveau 4",
+      "hint": "L'avant-dernier palier — les chantiers deviennent longs, l'énergie devient précieuse.",
+      "metric": "min_building_level",
+      "target": 4,
+      "age_points": 170,
+      "reward": {
+        "proteine": 900
+      }
+    },
+    {
+      "id": "serie_90",
+      "category": "discipline",
+      "label": "Quatre-vingt-dix jours d'affilée",
+      "hint": "La durée d'un Âge entier, sans un jour manqué.",
+      "metric": "streak",
+      "target": 90,
+      "age_points": 250,
+      "reward": {
+        "energie": 500
+      }
+    },
+    {
+      "id": "ascension",
+      "category": "ascension",
+      "label": "Ascension vers l'Âge 2",
+      "hint": "Tous les organes au niveau 5. La cellule est prête à devenir organisme.",
+      "metric": "min_building_level",
+      "target": 5,
+      "age_points": 300,
+      "reward": {
+        "vitalite": 500
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 
 import rawConfig from "@/data/economy_config.json";
 import { freshBastionState } from "./bastion/config";
-import type { BuildingId, GameState, ResourceId } from "./types";
+import type { BuildingId, BuildTask, GameState, ResourceId } from "./types";
 
 /* ---------- Typage de la structure réelle du JSON ---------- */
 
@@ -36,6 +36,14 @@ export interface ResourceConfig {
   note?: string;
 }
 
+export interface BuildSlotConfig {
+  label: string;
+  /** null = aucune limite de durée (slot principal). */
+  max_hours: number | null;
+  /** Nombre de proto-organes construits requis pour débloquer ce slot auxiliaire. */
+  requires_built?: number;
+}
+
 export interface EconomyConfig {
   age: string;
   global_params: {
@@ -48,6 +56,30 @@ export interface EconomyConfig {
     cost_scale: number;
     starting_stock_per_producible_resource: number;
     base_storage_cap: number;
+  };
+  build_slots: {
+    main: BuildSlotConfig;
+    aux: BuildSlotConfig[];
+  };
+  offline_report: {
+    /** En dessous, aucun rapport de retour n'est montré. */
+    min_absence_minutes: number;
+    /** Part de production perdue au plafond déclenchant l'alerte de stockage. */
+    waste_alert_ratio: number;
+    /** Nombre d'événements listés avant repli. */
+    max_lines: number;
+  };
+  energy_boost: {
+    /** Part maximale de la durée TOTALE d'un chantier rachetable à l'énergie. */
+    max_ratio_per_task: number;
+    /** Part de la durée totale rachetée par tap. */
+    step_ratio: number;
+    /** Coût de base d'une heure rachetée (⚡). */
+    energy_per_hour: number;
+    /** Surcoût de la dernière heure du quota par rapport à la première. */
+    cost_growth_at_cap: number;
+    /** En dessous, on ne propose plus de rachat (micro-achats sans intérêt). */
+    min_step_minutes: number;
   };
   buildings: Record<string, BuildingConfig>;
   resources: Record<string, ResourceConfig>;
@@ -144,6 +176,197 @@ export function totalProductionPerSecond(
   return out;
 }
 
+/* ---------- File de construction multi-slots ---------- */
+
+/** Nombre de proto-organes construits (tout bâtiment ≥ Nv1, Noyau exclu).
+ *  Défini ici (et non dans scene.ts) parce que les déblocages de slots s'y indexent :
+ *  scene.ts le réexporte pour ne pas dupliquer la règle. */
+export function builtOrganCount(buildings: Record<BuildingId, number>): number {
+  return BUILDING_ORDER.filter((id) => id !== "noyau" && (buildings[id] ?? 0) > 0).length;
+}
+
+/** Configuration du slot `index` (0 = principal, 1+ = auxiliaires). */
+export function buildSlotConfig(index: number): BuildSlotConfig {
+  if (index <= 0) return ECONOMY.build_slots.main;
+  return ECONOMY.build_slots.aux[index - 1] ?? ECONOMY.build_slots.main;
+}
+
+/** Nombre total de slots ouverts pour un état de bâtiments donné (toujours ≥ 1). */
+export function unlockedSlotCount(buildings: Record<BuildingId, number>): number {
+  const built = builtOrganCount(buildings);
+  let n = 1;
+  for (const aux of ECONOMY.build_slots.aux) {
+    if (built >= (aux.requires_built ?? Infinity)) n++;
+  }
+  return n;
+}
+
+/** Prochain slot à débloquer (pour l'affichage des objectifs) — null si tout est ouvert. */
+export function nextSlotUnlock(
+  buildings: Record<BuildingId, number>,
+): { label: string; requiresBuilt: number; built: number } | null {
+  const built = builtOrganCount(buildings);
+  for (const aux of ECONOMY.build_slots.aux) {
+    const need = aux.requires_built ?? Infinity;
+    if (built < need) return { label: aux.label, requiresBuilt: need, built };
+  }
+  return null;
+}
+
+/** Réglages du rapport de retour (« pendant ton absence… »). */
+export const OFFLINE_REPORT = ECONOMY.offline_report;
+
+/** Un slot accepte-t-il un chantier de `hours` heures ? (le principal accepte tout) */
+export function slotAcceptsHours(index: number, hours: number): boolean {
+  const max = buildSlotConfig(index).max_hours;
+  return max === null || hours <= max;
+}
+
+/** Premier slot libre acceptant ce chantier — -1 si aucun.
+ *  On sert le principal en dernier : un chantier court doit préférer un slot auxiliaire,
+ *  sinon il bloquerait le seul slot capable de prendre les gros chantiers. */
+export function findFreeSlot(
+  buildings: Record<BuildingId, number>,
+  queue: BuildTask[],
+  hours: number,
+): number {
+  const total = unlockedSlotCount(buildings);
+  const busy = new Set(queue.map((t) => t.slot));
+  for (let i = total - 1; i >= 0; i--) {
+    if (!busy.has(i) && slotAcceptsHours(i, hours)) return i;
+  }
+  return -1;
+}
+
+/* ---------- L'énergie achète du temps ---------- */
+
+/** Réglages du rachat d'heures de chantier à l'énergie (dette PLAN.md §5.4). */
+export const ENERGY_BOOST = ECONOMY.energy_boost;
+
+/** Devis d'une accélération (un tap). */
+export interface BoostQuote {
+  /** Temps racheté par ce tap (ms). */
+  ms: number;
+  /** Coût en ⚡ (entier). */
+  cost: number;
+  /** Quota encore rachetable APRÈS ce tap (ms). */
+  leftAfterMs: number;
+  /** Quota total de ce chantier (ms) — pour la jauge. */
+  allowanceMs: number;
+  /** Quota déjà consommé (ms) — pour la jauge. */
+  usedMs: number;
+}
+
+/** Durée d'origine d'un chantier, avant tout rachat (ms).
+ *  Le rachat rogne `endsAt` : sans mémoriser `boostedMs`, le quota de 25 %
+ *  se recalculerait sur une durée qui rétrécit et deviendrait infini. */
+function originalDurationMs(task: BuildTask): number {
+  return Math.max(1, task.endsAt - task.startedAt + task.boostedMs);
+}
+
+/** Quota total rachetable sur ce chantier (ms). */
+export function boostAllowanceMs(task: BuildTask): number {
+  return originalDurationMs(task) * ENERGY_BOOST.max_ratio_per_task;
+}
+
+/** Combien coûte le prochain tap d'accélération — null s'il n'y a plus rien à racheter.
+ *  Le coût est dégressif en rendement : la première heure rachetée est au tarif de base,
+ *  la dernière du quota coûte `cost_growth_at_cap` de plus. C'est ce qui empêche
+ *  l'énergie de devenir une simple monnaie « fast-forward ». */
+export function boostQuote(task: BuildTask, now: number): BoostQuote | null {
+  const total = originalDurationMs(task);
+  const allowanceMs = total * ENERGY_BOOST.max_ratio_per_task;
+  const usedMs = Math.min(task.boostedMs, allowanceMs);
+  const leftAllowance = allowanceMs - usedMs;
+  const remaining = task.endsAt - now;
+  if (remaining <= 0 || leftAllowance <= 0) return null;
+  const ms = Math.min(total * ENERGY_BOOST.step_ratio, leftAllowance, remaining);
+  if (ms < ENERGY_BOOST.min_step_minutes * 60_000) return null;
+  const mult = 1 + ENERGY_BOOST.cost_growth_at_cap * (usedMs / allowanceMs);
+  const cost = Math.max(1, Math.ceil((ms / 3_600_000) * ENERGY_BOOST.energy_per_hour * mult));
+  return { ms, cost, leftAfterMs: leftAllowance - ms, allowanceMs, usedMs };
+}
+
+/* ---------- Recommandation de chantier ---------- */
+
+/** Un chantier proposé au joueur (« Enchaîner »). */
+export interface BuildSuggestion {
+  id: BuildingId;
+  /** Niveau visé (niveau actuel + 1). */
+  level: number;
+  /** Le coût est-il payable tout de suite ? */
+  affordable: boolean;
+}
+
+/** Bonus de score d'un organe encore jamais construit : au-delà de sa production,
+ *  il fait avancer les mues ET les déblocages de slots — c'est structurel. */
+const NEW_ORGAN_SCORE_BONUS = 0.6;
+
+/** Quel chantier proposer maintenant ? (bouton « Enchaîner » de fin de chantier)
+ *
+ *  La règle : un gain de production RELATIF (pondéré par ce que la cellule produit
+ *  déjà de cette ressource — +10/h d'une ressource rare vaut mieux que +10/h d'une
+ *  ressource abondante) rapporté à l'heure de chantier. Les organes neufs reçoivent
+ *  un bonus : ils débloquent slots et mues.
+ *  On ne propose QUE des chantiers réellement lançables (slot compatible libre).
+ *  Si rien n'est payable, on propose le plus proche de l'être — c'est un objectif,
+ *  pas une frustration : la fiche affichera le coût manquant. */
+export function recommendNextBuild(
+  buildings: Record<BuildingId, number>,
+  resources: Record<ResourceId, number>,
+  queue: BuildTask[],
+  exclude?: BuildingId,
+): BuildSuggestion | null {
+  const perHour = totalProductionPerHour(buildings);
+  let best: BuildSuggestion | null = null;
+  let bestKey: [number, number, number] | null = null; // [payable, -manque, score]
+
+  for (const id of BUILDING_ORDER) {
+    if (id === exclude) continue;
+    if (!isDesigned(id)) continue;
+    const level = buildings[id] ?? 0;
+    const target = level + 1;
+    if (target > maxLevel(id)) continue;
+    if (queue.some((t) => t.buildingId === id)) continue;
+    const cost = levelCost(id, target);
+    if (!cost) continue;
+    const hours = buildTimeHours(id, target);
+    if (findFreeSlot(buildings, queue, hours) < 0) continue;
+
+    // Gain de production relatif.
+    const before = buildingProductionPerHour(id, level);
+    const after = buildingProductionPerHour(id, target);
+    let gain = 0;
+    for (const [res, rate] of Object.entries(after)) {
+      const delta = rate - (before[res as ResourceId] ?? 0);
+      if (delta <= 0) continue;
+      gain += delta / Math.max(1, perHour[res as ResourceId] ?? 0);
+    }
+    if (level === 0) gain += NEW_ORGAN_SCORE_BONUS;
+    const score = gain / Math.max(0.1, hours);
+
+    // Distance au coût : 0 si payable, sinon la pire fraction manquante.
+    let shortfall = 0;
+    for (const [res, amount] of Object.entries(cost)) {
+      const have = resources[res as ResourceId] ?? 0;
+      if (have >= amount) continue;
+      shortfall = Math.max(shortfall, (amount - have) / Math.max(1, amount));
+    }
+    const affordable = shortfall === 0;
+    const key: [number, number, number] = [affordable ? 1 : 0, -shortfall, score];
+
+    if (!bestKey || key[0] > bestKey[0] || (key[0] === bestKey[0] &&
+        (key[1] > bestKey[1] + 0.15 ||
+          (Math.abs(key[1] - bestKey[1]) <= 0.15 && key[2] > bestKey[2])))) {
+      // Entre deux chantiers hors budget de coût comparable (±15 %), c'est le
+      // meilleur rendement qui tranche — pas le hasard de l'ordre d'affichage.
+      best = { id, level: target, affordable };
+      bestKey = key;
+    }
+  }
+  return best;
+}
+
 /* ---------- Stockage ---------- */
 
 /** Ressources plafonnées par le stockage cellulaire (les 6 productibles, cf. storage.applies_to). */
@@ -227,14 +450,16 @@ export function freshGameState(now: number): GameState {
     tutorialStep: 0, // nouveau joueur : micro-tutoriel actif après création du profil
     resources: startingResources(),
     buildings: startingBuildings(),
-    buildQueue: null,
+    buildQueue: [],
     habits: {
       days: {},
       calorieGoal: 2500, // valeur par défaut, modifiable par le joueur (pas un tuning économique)
       streak: 0,
-      lastStreakDate: null,
+      streakDay: null,
       bestStreak: 0,
-      milestoneAwards: {},
+      streakAwards: {},
+      graceDays: [],
+      graceUsedMonth: null,
     },
     lastTick: now,
     createdAt: now,
@@ -258,5 +483,6 @@ export function freshGameState(now: number): GameState {
     cardAssignments: { defense: [], expedition: [] },
     lastCatch: null,
     bastion: freshBastionState(),
+    claimedMilestones: [],
   };
 }
