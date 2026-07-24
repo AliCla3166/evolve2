@@ -68,8 +68,13 @@ export const SOCKETS: Record<BuildingId, Socket> = {
    L'enveloppe grandit par paliers ; les sockets s'écartent du centre avec elle
    (les bâtiments GLISSENT vers leur nouvelle position pendant la mue — le
    facteur est interpolé en continu côté rendu). */
-export const ENVELOPE_SCALE = [0.6, 0.72, 0.84, 0.94, 1.02] as const;
-export const SOCKET_SPREAD = [0.56, 0.68, 0.8, 0.91, 1.0] as const;
+/* Lisibilité (retour utilisateur) : à faible stade, l'ancien écartement (0.56)
+   resserrait les 12 sockets bien plus près du centre que leur rayon de sprite
+   ne le permettait (chevauchements). L'écartement de base est relevé et
+   l'enveloppe agrandie en conséquence pour que la cellule "respire" dès le
+   premier stade, quitte à ce que l'image centrale soit plus grande. */
+export const ENVELOPE_SCALE = [0.76, 0.84, 0.91, 0.97, 1.04] as const;
+export const SOCKET_SPREAD = [0.78, 0.85, 0.91, 0.96, 1.0] as const;
 
 /** Position d'un socket pour un écartement donné (spread interpolé 0..1). */
 export function socketPos(

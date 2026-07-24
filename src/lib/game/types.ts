@@ -42,9 +42,9 @@ export type HabitId = "calories" | "steps" | "mf" | "alilou" | "rituals";
 
 /** Saisie d'une journée calendaire (clé YYYY-MM-DD locale). Modifiable le jour même uniquement. */
 export interface HabitDayEntry {
-  /** kcal mangées ce jour. */
+  /** Bilan calorique du jour, en kcal (signé — négatif = déficit, positif = surplus). */
   calories: number;
-  /** Journée calorique clôturée (déclare la saisie kcal définitive). */
+  /** true dès que le bilan calorique du jour a été saisi (posé automatiquement). */
   caloriesDone: boolean;
   /** Pas quotidiens. */
   steps: number;

@@ -48,7 +48,9 @@ export default function PlayPage() {
   const reports = useGame((s) => s.reports);
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const [selected, setSelected] = useState<BuildingId | null>(null);
-  const [panel, setPanel] = useState<"noyau" | "mare" | "reports" | "settings" | null>(null);
+  const [panel, setPanel] = useState<"habits" | "noyau" | "mare" | "reports" | "settings" | null>(
+    null,
+  );
   // Sync cloud active pendant le jeu (push périodique + arrière-plan).
   const { user: cloudUser, status: cloudStatus } = useCloudSync();
 
@@ -140,16 +142,14 @@ export default function PlayPage() {
 
           {/* La base vivante — tap sur un bâtiment pour ouvrir son panneau */}
           <CellScene selected={selected} onSelect={setSelected} />
-
-          {/* Habitudes du jour */}
-          <HabitsPanel />
         </div>
       )}
 
       {/* Panneau d'amélioration (bottom sheet) */}
       {selected && <BuildingSheet id={selected} onClose={() => setSelected(null)} />}
 
-      {/* Overlays Phase 5 & 6 */}
+      {/* Overlays */}
+      {panel === "habits" && <HabitsPanel onClose={() => setPanel(null)} />}
       {panel === "noyau" && <NoyauHub onClose={() => setPanel(null)} />}
       {panel === "mare" && <MarePanel onClose={() => setPanel(null)} />}
       {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
@@ -166,43 +166,50 @@ export default function PlayPage() {
                 setPanel(null);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="flex flex-col items-center gap-0.5 px-4"
+              className="flex flex-col items-center gap-0.5 px-1.5"
             >
-              <NavIcon id="base" size={26} active={panel === null} />
-              <span className="text-[9px] tracking-widest text-cell-teal/70">BASE</span>
+              <NavIcon id="base" size={24} active={panel === null} />
+              <span className="text-[8px] tracking-widest text-cell-teal/70">BASE</span>
+            </button>
+            <button
+              onClick={() => setPanel(panel === "habits" ? null : "habits")}
+              className="flex flex-col items-center gap-0.5 px-1.5"
+            >
+              <NavIcon id="habits" size={24} active={panel === "habits"} />
+              <span className="text-[8px] tracking-widest text-cell-teal/70">HABITUDES</span>
             </button>
             <button
               onClick={() => setPanel(panel === "noyau" ? null : "noyau")}
-              className="flex flex-col items-center gap-0.5 px-4"
+              className="flex flex-col items-center gap-0.5 px-1.5"
             >
-              <NavIcon id="units" size={26} active={panel === "noyau"} />
-              <span className="text-[9px] tracking-widest text-cell-teal/70">NOYAU</span>
+              <NavIcon id="units" size={24} active={panel === "noyau"} />
+              <span className="text-[8px] tracking-widest text-cell-teal/70">NOYAU</span>
             </button>
             <button
               onClick={() => setPanel(panel === "mare" ? null : "mare")}
-              className="flex flex-col items-center gap-0.5 px-4"
+              className="flex flex-col items-center gap-0.5 px-1.5"
             >
-              <NavIcon id="mare" size={26} active={panel === "mare"} />
-              <span className="text-[9px] tracking-widest text-cell-teal/70">MARE</span>
+              <NavIcon id="mare" size={24} active={panel === "mare"} />
+              <span className="text-[8px] tracking-widest text-cell-teal/70">MARE</span>
             </button>
             <button
               onClick={() => setPanel(panel === "reports" ? null : "reports")}
-              className="relative flex flex-col items-center gap-0.5 px-4"
+              className="relative flex flex-col items-center gap-0.5 px-1.5"
             >
-              <NavIcon id="reports" size={26} active={panel === "reports"} />
+              <NavIcon id="reports" size={24} active={panel === "reports"} />
               {unseen > 0 && (
                 <span className="absolute -top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cell-magenta px-1 text-[9px] font-bold text-abyss">
                   {unseen > 9 ? "9+" : unseen}
                 </span>
               )}
-              <span className="text-[9px] tracking-widest text-cell-teal/70">RAPPORTS</span>
+              <span className="text-[8px] tracking-widest text-cell-teal/70">RAPPORTS</span>
             </button>
             <button
               onClick={() => setPanel(panel === "settings" ? null : "settings")}
-              className="flex flex-col items-center gap-0.5 px-4"
+              className="flex flex-col items-center gap-0.5 px-1.5"
             >
-              <NavIcon id="settings" size={26} active={panel === "settings"} />
-              <span className="text-[9px] tracking-widest text-cell-teal/70">RÉGLAGES</span>
+              <NavIcon id="settings" size={24} active={panel === "settings"} />
+              <span className="text-[8px] tracking-widest text-cell-teal/70">RÉGLAGES</span>
             </button>
           </div>
         </nav>

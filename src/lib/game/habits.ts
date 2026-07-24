@@ -3,9 +3,11 @@
    de gameplay "habitudes", pas du tuning économique (le JSON d'économie ne les
    couvre pas — l'énergie y est déclarée kind: "externe_habitude").
 
-   Règles v1 conservées :
-   - Objectif calorique : +10 ⚡ si la journée est clôturée avec un apport
-     entre 80% et 100% de l'objectif (anti-sous-alimentation intégré).
+   Règles v1 conservées (retouchées sur demande utilisateur pour le bilan
+  calorique — plus simple à saisir) :
+   - Bilan calorique   : une seule valeur signée (négatif = déficit, positif =
+     surplus), au clavier ou par crans de 100 kcal. Négatif ou nul => +5 ⚡.
+     Positif => -1 ⚡ par tranche de 100 kcal de surplus.
    - Pas quotidiens    : +1 ⚡ par tranche de 1000 pas, plafonné à 15 ⚡.
    - Magic Focus       : +3 ⚡ par tâche, max 10 tâches/jour.
    - Chantier ALILOU   : +5 ⚡ par tâche, max 3/jour.
@@ -43,10 +45,10 @@ export const HABITS: HabitDef[] = [
   {
     id: "calories",
     icon: "🍽️",
-    name: "Objectif calorique",
-    desc: "Rester entre 80% et 100% de ton objectif. Anti-sous-alimentation intégré.",
+    name: "Bilan calorique",
+    desc: "Indique ton solde du jour (négatif = déficit). Déficit : +5 ⚡. Surplus : −1 ⚡ par 100 kcal.",
     type: "calorie",
-    energyPerDay: 10,
+    energyPerDay: 5,
   },
   {
     id: "steps",
@@ -115,6 +117,12 @@ export const CALORIE_INPUT_MAX = 6000;
 export const CALORIE_GOAL_MIN = 800;
 export const CALORIE_GOAL_MAX = 6000;
 
+/** Bilan calorique (retouche lisibilité) : une seule valeur signée en kcal,
+ *  saisie au clavier ou par crans — négatif = déficit, positif = surplus. */
+export const CALORIE_DELTA_MIN = -3000;
+export const CALORIE_DELTA_MAX = 3000;
+export const CALORIE_STEP = 100;
+
 /* ---------- Clés de jour calendaire (timezone locale) ---------- */
 
 /** Clé YYYY-MM-DD du jour local pour un timestamp donné. */
@@ -149,19 +157,25 @@ export function emptyDayEntry(): HabitDayEntry {
   };
 }
 
-/** Énergie rapportée par une habitude pour une saisie donnée (barème v1). */
+/** Énergie rapportée par une habitude pour une saisie donnée (barème v1,
+ *  bilan calorique retouché : cf. commentaire d'en-tête). Le paramètre
+ *  `calorieGoal` n'est plus utilisé par le type "calorie" (conservé dans la
+ *  signature pour ne pas casser les appelants existants). */
 export function habitEnergy(
   def: HabitDef,
   entry: HabitDayEntry,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- conservé pour compat d'appel
   calorieGoal: number,
 ): number {
   switch (def.type) {
     case "calorie": {
-      const ok =
-        entry.caloriesDone &&
-        entry.calories >= 0.8 * calorieGoal &&
-        entry.calories <= calorieGoal;
-      return ok ? (def.energyPerDay ?? 0) : 0;
+      // caloriesDone sert désormais de flag "saisi aujourd'hui" (posé
+      // automatiquement dès que la valeur est modifiée — plus de bouton
+      // "Valider" séparé) : une journée jamais touchée ne rapporte rien.
+      if (!entry.caloriesDone) return 0;
+      return entry.calories <= 0
+        ? (def.energyPerDay ?? 5)
+        : -Math.floor(entry.calories / (CALORIE_STEP || 1));
     }
     case "rate": {
       const raw = Math.floor(entry.steps / (def.per ?? 1)) * (def.energyPer ?? 0);
@@ -201,8 +215,11 @@ export function evaluateEntry(
 /** Clamp une valeur d'habitude dans ses bornes de saisie. */
 export function clampHabitValue(id: HabitId, value: number): number {
   const def = HABITS.find((h) => h.id === id)!;
+  // Bilan calorique : seul type qui accepte une valeur négative (déficit).
+  if (def.type === "calorie") {
+    return Math.min(CALORIE_DELTA_MAX, Math.max(CALORIE_DELTA_MIN, Math.round(value)));
+  }
   const v = Math.max(0, Math.round(value));
-  if (def.type === "calorie") return Math.min(v, CALORIE_INPUT_MAX);
   if (def.type === "rate") return Math.min(v, def.max ?? v);
   return Math.min(v, def.capItems ?? v);
 }

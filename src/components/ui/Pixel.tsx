@@ -59,7 +59,11 @@ export function PixelButton({
   );
 }
 
-/** Barre de ressource : cadre organique + remplissage CSS. */
+/** Barre de ressource : piste sobre (tile) + remplissage CSS animé.
+ *  Refonte lisibilité : l'ancien cadre sprite était opaque et masquait
+ *  entièrement le remplissage (la barre semblait "figée à moitié" quelle
+ *  que soit la valeur réelle) — la piste est maintenant un simple fond
+ *  translucide, le remplissage est le seul élément qui bouge. */
 export function ResourceBar({
   value,
   max,
@@ -79,34 +83,43 @@ export function ResourceBar({
   /** Tooltip natif (infobulle de ressource). */
   title?: string;
 }) {
-  const pct = Math.max(0, Math.min(100, (value / max) * 100));
-  const frame = large ? "bar_frame_large" : "bar_frame";
-  const h = large ? 24 : 16;
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  const h = large ? 22 : 16;
   return (
     <div
-      className="relative inline-block"
-      style={{ width: width ?? (large ? 256 : 192), height: h * 2 }}
+      className="relative overflow-hidden rounded-full"
+      style={{
+        width: width ?? (large ? 256 : 192),
+        height: h,
+        background: "rgba(5, 11, 20, 0.85)",
+        border: "1px solid rgba(109, 246, 255, 0.18)",
+      }}
       title={title}
     >
       <div
-        className="absolute rounded-full"
+        className="absolute inset-y-0 left-0 overflow-hidden rounded-full transition-[width] duration-300 ease-out"
         style={{
-          left: "6%",
-          right: "6%",
-          top: "28%",
-          bottom: "28%",
-          background: `linear-gradient(90deg, ${color}, ${color}cc ${pct}%, transparent ${pct}%)`,
-          boxShadow: `0 0 8px ${color}55 inset`,
+          width: `${pct}%`,
+          minWidth: pct > 0 ? "8%" : 0,
+          // Couleur pleine (pas de suffixe d'alpha concaténé sur `color` : certains
+          // appelants passent un var(--xxx) CSS, et "var(--lime)99" n'est PAS une
+          // couleur valide — ça invalidait TOUTE la déclaration `background` et
+          // la barre restait vide quelle que soit la valeur réelle).
+          background: color,
+          boxShadow: `0 0 6px ${color}`,
         }}
-      />
-      <img
-        src={`${UI}/age01_cell_ui_${frame}_v001.png`}
-        alt=""
-        className="pixelated absolute inset-0 h-full w-full"
-        draggable={false}
-      />
+      >
+        {/* Glaçage : profondeur fixe, indépendante de `color` (donc toujours valide). */}
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0) 55%)" }}
+        />
+      </div>
       {label && (
-        <span className="absolute inset-0 flex items-center justify-center text-[11px] tracking-wider text-white/90">
+        <span
+          className="absolute inset-0 flex items-center justify-center text-[10px] tracking-wide text-white/95"
+          style={{ textShadow: "0 1px 2px rgba(0,0,0,0.85)" }}
+        >
           {label}
         </span>
       )}

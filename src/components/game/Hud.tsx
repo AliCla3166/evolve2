@@ -1,8 +1,12 @@
-/* Bandeau HUD de ressources — barres compactes + tooltips natifs. */
+/* Bandeau HUD de ressources — barres compactes + tooltips natifs.
+   Tap sur une ressource -> fiche info (nom + à quoi elle sert), pour savoir
+   quoi farmer en premier (retour utilisateur). */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { useState } from "react";
 import { ResourceBar } from "@/components/ui/Pixel";
+import { ResourceInfoModal } from "@/components/game/ResourceInfoModal";
 import {
   cappedResources,
   ECONOMY,
@@ -53,6 +57,7 @@ function vitaliteTarget(mutationLevel: number, value: number): number {
 export function Hud() {
   const resources = useGame((s) => s.resources);
   const buildings = useGame((s) => s.buildings);
+  const [info, setInfo] = useState<ResourceId | null>(null);
 
   const cap = storageCap(buildings);
   const prod = totalProductionPerHour(buildings);
@@ -63,7 +68,7 @@ export function Hud() {
     <div className="space-y-1">
       {/* Énergie (habitudes réelles) + Vitalité (méta) */}
       <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-        <div className="flex items-center gap-1">
+        <button className="flex items-center gap-1" onClick={() => setInfo("energie")}>
           {icon("energie")}
           <ResourceBar
             value={resources.energie}
@@ -73,8 +78,8 @@ export function Hud() {
             label={`⚡ ${fmtInt(resources.energie)}`}
             title={`${resourceName("energie")} — gagnés via tes habitudes réelles (cap ${fmtInt(ENERGY_CAP)})`}
           />
-        </div>
-        <div className="flex items-center gap-1">
+        </button>
+        <button className="flex items-center gap-1" onClick={() => setInfo("vitalite")}>
           {icon("vitalite")}
           <ResourceBar
             value={resources.vitalite}
@@ -84,13 +89,13 @@ export function Hud() {
             label={`${fmtInt(resources.vitalite)}`}
             title={`${resourceName("vitalite")} — produits par le Noyau (${fmtRate(prod.vitalite ?? 0)}/h). Prochain palier du Centre de mutation : ${fmtInt(vitaliteMax)}.`}
           />
-        </div>
+        </button>
       </div>
 
       {/* Les 6 ressources productibles (cap de stockage partagé) */}
       <div className="grid grid-cols-2 justify-items-center gap-x-2 sm:grid-cols-3">
         {capped.map((res) => (
-          <div key={res} className="flex items-center gap-1">
+          <button key={res} className="flex items-center gap-1" onClick={() => setInfo(res)}>
             {icon(res)}
             <ResourceBar
               value={resources[res]}
@@ -100,9 +105,11 @@ export function Hud() {
               label={fmtInt(resources[res])}
               title={`${resourceName(res)} : ${fmtInt(resources[res])} / ${fmtInt(cap)} (stockage) — production ${fmtRate(prod[res] ?? 0)}/h`}
             />
-          </div>
+          </button>
         ))}
       </div>
+
+      {info && <ResourceInfoModal id={info} onClose={() => setInfo(null)} />}
     </div>
   );
 }

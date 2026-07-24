@@ -1,12 +1,17 @@
 /* Panneau "Habitudes du jour" — saisie quotidienne -> Points d'énergie.
-   Une saisie par jour calendaire local, modifiable seulement le jour même
-   (le store n'écrit que sur la clé du jour courant). */
+   Une saisie par jour calendaire (modifiable seulement le jour même — le
+   store n'écrit que sur la clé du jour courant). Overlay plein écran ouvert
+   depuis un bouton dédié de la nav basse (retour lisibilité : ça vivait avant
+   en plein milieu de la page principale, ça prenait toute la place). */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { Panel } from "@/components/ui/Pixel";
 import { fmtInt } from "@/lib/game/format";
 import {
+  CALORIE_DELTA_MAX,
+  CALORIE_DELTA_MIN,
+  CALORIE_STEP,
   dayKey,
   emptyDayEntry,
   habitEnergy,
@@ -56,7 +61,6 @@ function HabitRow({
   calorieGoal: number;
 }) {
   const updateHabitToday = useGame((s) => s.updateHabitToday);
-  const setCalorieGoal = useGame((s) => s.setCalorieGoal);
   const energy = habitEnergy(def, entry, calorieGoal);
   const valid = habitValidated(def, entry, calorieGoal);
 
@@ -64,38 +68,33 @@ function HabitRow({
   if (def.type === "calorie") {
     controls = (
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1 text-[10px] text-cell-teal/80">
-          kcal
-          <input
-            type="number"
-            min={0}
-            max={6000}
-            step={10}
-            value={entry.calories || ""}
-            placeholder="0"
-            onChange={(e) => updateHabitToday({ calories: Number(e.target.value) || 0 })}
-            className="w-20 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-xs text-white outline-none focus:border-cell-cyan"
-          />
-        </label>
-        <label className="flex items-center gap-1 text-[10px] text-cell-teal/80">
-          objectif
-          <input
-            type="number"
-            min={800}
-            max={6000}
-            step={50}
-            value={calorieGoal}
-            onChange={(e) => setCalorieGoal(Number(e.target.value) || calorieGoal)}
-            className="w-20 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-xs text-white outline-none focus:border-cell-cyan"
-          />
-        </label>
         <MiniBtn
-          wide
-          active={entry.caloriesDone}
-          onClick={() => updateHabitToday({ caloriesDone: !entry.caloriesDone })}
+          onClick={() =>
+            updateHabitToday({ calories: Math.max(CALORIE_DELTA_MIN, entry.calories - CALORIE_STEP) })
+          }
         >
-          {entry.caloriesDone ? "Journée close ✔" : "Valider"}
+          −
         </MiniBtn>
+        <input
+          type="number"
+          step={CALORIE_STEP}
+          min={CALORIE_DELTA_MIN}
+          max={CALORIE_DELTA_MAX}
+          value={entry.caloriesDone ? entry.calories : ""}
+          placeholder="0"
+          onChange={(e) => updateHabitToday({ calories: Number(e.target.value) || 0 })}
+          className="w-24 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-center text-xs text-white outline-none focus:border-cell-cyan"
+        />
+        <MiniBtn
+          onClick={() =>
+            updateHabitToday({ calories: Math.min(CALORIE_DELTA_MAX, entry.calories + CALORIE_STEP) })
+          }
+        >
+          +
+        </MiniBtn>
+        <span className="text-[10px] text-cell-teal/60">
+          kcal {entry.caloriesDone && entry.calories > 0 ? "(surplus)" : entry.caloriesDone ? "(déficit)" : ""}
+        </span>
       </div>
     );
   } else if (def.type === "rate") {
@@ -149,8 +148,9 @@ function HabitRow({
             draggable={false}
           />
         )}
-        <span className={`text-xs ${energy > 0 ? "text-cell-lime" : "text-cell-teal/50"}`}>
-          +{energy} ⚡
+        <span className={`text-xs ${energy > 0 ? "text-cell-lime" : energy < 0 ? "text-red-400" : "text-cell-teal/50"}`}>
+          {energy > 0 ? "+" : ""}
+          {energy} ⚡
         </span>
       </div>
       <p className="mb-2 text-[10px] leading-4 text-cell-teal/60">{def.desc}</p>
@@ -159,7 +159,7 @@ function HabitRow({
   );
 }
 
-export function HabitsPanel() {
+export function HabitsPanel({ onClose }: { onClose: () => void }) {
   const habits = useGame((s) => s.habits);
   // "now" du rendu = dernier tick (1 s) : suit le passage de minuit sans Date.now() en rendu.
   const now = useGame((s) => s.lastTick);
@@ -169,35 +169,61 @@ export function HabitsPanel() {
   const nextMilestone = STREAK_MILESTONES.find((m) => m.days > habits.streak);
 
   return (
-    <Panel variant="noyau" className="p-3">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h2 className="flex-1 text-xs uppercase tracking-[0.3em] text-cell-cyan">
-          Habitudes du jour
-        </h2>
-        <span
-          className="rounded-full border border-cell-magenta/40 px-2 py-0.5 text-[10px] text-cell-magenta"
-          title={
-            nextMilestone
-              ? `Série de jours avec au moins une habitude validée. Prochain jalon : ${nextMilestone.days} j → +${nextMilestone.energy} ⚡`
-              : "Série de jours avec au moins une habitude validée. Tous les jalons sont atteints !"
-          }
-        >
-          🔥 {habits.streak} j
-        </span>
-        <span className="rounded-full border border-cell-lime/40 px-2 py-0.5 text-[10px] text-cell-lime">
-          +{entry.energy} ⚡ aujourd&apos;hui
-        </span>
+    <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
+      <div className="mx-auto max-w-md space-y-3 px-2 pb-24 pt-3 sm:max-w-2xl">
+        {/* En-tête */}
+        <div className="flex items-center gap-3">
+          <span className="text-3xl">🧬</span>
+          <div className="flex-1">
+            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">Habitudes du jour</h1>
+            <p className="text-[11px] text-cell-teal/60">
+              {key} — modifiable jusqu&apos;à minuit · {entry.validatedCount}/{HABITS.length} validées
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Fermer"
+            className="px-3 py-2 text-base text-cell-teal/70 hover:text-cell-cyan"
+          >
+            ✕
+          </button>
+        </div>
+
+        <Panel variant="noyau" className="p-3">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className="rounded-full border border-cell-magenta/40 px-2 py-0.5 text-[10px] text-cell-magenta"
+              title={
+                nextMilestone
+                  ? `Série de jours avec au moins une habitude validée. Prochain jalon : ${nextMilestone.days} j → +${nextMilestone.energy} ⚡`
+                  : "Série de jours avec au moins une habitude validée. Tous les jalons sont atteints !"
+              }
+            >
+              🔥 {habits.streak} j
+            </span>
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                entry.energy >= 0
+                  ? "border-cell-lime/40 text-cell-lime"
+                  : "border-red-400/40 text-red-400"
+              }`}
+            >
+              {entry.energy >= 0 ? "+" : ""}
+              {entry.energy} ⚡ aujourd&apos;hui
+            </span>
+            {nextMilestone && (
+              <span className="text-[10px] text-cell-teal/60">
+                jalon {nextMilestone.days} j : +{nextMilestone.energy} ⚡
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {HABITS.map((def) => (
+              <HabitRow key={def.id} def={def} entry={entry} calorieGoal={habits.calorieGoal} />
+            ))}
+          </div>
+        </Panel>
       </div>
-      <p className="mb-2 text-[10px] text-cell-teal/60">
-        {key} — modifiable jusqu&apos;à minuit · {entry.validatedCount}/{HABITS.length} validées
-        {nextMilestone &&
-          ` · jalon ${nextMilestone.days} j : +${nextMilestone.energy} ⚡`}
-      </p>
-      <div className="space-y-2">
-        {HABITS.map((def) => (
-          <HabitRow key={def.id} def={def} entry={entry} calorieGoal={habits.calorieGoal} />
-        ))}
-      </div>
-    </Panel>
+    </div>
   );
 }

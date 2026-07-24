@@ -186,7 +186,12 @@ export const useGame = create<GameStore>()(
         const prev = habits.days[key] ?? emptyDayEntry();
 
         const entry: HabitDayEntry = { ...prev };
-        if (patch.calories !== undefined) entry.calories = clampHabitValue("calories", patch.calories);
+        if (patch.calories !== undefined) {
+          entry.calories = clampHabitValue("calories", patch.calories);
+          // Saisir une valeur suffit désormais à "valider" la journée calorique
+          // du jour (plus de bouton dédié) — cf. redesign HabitsPanel.
+          entry.caloriesDone = true;
+        }
         if (patch.caloriesDone !== undefined) entry.caloriesDone = patch.caloriesDone;
         if (patch.steps !== undefined) entry.steps = clampHabitValue("steps", patch.steps);
         if (patch.mf !== undefined) entry.mf = clampHabitValue("mf", patch.mf);

@@ -171,7 +171,7 @@ export function CellScene({
     let cssSize = 0;
     let dpr = 1;
     const resize = () => {
-      cssSize = Math.min(wrap.clientWidth, 520);
+      cssSize = Math.min(wrap.clientWidth, 580);
       dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.round(cssSize * dpr);
       canvas.height = Math.round(cssSize * dpr);

@@ -6,6 +6,7 @@
 "use client";
 
 import { Panel, PixelButton, ResourceBar } from "@/components/ui/Pixel";
+import { buildingPurpose } from "@/lib/game/buildingInfo";
 import {
   buildingProductionPerHour,
   buildTimeMs,
@@ -150,13 +151,16 @@ export function BuildingSheet({
             </button>
           </div>
 
+          {/* À quoi ça sert — en gros, avant les chiffres (retour lisibilité) */}
+          <p
+            className="mt-2 rounded-lg border-l-4 bg-black/20 px-2.5 py-2 text-[12px] leading-relaxed text-white/90"
+            style={{ borderColor: accent }}
+          >
+            {buildingPurpose(id)}
+          </p>
+
           {/* Corps selon l'état */}
-          {!designed ? (
-            <p className="mt-2 text-xs leading-relaxed text-cell-teal/60">
-              Ce proto-organe s&apos;éveillera avec son propre mini-jeu dans une
-              future mise à jour. <span className="text-cell-teal">À venir.</span>
-            </p>
-          ) : (
+          {!designed ? null : (
             <div className="mt-2 space-y-2">
               {/* Production actuelle */}
               <div>
