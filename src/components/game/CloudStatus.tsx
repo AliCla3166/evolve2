@@ -5,9 +5,21 @@
 import { PixelButton } from "@/components/ui/Pixel";
 import { cloudConfigured, signInGoogle, signOutCloud } from "@/lib/cloud/firebase";
 import { useCloudSync } from "@/lib/cloud/useCloudSync";
+import { useGame } from "@/lib/game/store";
 
 export function CloudStatus() {
   const { user, status } = useCloudSync();
+  const activeSlot = useGame((s) => s.activeSlot);
+
+  // Le mode dev ne synchronise jamais (cf. useCloudSync) : pas la peine de
+  // proposer un bouton qui n'aurait aucun effet sur cette partie de test.
+  if (activeSlot === "dev") {
+    return (
+      <span className="rounded-full border border-cell-magenta/30 px-4 py-1 text-xs tracking-widest text-cell-magenta/70">
+        🧪 Mode dev — sync cloud désactivée
+      </span>
+    );
+  }
 
   if (!cloudConfigured) {
     return (

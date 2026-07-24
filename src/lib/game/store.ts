@@ -41,16 +41,19 @@ import {
   resolveChoiceEvent,
 } from "./military";
 import { applyTick } from "./tick";
+import { getActiveSlot, setActiveSlot, slotHasSave, slotStorageKey, type SaveSlot } from "./slot";
 import {
   TUTORIAL_DONE,
   type BuildingId,
   type GameState,
   type HabitDayEntry,
+  type ResourceId,
   type UnitId,
 } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
 export const SAVE_VERSION = 4;
+export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
 export type HabitPatch = Partial<
@@ -61,6 +64,19 @@ interface GameActions {
   /** true une fois la sauvegarde localStorage rechargée (évite les mismatches SSR). */
   hasHydrated: boolean;
   setHasHydrated: (v: boolean) => void;
+  /** Slot de sauvegarde actif ("perso" réel ou "dev" isolé pour tester).
+   *  Préférence d'appareil, jamais incluse dans la sauvegarde elle-même. */
+  activeSlot: SaveSlot;
+  /** Bascule vers l'autre slot : recharge sa sauvegarde si elle existe,
+   *  sinon repart d'un état neuf (jamais un mélange avec le slot précédent). */
+  switchSlot: (slot: SaveSlot) => void;
+  /** Mode dev UNIQUEMENT (no-op silencieux en perso, garde-fou anti-triche) :
+   *  s'octroie librement ressources/jetons/fragments pour tester le jeu. */
+  devGrant: (patch: {
+    resources?: Partial<Record<ResourceId, number>>;
+    jetons?: number;
+    fragments?: number;
+  }) => void;
   /** Tick du moteur — appelé par un setInterval 1 s côté client,
    *  et une seule fois au chargement pour le gros tick de rattrapage offline. */
   collectTick: (now?: number) => void;
@@ -106,6 +122,23 @@ export function exportSave(): GameState {
   return gameSlice(useGame.getState());
 }
 
+/** À appeler une fois par montage de page (titre, /play) : réhydrate le store
+ *  depuis le slot actif puis synchronise le champ réactif `activeSlot`
+ *  (remplace l'ancien appel direct à `persist.rehydrate()`).
+ *
+ *  ATTENTION À L'ORDRE : `useGame.setState(...)` écrit IMMÉDIATEMENT l'état
+ *  courant sur le disque (le middleware persist de zustand persiste sur
+ *  CHAQUE set(), avant même la première hydratation). Si on l'appelait avant
+ *  que `rehydrate()` ait fini de charger la vraie sauvegarde, on écraserait
+ *  cette dernière avec l'état par défaut encore en mémoire. On attend donc
+ *  la fin de l'hydratation avant de toucher au store. */
+export function hydrateActiveSlot(): void {
+  const slot = getActiveSlot();
+  void Promise.resolve(useGame.persist.rehydrate()).then(() => {
+    useGame.setState({ activeSlot: slot });
+  });
+}
+
 /** Extrait la partie GameState pure du store (sans les actions). */
 function gameSlice(s: GameStore): GameState {
   return {
@@ -144,6 +177,38 @@ export const useGame = create<GameStore>()(
 
       hasHydrated: false,
       setHasHydrated: (v) => set({ hasHydrated: v }),
+
+      activeSlot: getActiveSlot(),
+      switchSlot: (slot) => {
+        setActiveSlot(slot);
+        if (!slotHasSave(slot)) {
+          // Rien encore dans ce slot : on repart d'un état neuf plutôt que de
+          // garder en mémoire les données du slot qu'on vient de quitter.
+          set({ ...freshGameState(Date.now()), activeSlot: slot, hasHydrated: true });
+        } else {
+          // NE PAS faire `set({ activeSlot: slot })` avant rehydrate() : ce
+          // set() persisterait tout de suite l'état encore en mémoire (celui
+          // du slot qu'on quitte) par-dessus la sauvegarde du nouveau slot.
+          // On attend que rehydrate() ait chargé la vraie donnée du nouveau
+          // slot avant de toucher au store (même piège que hydrateActiveSlot).
+          void Promise.resolve(useGame.persist.rehydrate()).then(() => {
+            useGame.setState({ activeSlot: slot });
+          });
+        }
+      },
+      devGrant: (patch) => {
+        if (get().activeSlot !== "dev") return; // garde-fou : jamais en perso
+        const s = get();
+        const resources = { ...s.resources };
+        for (const [res, amount] of Object.entries(patch.resources ?? {})) {
+          resources[res as ResourceId] = Math.max(0, resources[res as ResourceId] + (amount ?? 0));
+        }
+        set({
+          resources,
+          jetons: Math.max(0, Math.min(MARE.jetons.max_stock, s.jetons + (patch.jetons ?? 0))),
+          fragments: Math.max(0, s.fragments + (patch.fragments ?? 0)),
+        });
+      },
 
       collectTick: (now = Date.now()) => {
         set(applyTick(gameSlice(get()), now));
@@ -426,7 +491,35 @@ export const useGame = create<GameStore>()(
     {
       name: SAVE_KEY,
       version: SAVE_VERSION,
-      storage: createJSONStorage(() => localStorage),
+      // Stockage conscient du slot actif : perso/dev vivent sous des clés
+      // localStorage séparées (cf. slot.ts) ; on résout la clé à chaque accès
+      // (jamais figée à la création du store) pour que switchSlot() fonctionne
+      // sur cette unique instance de store, sans la recréer.
+      storage: createJSONStorage(() => ({
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- signature StateStorage imposée
+        getItem: (name) => {
+          try {
+            return localStorage.getItem(slotStorageKey(getActiveSlot()));
+          } catch {
+            return null;
+          }
+        },
+        setItem: (name, value) => {
+          try {
+            localStorage.setItem(slotStorageKey(getActiveSlot()), value);
+          } catch {
+            /* quota / navigation privée : silencieux, comme avant */
+          }
+        },
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- signature StateStorage imposée
+        removeItem: (name) => {
+          try {
+            localStorage.removeItem(slotStorageKey(getActiveSlot()));
+          } catch {
+            /* ignore */
+          }
+        },
+      })),
       // Next.js App Router : on réhydrate manuellement côté client (useGame.persist.rehydrate()).
       skipHydration: true,
       // v1 -> v2 : les sauvegardes d'avant la Phase 4 n'ont pas de tutorialStep —

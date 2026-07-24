@@ -24,7 +24,7 @@ import { NavIcon, Panel } from "@/components/ui/Pixel";
 import { cloudConfigured } from "@/lib/cloud/firebase";
 import { useCloudSync } from "@/lib/cloud/useCloudSync";
 import { fmtDuration } from "@/lib/game/format";
-import { useGame } from "@/lib/game/store";
+import { hydrateActiveSlot, useGame } from "@/lib/game/store";
 import type { BuildingId } from "@/lib/game/types";
 
 /** Alerte vague imminente (moins de 12 h) — visible sans ouvrir le Noyau. */
@@ -45,6 +45,7 @@ function WaveWarning() {
 export default function PlayPage() {
   const hasHydrated = useGame((s) => s.hasHydrated);
   const profile = useGame((s) => s.profile);
+  const activeSlot = useGame((s) => s.activeSlot);
   const reports = useGame((s) => s.reports);
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const [selected, setSelected] = useState<BuildingId | null>(null);
@@ -58,7 +59,7 @@ export default function PlayPage() {
 
   // Recharge la sauvegarde localStorage (une seule fois, côté client).
   useEffect(() => {
-    useGame.persist.rehydrate();
+    hydrateActiveSlot();
   }, []);
 
   // Un seul gros tick de rattrapage offline au chargement, puis tick 1 s.
@@ -102,6 +103,14 @@ export default function PlayPage() {
             <span className="flex-1 truncate text-xs tracking-widest text-cell-cyan">
               {profile.nomOrganisme}
             </span>
+            {activeSlot === "dev" && (
+              <span
+                className="rounded-full border border-cell-magenta/50 px-2 py-0.5 text-[9px] tracking-widest text-cell-magenta"
+                title="Mode développeur — partie de test, séparée de ta vraie sauvegarde"
+              >
+                🧪 DEV
+              </span>
+            )}
             {cloudConfigured && (
               <span
                 className="text-xs"

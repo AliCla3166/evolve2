@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import { SwRegister } from "@/components/SwRegister";
 import "./globals.css";
 
@@ -33,6 +34,7 @@ export default function RootLayout({
     <html lang="fr" className="h-full">
       <body className="min-h-full antialiased">
         <SwRegister />
+        <InstallPrompt />
         {children}
       </body>
     </html>

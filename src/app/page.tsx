@@ -8,7 +8,8 @@ import { useEffect } from "react";
 import { PixelButton } from "@/components/ui/Pixel";
 import { CloudStatus } from "@/components/game/CloudStatus";
 import { portraitSrc } from "@/components/game/ProfileCreate";
-import { useGame } from "@/lib/game/store";
+import { SlotSwitch } from "@/components/game/SlotSwitch";
+import { hydrateActiveSlot, useGame } from "@/lib/game/store";
 
 const PLANKTON = [
   { left: "8%", size: 3, dur: 26, delay: 0 },
@@ -25,7 +26,7 @@ export default function Home() {
   const profile = useGame((s) => s.profile);
 
   useEffect(() => {
-    useGame.persist.rehydrate();
+    hydrateActiveSlot();
   }, []);
 
   return (
@@ -73,6 +74,8 @@ export default function Home() {
         Tes bonnes habitudes du réel financent une civilisation qui évolue de la
         cellule au divin.
       </p>
+
+      {hasHydrated && <SlotSwitch />}
 
       {!hasHydrated ? (
         <div className="h-[76px]" aria-hidden /* réserve l'espace des boutons */ />

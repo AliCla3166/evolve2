@@ -5,6 +5,8 @@
 
 import { useState } from "react";
 import { Panel, PixelButton } from "@/components/ui/Pixel";
+import { DevPanel } from "@/components/game/DevPanel";
+import { SlotSwitch } from "@/components/game/SlotSwitch";
 import { cloudConfigured } from "@/lib/cloud/firebase";
 import { freshGameState } from "@/lib/game/economy";
 import { exportSave, useGame } from "@/lib/game/store";
@@ -13,6 +15,7 @@ import type { GameState } from "@/lib/game/types";
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const adoptSave = useGame((s) => s.adoptSave);
+  const activeSlot = useGame((s) => s.activeSlot);
   const [vib, setVib] = useState(() => getPrefs().vibrations);
   const [exported, setExported] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
@@ -76,6 +79,15 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
+
+        {/* Slot de sauvegarde : perso / dev */}
+        <Panel className="flex flex-col items-center gap-2 p-3">
+          <div className="text-xs text-cell-cyan">Partie active</div>
+          <SlotSwitch compact />
+        </Panel>
+
+        {/* Mode développeur : uniquement dans le slot dev */}
+        {activeSlot === "dev" && <DevPanel />}
 
         {/* Vibrations */}
         <Panel className="flex items-center justify-between p-3">
