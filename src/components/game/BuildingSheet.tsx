@@ -19,6 +19,7 @@ import {
 import { fmtDuration, fmtInt, fmtRate } from "@/lib/game/format";
 import { SOCKETS } from "@/lib/game/scene";
 import { useGame } from "@/lib/game/store";
+import { vibrate } from "@/lib/prefs";
 import type { BuildingId, ResourceId } from "@/lib/game/types";
 
 function CostLine({
@@ -217,7 +218,9 @@ export function BuildingSheet({
                       <PixelButton
                         className="flex-1 text-xs"
                         disabled={queueBusy || !affordable}
-                        onClick={() => startUpgrade(id)}
+                        onClick={() => {
+                          if (startUpgrade(id)) vibrate(20);
+                        }}
                       >
                         {level === 0 ? "CONSTRUIRE" : "AMÉLIORER"}
                       </PixelButton>

@@ -18,6 +18,7 @@ import { NoyauHub } from "@/components/game/NoyauHub";
 import { ProfileCreate, portraitSrc } from "@/components/game/ProfileCreate";
 import { QueueBanner } from "@/components/game/QueueBanner";
 import { ReportsPanel } from "@/components/game/ReportsPanel";
+import { SettingsPanel } from "@/components/game/SettingsPanel";
 import { TutorialCoach } from "@/components/game/TutorialCoach";
 import { NavIcon, Panel } from "@/components/ui/Pixel";
 import { cloudConfigured } from "@/lib/cloud/firebase";
@@ -47,7 +48,7 @@ export default function PlayPage() {
   const reports = useGame((s) => s.reports);
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const [selected, setSelected] = useState<BuildingId | null>(null);
-  const [panel, setPanel] = useState<"noyau" | "mare" | "reports" | null>(null);
+  const [panel, setPanel] = useState<"noyau" | "mare" | "reports" | "settings" | null>(null);
   // Sync cloud active pendant le jeu (push périodique + arrière-plan).
   const { user: cloudUser, status: cloudStatus } = useCloudSync();
 
@@ -152,6 +153,7 @@ export default function PlayPage() {
       {panel === "noyau" && <NoyauHub onClose={() => setPanel(null)} />}
       {panel === "mare" && <MarePanel onClose={() => setPanel(null)} />}
       {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
+      {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
       <EventModal />
       <CardReveal />
 
@@ -194,6 +196,13 @@ export default function PlayPage() {
                 </span>
               )}
               <span className="text-[9px] tracking-widest text-cell-teal/70">RAPPORTS</span>
+            </button>
+            <button
+              onClick={() => setPanel(panel === "settings" ? null : "settings")}
+              className="flex flex-col items-center gap-0.5 px-4"
+            >
+              <NavIcon id="settings" size={26} active={panel === "settings"} />
+              <span className="text-[9px] tracking-widest text-cell-teal/70">RÉGLAGES</span>
             </button>
           </div>
         </nav>

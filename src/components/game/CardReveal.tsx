@@ -3,13 +3,20 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { useEffect } from "react";
 import { CardFrame, PixelButton, type Rarity } from "@/components/ui/Pixel";
 import { cardArt, rarityConfig, speciesConfig } from "@/lib/game/cards";
 import { useGame } from "@/lib/game/store";
+import { vibrate } from "@/lib/prefs";
 
 export function CardReveal() {
   const lastCatch = useGame((s) => s.lastCatch);
   const clearLastCatch = useGame((s) => s.clearLastCatch);
+
+  // Petite pulsation physique à la révélation (plus marquée pour les hautes raretés).
+  useEffect(() => {
+    if (lastCatch) vibrate(lastCatch.rarity >= 3 ? [20, 40, 30] : [15, 30, 15]);
+  }, [lastCatch]);
 
   if (!lastCatch) return null;
   const sp = speciesConfig(lastCatch.speciesId);
