@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Panel } from "@/components/ui/Pixel";
+import { playCue } from "@/lib/audio";
 import { fmtInt } from "@/lib/game/format";
 import {
   addDaysToKey,
@@ -339,6 +340,9 @@ export function HabitsPanel({ onClose }: { onClose: () => void }) {
       if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
         navigator.vibrate([18, 45, 18, 45, 90]);
       }
+      // Rituel complet : la seule occurrence quotidienne garantie, elle mérite
+      // le repère de victoire plutôt qu'une simple collecte.
+      playCue("victory");
     }
   }, [key, entry.validatedCount]);
 

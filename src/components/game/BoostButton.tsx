@@ -20,6 +20,7 @@ import { boostQuote } from "@/lib/game/economy";
 import { fmtDurationShort, fmtInt } from "@/lib/game/format";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
+import { playCue } from "@/lib/audio";
 import type { BuildTask } from "@/lib/game/types";
 
 export function BoostButton({
@@ -50,7 +51,10 @@ export function BoostButton({
   const onClick = () => {
     // vibrate() ne se déclenche que si l'action a réellement abouti : le store
     // revalide le devis avec l'horloge réelle et peut refuser (chantier échu).
-    if (boostBuild(task.slot)) vibrate([10, 30, 22]);
+    if (boostBuild(task.slot)) {
+      vibrate([10, 30, 22]);
+      playCue("build_start");
+    }
   };
 
   if (size === "banner") {

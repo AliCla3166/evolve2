@@ -25,6 +25,7 @@ import { fmtDuration, fmtInt, fmtRate } from "@/lib/game/format";
 import { SOCKETS } from "@/lib/game/scene";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
+import { playCue } from "@/lib/audio";
 import type { BuildingId, ResourceId } from "@/lib/game/types";
 
 function CostLine({
@@ -253,7 +254,10 @@ export function BuildingSheet({
                         className="flex-1 text-xs"
                         disabled={queueBusy || !affordable}
                         onClick={() => {
-                          if (startUpgrade(id)) vibrate(20);
+                          if (startUpgrade(id)) {
+                            vibrate(20);
+                            playCue("build_start");
+                          }
                         }}
                       >
                         {level === 0 ? "CONSTRUIRE" : "AMÉLIORER"}

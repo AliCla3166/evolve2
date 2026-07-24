@@ -1,6 +1,6 @@
-/* Réglages (Phase 8) — vibrations, export/import de sauvegarde (transfert
-   manuel entre appareils tant que la sync cloud n'est pas activée),
-   nouvelle partie, à propos. */
+/* Réglages (Phase 8) — vibrations, repères sonores (piste 8), export/import de
+   sauvegarde (transfert manuel entre appareils tant que la sync cloud n'est pas
+   activée), nouvelle partie, à propos. */
 "use client";
 
 import { useState } from "react";
@@ -10,13 +10,56 @@ import { SlotSwitch } from "@/components/game/SlotSwitch";
 import { cloudConfigured } from "@/lib/cloud/firebase";
 import { freshGameState } from "@/lib/game/economy";
 import { exportSave, useGame } from "@/lib/game/store";
-import { GAME_VERSION, getPrefs, setPref } from "@/lib/prefs";
+import { GAME_VERSION, getPrefs, setPref, type Prefs } from "@/lib/prefs";
+import { playCue, syncAudioPrefs, unlockAudio } from "@/lib/audio";
 import type { GameState } from "@/lib/game/types";
+
+/** Interrupteur de préférence locale. Extrait ici parce qu'il y en a désormais
+ *  trois : dupliquer vingt lignes de balisage trois fois est le meilleur moyen
+ *  de les voir diverger à la première retouche de style. */
+function PrefToggle({
+  pref,
+  title,
+  hint,
+  onChange,
+}: {
+  pref: keyof Prefs;
+  title: string;
+  hint: string;
+  onChange?: (value: boolean) => void;
+}) {
+  const [on, setOn] = useState(() => getPrefs()[pref]);
+  return (
+    <Panel className="flex items-center justify-between gap-3 p-3">
+      <div>
+        <div className="text-xs text-cell-cyan">{title}</div>
+        <div className="text-[11px] text-cell-teal/60">{hint}</div>
+      </div>
+      <button
+        role="switch"
+        aria-checked={on}
+        aria-label={title}
+        onClick={() => {
+          const next = !on;
+          setPref(pref, next);
+          setOn(next);
+          onChange?.(next);
+        }}
+        className={`h-7 w-12 shrink-0 rounded-full border transition ${
+          on ? "border-cell-lime bg-cell-lime/30" : "border-cell-teal/40 bg-abyss"
+        }`}
+      >
+        <span
+          className={`block h-5 w-5 rounded-full bg-cell-cyan transition ${on ? "translate-x-6" : "translate-x-1"}`}
+        />
+      </button>
+    </Panel>
+  );
+}
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const adoptSave = useGame((s) => s.adoptSave);
   const activeSlot = useGame((s) => s.activeSlot);
-  const [vib, setVib] = useState(() => getPrefs().vibrations);
   const [exported, setExported] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -89,30 +132,32 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         {/* Mode développeur : uniquement dans le slot dev */}
         {activeSlot === "dev" && <DevPanel />}
 
-        {/* Vibrations */}
-        <Panel className="flex items-center justify-between p-3">
-          <div>
-            <div className="text-xs text-cell-cyan">Vibrations légères</div>
-            <div className="text-[11px] text-cell-teal/60">
-              Constructions, prises, mues (si ton appareil le permet).
-            </div>
-          </div>
-          <button
-            role="switch"
-            aria-checked={vib}
-            onClick={() => {
-              setPref("vibrations", !vib);
-              setVib(!vib);
-            }}
-            className={`h-7 w-12 rounded-full border transition ${
-              vib ? "border-cell-lime bg-cell-lime/30" : "border-cell-teal/40 bg-abyss"
-            }`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-cell-cyan transition ${vib ? "translate-x-6" : "translate-x-1"}`}
-            />
-          </button>
-        </Panel>
+        {/* Retour sensoriel — vibrations et son (piste 8 du diagnostic UX) */}
+        <PrefToggle
+          pref="vibrations"
+          title="Vibrations légères"
+          hint="Constructions, prises, mues (si ton appareil le permet)."
+        />
+        <PrefToggle
+          pref="sons"
+          title="Repères sonores"
+          hint="Taps, chantiers, prises, vagues. Synthétisés : aucun téléchargement."
+          onChange={(on) => {
+            syncAudioPrefs();
+            /* Une écoute immédiate à l'activation : sans elle, le joueur bascule
+               l'interrupteur et n'entend rien jusqu'à sa prochaine action. */
+            if (on) {
+              unlockAudio();
+              playCue("build_done");
+            }
+          }}
+        />
+        <PrefToggle
+          pref="ambiance"
+          title="Nappe d'ambiance"
+          hint="Fond sous-marin très discret, coupé par défaut."
+          onChange={() => syncAudioPrefs()}
+        />
 
         {/* Sauvegarde */}
         <Panel className="space-y-2 p-3">

@@ -34,6 +34,7 @@ import {
 } from "@/lib/game/milestones";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
+import { playCue } from "@/lib/audio";
 import type { ResourceId } from "@/lib/game/types";
 
 /* Habillage purement visuel — aucune règle de jeu ne dépend de ces tables. */
@@ -99,7 +100,10 @@ export function ObjectiveStrip() {
   const pa = agePoints(state);
 
   const onClaim = (id: string) => {
-    if (claimMilestone(id)) vibrate([12, 40, 12, 40, 30]);
+    if (claimMilestone(id)) {
+      vibrate([12, 40, 12, 40, 30]);
+      playCue("collect");
+    }
   };
 
   return (
@@ -183,7 +187,10 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
   const done = views.filter((v) => v.claimed).length;
 
   const onClaim = (id: string) => {
-    if (claimMilestone(id)) vibrate([12, 40, 12, 40, 30]);
+    if (claimMilestone(id)) {
+      vibrate([12, 40, 12, 40, 30]);
+      playCue("collect");
+    }
   };
 
   return (

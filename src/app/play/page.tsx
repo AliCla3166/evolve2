@@ -28,6 +28,7 @@ import { NavIcon, Panel } from "@/components/ui/Pixel";
 import { cloudConfigured } from "@/lib/cloud/firebase";
 import { useCloudSync } from "@/lib/cloud/useCloudSync";
 import { fmtDuration } from "@/lib/game/format";
+import { installAudio, playCue } from "@/lib/audio";
 import { hydrateActiveSlot, useGame } from "@/lib/game/store";
 import type { BuildingId } from "@/lib/game/types";
 
@@ -57,6 +58,9 @@ function WaveWarning({ onOpenBastion }: { onOpenBastion: () => void }) {
   );
 }
 
+/** Panneaux plein écran montés par-dessus la base. */
+type PanelId = "habits" | "noyau" | "mare" | "bastion" | "reports" | "settings" | null;
+
 export default function PlayPage() {
   const hasHydrated = useGame((s) => s.hasHydrated);
   const profile = useGame((s) => s.profile);
@@ -64,9 +68,15 @@ export default function PlayPage() {
   const reports = useGame((s) => s.reports);
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const [selected, setSelected] = useState<BuildingId | null>(null);
-  const [panel, setPanel] = useState<
-    "habits" | "noyau" | "mare" | "bastion" | "reports" | "settings" | null
-  >(null);
+  const [panel, setPanelState] = useState<PanelId>(null);
+  /* Tout passe par ce setter : c'est le seul point où le repère sonore de
+     membrane (piste 8) est déclenché, plutôt que sur une dizaine de handlers.
+     Le repère ne part que si l'état change réellement — retoucher l'onglet
+     déjà ouvert ne doit rien produire. */
+  const setPanel = (next: PanelId) => {
+    if (next !== panel) playCue(next === null ? "panel_close" : "panel_open");
+    setPanelState(next);
+  };
   // Sync cloud active pendant le jeu (push périodique + arrière-plan).
   const { user: cloudUser, status: cloudStatus } = useCloudSync();
 
@@ -76,6 +86,12 @@ export default function PlayPage() {
   useEffect(() => {
     hydrateActiveSlot();
   }, []);
+
+  /* Audio (piste 8). `installAudio` pose un unique écouteur délégué en capture :
+     il débloque le contexte au tout premier geste — contrainte iOS, on ne peut
+     pas créer un AudioContext hors interaction — et sonorise n'importe quel
+     bouton du jeu sans qu'aucun composant n'ait à s'en occuper. */
+  useEffect(() => installAudio(), []);
 
   // Un seul gros tick de rattrapage offline au chargement, puis tick 1 s.
   useEffect(() => {

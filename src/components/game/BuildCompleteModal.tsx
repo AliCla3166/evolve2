@@ -25,6 +25,7 @@ import { fmtInt, fmtRate } from "@/lib/game/format";
 import { envelopeStage, SOCKETS, STAGE_MIN_BUILT, builtCount } from "@/lib/game/scene";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
+import { playCue } from "@/lib/audio";
 import type { BuildingId, ResourceId } from "@/lib/game/types";
 
 /** `onNext` ouvre la fiche du chantier suivant recommandé : c'est le point clé de
@@ -40,7 +41,12 @@ export function BuildCompleteModal({ onNext }: { onNext?: (id: BuildingId) => vo
 
   // Une seule vibration par chantier célébré (le motif "réussite" : long-court-long).
   useEffect(() => {
-    if (done) vibrate([28, 60, 18, 40, 44]);
+    if (done) {
+      vibrate([28, 60, 18, 40, 44]);
+      // Le repère sonore de la piste 8 : c'est la récompense la plus rare et la
+      // plus méritée du jeu, c'est donc elle qui a droit à la floraison complète.
+      playCue("build_done");
+    }
   }, [done]);
 
   if (!done) return null;

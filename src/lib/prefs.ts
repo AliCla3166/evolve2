@@ -6,9 +6,15 @@ const KEY = "evolve2_prefs";
 
 export interface Prefs {
   vibrations: boolean;
+  /** Repères sonores (piste 8). Activés par défaut : un jeu muet est lu comme
+   *  un prototype, et un joueur qui découvre le son coupé ne l'allume jamais. */
+  sons: boolean;
+  /** Nappe d'ambiance sous-marine. COUPÉE par défaut : une boucle continue
+   *  imposée d'entrée est la première cause de coupure du son sur mobile. */
+  ambiance: boolean;
 }
 
-const DEFAULTS: Prefs = { vibrations: true };
+const DEFAULTS: Prefs = { vibrations: true, sons: true, ambiance: false };
 
 export function getPrefs(): Prefs {
   if (typeof window === "undefined") return DEFAULTS;

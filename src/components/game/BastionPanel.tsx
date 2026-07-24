@@ -41,6 +41,7 @@ import { estimatedWavePower } from "@/lib/game/military";
 import { fmtDuration, fmtInt } from "@/lib/game/format";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
+import { playCue } from "@/lib/audio";
 
 /** Ce que chaque niveau de Vigie dévoile (index = bastion.scoutLevel). */
 const SCOUT_LEVEL_LABEL: string[] = [
@@ -318,6 +319,7 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
                   // Pose le verrou anti-double-résolution AVANT de démarrer la simulation
                   // locale — cf. store.beginBastionBattle.
                   beginBastionBattle();
+                  playCue("wave_start");
                   sceneRef.current?.startBattle(waveCount + 1);
                 }}
               >
@@ -364,6 +366,7 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
             finishBastionBattle(result, survivingStructures);
             setBanner(result);
             vibrate(result.won ? 40 : 25);
+            playCue(result.won ? "victory" : "defeat");
           }}
         />
 

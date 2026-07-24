@@ -42,6 +42,7 @@ import {
 import { useGame } from "@/lib/game/store";
 import type { LastCatch } from "@/lib/game/types";
 import { vibrate } from "@/lib/prefs";
+import { playCue, revealCue } from "@/lib/audio";
 
 /** Étapes de la mise en scène. `hold`/`fall` n'existent qu'en cas de teasing. */
 type Phase = "charge" | "hold" | "fall" | "done";
@@ -140,6 +141,7 @@ export function CardReveal() {
     // il ne reste que le retour haptique à jouer.
     if (reduced) {
       vibrate(finalCfg.vibrate);
+      playCue(revealCue(rarity));
       return clear;
     }
 
@@ -150,13 +152,24 @@ export function CardReveal() {
     const reveal = () => {
       go({ phase: "done", halo: rarity });
       vibrate(finalCfg.vibrate);
+      // Trois variantes de révélation selon la rareté (piste 8) : la commune
+      // s'efface, la mythique fleurit. La table de correspondance est en JSON.
+      playCue(revealCue(rarity));
     };
 
     // La charge est calibrée sur le SOMMET du halo : un teasing vers légendaire
     // prend le temps d'un légendaire, sinon la tension ne serait pas crédible.
     const total = revealConfig(peak).charge_ms;
     const step = total / (peak + 1);
-    for (let i = 1; i <= peak; i++) at(step * i, () => go({ phase: "charge", halo: i }));
+    /* Un tic sonore par palier, transposé d'une tierce mineure à chaque cran
+       (cf. `transpose_semitones` dans audio_config.json) : la montée du halo
+       s'ENTEND, ce qui est précisément ce qui rend l'attente désirable. */
+    playCue("reveal_charge", 0);
+    for (let i = 1; i <= peak; i++)
+      at(step * i, () => {
+        go({ phase: "charge", halo: i });
+        playCue("reveal_charge", i);
+      });
 
     if (!teased) {
       at(total, reveal);
@@ -166,6 +179,8 @@ export function CardReveal() {
     at(total, () => {
       go({ phase: "hold", halo: peak });
       vibrate(t.vibrate);
+      // Accord suspendu, jamais résolu : c'est ce qui fait la quasi-réussite.
+      playCue("reveal_tease");
     });
     at(total + t.hold_ms, () => go({ phase: "fall", halo: rarity }));
     at(total + t.hold_ms + t.fallback_ms, reveal);
@@ -206,6 +221,7 @@ export function CardReveal() {
     timers.current = [];
     setProg({ src: lastCatch, stage: { phase: "done", halo: rarity } });
     vibrate(finalCfg.vibrate);
+    playCue(revealCue(rarity));
   };
 
   return (
