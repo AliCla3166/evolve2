@@ -205,7 +205,7 @@ export interface GameState {
   /* ----- La Mare & les cartes (Phase 6) ----- */
   /** Jetons de pêche (achetés en énergie, 1 par lancer). */
   jetons: number;
-  /** Collection par espèce (12 espèces, cf. mare_config.json). */
+  /** Collection par espèce (62 espèces au 24/07, cf. mare_config.json). */
   collection: Record<string, CardEntry>;
   /** Cartes assignées en défense / expédition. */
   cardAssignments: CardAssignments;

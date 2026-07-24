@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { CardFrame, Panel, PixelButton, type Rarity } from "@/components/ui/Pixel";
 import {
   cardArt,
+  cardHp,
   cardLevel,
   cardPowerAtk,
   cardPowerDef,
@@ -366,7 +367,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                   : "border-cell-cyan/25 text-cell-teal/60"
               }`}
             >
-              {t === "peche" ? "Pêcher" : `Collection ${Object.keys(collection).length}/12`}
+              {t === "peche" ? "Pêcher" : `Collection ${Object.keys(collection).length}/${MARE.species.length}`}
             </button>
           ))}
         </div>
@@ -442,7 +443,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
               {" "}({assignments.defense.length}/{MARE.assign_slots.defense} · {assignments.expedition.length}/{MARE.assign_slots.expedition})
             </p>
 
-            {/* La collection : les 12 espèces */}
+            {/* La collection : toutes les espèces de MARE.species (62 au 24/07) */}
             <div className="grid grid-cols-3 gap-2">
               {MARE.species.map((sp) => {
                 const entry = collection[sp.id];
@@ -465,7 +466,17 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 return (
                   <div key={sp.id} className="flex flex-col items-center gap-1">
                     <CardFrame rarity={rar.id as Rarity}>
-                      <img src={cardArt(sp.id)} alt={sp.name} className="pixelated h-full w-full object-contain" draggable={false} />
+                      <img
+                        src={cardArt(sp.id)}
+                        alt={sp.name}
+                        className="pixelated h-full w-full object-contain"
+                        draggable={false}
+                        onError={(e) => {
+                          // Portrait pas encore généré (nouvelle espèce en attente de PixelLab) — repli neutre.
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = "/assets/ui/age01_cell_ui_card_slot_v001.png";
+                        }}
+                      />
                     </CardFrame>
                     <span className="text-center text-[10px] leading-tight text-cell-cyan">{sp.name}</span>
                     <span className="text-[9px]" style={{ color: rar.color }}>
@@ -473,6 +484,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                       {next !== null && <span className="text-cell-teal/50"> ({entry.count}/{next})</span>}
                     </span>
                     <span className="text-[9px] text-cell-teal/60">{ROLE_LABEL[sp.role]}</span>
+                    <span className="whitespace-nowrap text-[9px] text-cell-magenta/80">❤{cardHp(sp.id, entry)} PV</span>
                     <span className="whitespace-nowrap text-[9px] text-cell-teal/70">
                       🛡{cardPowerDef(sp.id, entry)} · 🧭{cardPowerExp(sp.id, entry)} · ⚔{cardPowerAtk(sp.id, entry)}
                     </span>

@@ -5,12 +5,21 @@
 
 import { useEffect } from "react";
 import { CardFrame, PixelButton, type Rarity } from "@/components/ui/Pixel";
-import { cardArt, rarityConfig, speciesConfig } from "@/lib/game/cards";
+import {
+  cardArt,
+  cardHp,
+  cardPowerAtk,
+  cardPowerDef,
+  cardPowerExp,
+  rarityConfig,
+  speciesConfig,
+} from "@/lib/game/cards";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
 
 export function CardReveal() {
   const lastCatch = useGame((s) => s.lastCatch);
+  const collection = useGame((s) => s.collection);
   const clearLastCatch = useGame((s) => s.clearLastCatch);
 
   // Petite pulsation physique à la révélation (plus marquée pour les hautes raretés).
@@ -21,7 +30,8 @@ export function CardReveal() {
   if (!lastCatch) return null;
   const sp = speciesConfig(lastCatch.speciesId);
   const rar = rarityConfig(lastCatch.rarity);
-  if (!sp) return null;
+  const entry = collection[lastCatch.speciesId];
+  if (!sp || !entry) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 px-6">
@@ -37,6 +47,11 @@ export function CardReveal() {
               alt={sp.name}
               className="pixelated h-full w-full object-contain"
               draggable={false}
+              onError={(e) => {
+                // Portrait pas encore généré (nouvelle espèce en attente de PixelLab) — repli neutre.
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "/assets/ui/age01_cell_ui_card_slot_v001.png";
+              }}
             />
           </CardFrame>
         </div>
@@ -45,6 +60,9 @@ export function CardReveal() {
           <div className="text-sm tracking-wide text-cell-cyan">{sp.name}</div>
           <div className="text-xs" style={{ color: rar.color }}>
             {rar.name} · Nv {lastCatch.level}
+          </div>
+          <div className="text-[10px] text-cell-teal/70">
+            ❤{cardHp(sp.id, entry)} PV · 🛡{cardPowerDef(sp.id, entry)} · 🧭{cardPowerExp(sp.id, entry)} · ⚔{cardPowerAtk(sp.id, entry)}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
             {lastCatch.isNew && (

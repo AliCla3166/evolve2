@@ -34,6 +34,8 @@ export interface SpeciesConfig {
   power_def: number;
   power_exp: number;
   power_atk: number;
+  /** Points de vie de base (avant multiplicateur rareté × niveau, cf. cardHp). */
+  hp: number;
 }
 
 export interface MareConfig {
@@ -120,6 +122,14 @@ export function cardPowerExp(speciesId: string, entry: CardEntry): number {
 export function cardPowerAtk(speciesId: string, entry: CardEntry): number {
   const sp = speciesConfig(speciesId);
   return sp ? Math.round(sp.power_atk * cardMult(entry)) : 0;
+}
+
+/** PV affichés sur la carte (même multiplicateur rareté × niveau que les 3 stats
+ *  de puissance) — purement informatif/collection pour l'instant, ne modifie pas
+ *  les formules de combat existantes (cf. journal 24/07). */
+export function cardHp(speciesId: string, entry: CardEntry): number {
+  const sp = speciesConfig(speciesId);
+  return sp ? Math.round(sp.hp * cardMult(entry)) : 0;
 }
 
 /* ---------- Bonus d'assignation (passerelle vers le militaire) ---------- */

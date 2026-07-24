@@ -1,0 +1,170 @@
+[
+  {
+    "id": "tardigrade",
+    "desc": "armored water-bear tardigrade, plated chitin shell, stoic tiny claws"
+  },
+  {
+    "id": "copepode",
+    "desc": "arrow-fast copepod with long antennae, translucent blue speed lines"
+  },
+  {
+    "id": "foraminifere",
+    "desc": "chiseled foraminifera with spiraled chalky shell, sand-gold texture"
+  },
+  {
+    "id": "dinoflagelle",
+    "desc": "spinning dinoflagellate wreathed in bioluminescent sparks"
+  },
+  {
+    "id": "rotifere",
+    "desc": "whirlpool rotifer with crown of beating cilia, hypnotic spiral"
+  },
+  {
+    "id": "nudibranche",
+    "desc": "rainbow nudibranch sea slug with frilled rhinophores, iridescent"
+  },
+  {
+    "id": "salpe",
+    "desc": "chain of glass-clear salps linked like a living necklace"
+  },
+  {
+    "id": "ctenophore",
+    "desc": "prismatic comb jelly rippling with rainbow light combs"
+  },
+  {
+    "id": "chiton",
+    "desc": "armored chiton with eight overlapping stone plates"
+  },
+  {
+    "id": "limace_abysse",
+    "desc": "eyeless abyssal slug with phosphorescent slime trail and sharp radula"
+  },
+  {
+    "id": "oursin_fantome",
+    "desc": "pale ghost urchin with translucent glass spines"
+  },
+  {
+    "id": "nautile",
+    "desc": "ancient chambered nautilus with spiraled pearl shell"
+  },
+  {
+    "id": "ammonite",
+    "desc": "fossil ammonite with glowing spiral seams of amber light"
+  },
+  {
+    "id": "ostracode",
+    "desc": "tiny armored ostracod sealed in a bean-shaped bivalve shell"
+  },
+  {
+    "id": "anemone",
+    "desc": "venomous anemone with crown of stinging violet tentacles"
+  },
+  {
+    "id": "corail",
+    "desc": "living coral polyp colony, branching bone-white and coral pink"
+  },
+  {
+    "id": "eponge",
+    "desc": "porous deep-sea sponge riddled with glowing pores"
+  },
+  {
+    "id": "vers_tube",
+    "desc": "tube worm with crimson plume bursting from a white tube"
+  },
+  {
+    "id": "crevette_aveugle",
+    "desc": "blind vent shrimp with translucent shell and heat-sensing back"
+  },
+  {
+    "id": "crabe_yeti",
+    "desc": "yeti crab with bristling pale fur-like setae on its claws"
+  },
+  {
+    "id": "pieuvre_spectrale",
+    "desc": "ghostly translucent octopus with glowing suckers"
+  },
+  {
+    "id": "calmar_vampire",
+    "desc": "vampire squid with cloak-like webbed arms, deep red eyes"
+  },
+  {
+    "id": "anguille_gouffre",
+    "desc": "gulper eel with vast unhinged jaw and whip-thin tail"
+  },
+  {
+    "id": "poisson_vipere",
+    "desc": "viperfish with needle fangs bared, hinged glowing jaw"
+  },
+  {
+    "id": "requin_lanterne",
+    "desc": "small lanternshark with glowing belly markings"
+  },
+  {
+    "id": "etoile_epineuse",
+    "desc": "spiny sea star with radiating armored arms"
+  },
+  {
+    "id": "concombre_bio",
+    "desc": "glowing sea cucumber trailing luminous ink clouds"
+  },
+  {
+    "id": "myxine",
+    "desc": "eyeless hagfish coiled in a knot of slime"
+  },
+  {
+    "id": "isopode",
+    "desc": "giant deep-sea isopod curled into an armored ball"
+  },
+  {
+    "id": "balane",
+    "desc": "crowned barnacle with fan-like feeding cirri extended"
+  },
+  {
+    "id": "polype",
+    "desc": "budding hydrozoan polyp colony, glass-clear stalks"
+  },
+  {
+    "id": "meduse_boite",
+    "desc": "box jellyfish with glowing cuboidal bell and trailing threads"
+  },
+  {
+    "id": "siphonophore",
+    "desc": "chain siphonophore colony, drifting glowing blue ribbon"
+  },
+  {
+    "id": "plancton_cuirasse",
+    "desc": "armored plankton warrior with crystalline exoskeleton"
+  },
+  {
+    "id": "algue_chantante",
+    "desc": "singing bioluminescent algae strand, rippling with light notes"
+  },
+  {
+    "id": "champignon_abyssal",
+    "desc": "abyssal fungus cap glowing with spore clouds"
+  },
+  {
+    "id": "virus_couronne",
+    "desc": "crowned viral capsid, geometric icosahedron studded with spikes"
+  },
+  {
+    "id": "bacterie",
+    "desc": "armored bacterium with flagella whip and metallic sheen"
+  },
+  {
+    "id": "protozoaire",
+    "desc": "dancing protozoan with rippling cilia veil, graceful spiral"
+  },
+  {
+    "id": "levure",
+    "desc": "dormant yeast spore cocooned in golden dust"
+  },
+  {
+    "id": "lichen",
+    "desc": "frost lichen creature crusted with ice crystal fur"
+  },
+  {
+    "id": "moisissure",
+    "desc": "queen mold organism crowned with velvet spore tendrils"
+  }
+]

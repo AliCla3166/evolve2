@@ -1,5 +1,5 @@
 {
-  "$comment": "Tuning v2 de la Mare & des cartes (Phase 6, refonte pêche 24/07) — mini-jeu façon Stardew Valley : une barre canne à pêche montée par pression maintenue et qui retombe seule (gravité), à garder alignée sur un poisson qui se déplace de façon erratique (vitesse/fréquence de changement de cap dépendent de la rareté). Les 12 espèces réutilisent les portraits PixelLab de la charte (art officiel) ; sprites dédiés à régénérer via PixelLab quand les crédits reviendront. À recalibrer en Phase 7. Aucune valeur en dur dans le code.",
+  "$comment": "Tuning v2 de la Mare & des cartes (Phase 6, refonte pêche 24/07 + extension collection 24/07) — mini-jeu façon Stardew Valley : une barre canne à pêche montée par pression maintenue et qui retombe seule (gravité), à garder alignée sur un poisson qui se déplace de façon erratique (vitesse/fréquence de changement de cap dépendent de la rareté). 62 espèces : les 12 historiques + 8 réutilisant des portraits PixelLab déjà générés en Phase 1 (jamais câblés en espèce) ont leur art ; les 42 autres référencent un `portrait` dont le PNG est en attente de génération PixelLab (cf. tools/gen_species_portraits.py + tools/portrait_jobs.json), affiché avec un repli neutre tant qu'il n'existe pas sur disque. `hp` (PV) sur chaque espèce est un stat de collection scalé par cardHp (même multiplicateur rareté × niveau que les 3 stats de puissance) ; purement informatif pour l'instant, ne modifie aucune formule de combat existante. À recalibrer en Phase 7. Aucune valeur en dur dans le code.",
   "jetons": {
     "cost_energie": 30,
     "max_stock": 20
@@ -7,12 +7,72 @@
   "fragments_per_card": 8,
   "fragment_card_rarity_floor": 2,
   "rarities": [
-    { "id": "commune", "name": "Commune", "weight": 46, "bar_mult": 1.0, "fish_speed": 0.32, "fish_retarget_hz": 0.45, "drain_mult": 0.8, "color": "#7fd7c4", "power_mult": 1.0 },
-    { "id": "peucommune", "name": "Peu commune", "weight": 26, "bar_mult": 0.88, "fish_speed": 0.46, "fish_retarget_hz": 0.65, "drain_mult": 0.9, "color": "#5bd06a", "power_mult": 1.3 },
-    { "id": "rare", "name": "Rare", "weight": 15, "bar_mult": 0.76, "fish_speed": 0.62, "fish_retarget_hz": 0.9, "drain_mult": 1.0, "color": "#4ea8ff", "power_mult": 1.7 },
-    { "id": "epique", "name": "Épique", "weight": 8, "bar_mult": 0.65, "fish_speed": 0.8, "fish_retarget_hz": 1.2, "drain_mult": 1.12, "color": "#c48bff", "power_mult": 2.3 },
-    { "id": "legendaire", "name": "Légendaire", "weight": 3.5, "bar_mult": 0.55, "fish_speed": 1.0, "fish_retarget_hz": 1.6, "drain_mult": 1.25, "color": "#ffcf5c", "power_mult": 3.2 },
-    { "id": "mythique", "name": "Mythique", "weight": 1, "bar_mult": 0.48, "fish_speed": 1.25, "fish_retarget_hz": 2.1, "drain_mult": 1.4, "color": "#ff8bd0", "power_mult": 4.5 }
+    {
+      "id": "commune",
+      "name": "Commune",
+      "weight": 46,
+      "bar_mult": 1.0,
+      "fish_speed": 0.32,
+      "fish_retarget_hz": 0.45,
+      "drain_mult": 0.8,
+      "color": "#7fd7c4",
+      "power_mult": 1.0
+    },
+    {
+      "id": "peucommune",
+      "name": "Peu commune",
+      "weight": 26,
+      "bar_mult": 0.88,
+      "fish_speed": 0.46,
+      "fish_retarget_hz": 0.65,
+      "drain_mult": 0.9,
+      "color": "#5bd06a",
+      "power_mult": 1.3
+    },
+    {
+      "id": "rare",
+      "name": "Rare",
+      "weight": 15,
+      "bar_mult": 0.76,
+      "fish_speed": 0.62,
+      "fish_retarget_hz": 0.9,
+      "drain_mult": 1.0,
+      "color": "#4ea8ff",
+      "power_mult": 1.7
+    },
+    {
+      "id": "epique",
+      "name": "Épique",
+      "weight": 8,
+      "bar_mult": 0.65,
+      "fish_speed": 0.8,
+      "fish_retarget_hz": 1.2,
+      "drain_mult": 1.12,
+      "color": "#c48bff",
+      "power_mult": 2.3
+    },
+    {
+      "id": "legendaire",
+      "name": "Légendaire",
+      "weight": 3.5,
+      "bar_mult": 0.55,
+      "fish_speed": 1.0,
+      "fish_retarget_hz": 1.6,
+      "drain_mult": 1.25,
+      "color": "#ffcf5c",
+      "power_mult": 3.2
+    },
+    {
+      "id": "mythique",
+      "name": "Mythique",
+      "weight": 1,
+      "bar_mult": 0.48,
+      "fish_speed": 1.25,
+      "fish_retarget_hz": 2.1,
+      "drain_mult": 1.4,
+      "color": "#ff8bd0",
+      "power_mult": 4.5
+    }
   ],
   "fishing": {
     "$comment": "Physique de la barre (position/vitesse en fractions 0..1 de la piste par seconde) : maintenir = accélération vers le haut (rise_accel + gravity, net positif), relâcher = seule la gravité agit (négative). drag amortit la vitesse (exp(-drag*dt), indépendant du framerate). bar_height/bar_height_min : hauteur de la fenêtre de capture, réduite par bar_mult (plancher d'équité comme l'ex zone_min). fill_rate/drain_rate : progression du succès par seconde de chevauchement/non-chevauchement (drain_rate scalé par drain_mult de la rareté). start_progress : 0.5 pour ne pas punir/favoriser le tout début. quality_luck (inchangé de la v1) : bonus de chance de rareté selon le ratio de temps passé en chevauchement, discrétisé en 4 paliers (0..3).",
@@ -25,23 +85,645 @@
     "fill_rate": 0.56,
     "drain_rate": 0.34,
     "start_progress": 0.5,
-    "quality_luck": [0, 0.06, 0.14, 0.24]
+    "quality_luck": [
+      0,
+      0.06,
+      0.14,
+      0.24
+    ]
   },
-  "level_thresholds": [1, 2, 4, 7, 11],
+  "level_thresholds": [
+    1,
+    2,
+    4,
+    7,
+    11
+  ],
   "level_power_bonus": 0.2,
-  "assign_slots": { "defense": 3, "expedition": 3 },
+  "assign_slots": {
+    "defense": 3,
+    "expedition": 3
+  },
   "species": [
-    { "id": "meduse", "name": "Méduse à voiles", "portrait": "meduse", "role": "exploration", "power_def": 2, "power_exp": 6, "power_atk": 2 },
-    { "id": "crustace", "name": "Crustacé cristallin", "portrait": "crustace", "role": "defense", "power_def": 7, "power_exp": 1, "power_atk": 2 },
-    { "id": "larve", "name": "Larve stellaire", "portrait": "larve", "role": "exploration", "power_def": 1, "power_exp": 5, "power_atk": 3 },
-    { "id": "cephalopode", "name": "Céphalopode rêveur", "portrait": "cephalopode", "role": "exploration", "power_def": 2, "power_exp": 7, "power_atk": 3 },
-    { "id": "predateur", "name": "Prédateur cilié", "portrait": "predateur", "role": "assaut", "power_def": 2, "power_exp": 3, "power_atk": 7 },
-    { "id": "symbiote", "name": "Symbiote double", "portrait": "symbiote", "role": "defense", "power_def": 6, "power_exp": 3, "power_atk": 2 },
-    { "id": "lanterne", "name": "Poisson-lanterne", "portrait": "lanterne", "role": "exploration", "power_def": 2, "power_exp": 8, "power_atk": 2 },
-    { "id": "trilobite", "name": "Trilobite chromé", "portrait": "trilobite", "role": "defense", "power_def": 8, "power_exp": 1, "power_atk": 3 },
-    { "id": "hydre", "name": "Hydre naissante", "portrait": "hydre", "role": "assaut", "power_def": 3, "power_exp": 2, "power_atk": 8 },
-    { "id": "ver", "name": "Ver bioluminescent", "portrait": "ver", "role": "assaut", "power_def": 1, "power_exp": 4, "power_atk": 5 },
-    { "id": "radiolaire", "name": "Radiolaire architecte", "portrait": "radiolaire", "role": "defense", "power_def": 5, "power_exp": 3, "power_atk": 2 },
-    { "id": "planaire", "name": "Planaire double-face", "portrait": "planaire", "role": "assaut", "power_def": 2, "power_exp": 4, "power_atk": 6 }
+    {
+      "id": "meduse",
+      "name": "Méduse à voiles",
+      "portrait": "meduse",
+      "role": "exploration",
+      "power_def": 2,
+      "power_exp": 6,
+      "power_atk": 2,
+      "hp": 18
+    },
+    {
+      "id": "crustace",
+      "name": "Crustacé cristallin",
+      "portrait": "crustace",
+      "role": "defense",
+      "power_def": 7,
+      "power_exp": 1,
+      "power_atk": 2,
+      "hp": 44
+    },
+    {
+      "id": "larve",
+      "name": "Larve stellaire",
+      "portrait": "larve",
+      "role": "exploration",
+      "power_def": 1,
+      "power_exp": 5,
+      "power_atk": 3,
+      "hp": 16
+    },
+    {
+      "id": "cephalopode",
+      "name": "Céphalopode rêveur",
+      "portrait": "cephalopode",
+      "role": "exploration",
+      "power_def": 2,
+      "power_exp": 7,
+      "power_atk": 3,
+      "hp": 20
+    },
+    {
+      "id": "predateur",
+      "name": "Prédateur cilié",
+      "portrait": "predateur",
+      "role": "assaut",
+      "power_def": 2,
+      "power_exp": 3,
+      "power_atk": 7,
+      "hp": 27
+    },
+    {
+      "id": "symbiote",
+      "name": "Symbiote double",
+      "portrait": "symbiote",
+      "role": "defense",
+      "power_def": 6,
+      "power_exp": 3,
+      "power_atk": 2,
+      "hp": 40
+    },
+    {
+      "id": "lanterne",
+      "name": "Poisson-lanterne",
+      "portrait": "lanterne",
+      "role": "exploration",
+      "power_def": 2,
+      "power_exp": 8,
+      "power_atk": 2,
+      "hp": 19
+    },
+    {
+      "id": "trilobite",
+      "name": "Trilobite chromé",
+      "portrait": "trilobite",
+      "role": "defense",
+      "power_def": 8,
+      "power_exp": 1,
+      "power_atk": 3,
+      "hp": 48
+    },
+    {
+      "id": "hydre",
+      "name": "Hydre naissante",
+      "portrait": "hydre",
+      "role": "assaut",
+      "power_def": 3,
+      "power_exp": 2,
+      "power_atk": 8,
+      "hp": 30
+    },
+    {
+      "id": "ver",
+      "name": "Ver bioluminescent",
+      "portrait": "ver",
+      "role": "assaut",
+      "power_def": 1,
+      "power_exp": 4,
+      "power_atk": 5,
+      "hp": 24
+    },
+    {
+      "id": "radiolaire",
+      "name": "Radiolaire architecte",
+      "portrait": "radiolaire",
+      "role": "defense",
+      "power_def": 5,
+      "power_exp": 3,
+      "power_atk": 2,
+      "hp": 38
+    },
+    {
+      "id": "planaire",
+      "name": "Planaire double-face",
+      "portrait": "planaire",
+      "role": "assaut",
+      "power_def": 2,
+      "power_exp": 4,
+      "power_atk": 6,
+      "hp": 26
+    },
+    {
+      "id": "abyssal",
+      "name": "Abyssal aux mille regards",
+      "portrait": "abyssal",
+      "role": "defense",
+      "power_def": 7,
+      "power_exp": 3,
+      "power_atk": 1,
+      "hp": 42
+    },
+    {
+      "id": "spore",
+      "name": "Spore éveillée",
+      "portrait": "spore",
+      "role": "exploration",
+      "power_def": 1,
+      "power_exp": 9,
+      "power_atk": 3,
+      "hp": 20
+    },
+    {
+      "id": "amibe",
+      "name": "Amibe royale",
+      "portrait": "amibe",
+      "role": "defense",
+      "power_def": 6,
+      "power_exp": 4,
+      "power_atk": 2,
+      "hp": 38
+    },
+    {
+      "id": "diatomee",
+      "name": "Diatomée joyau",
+      "portrait": "diatomee",
+      "role": "defense",
+      "power_def": 8,
+      "power_exp": 2,
+      "power_atk": 4,
+      "hp": 46
+    },
+    {
+      "id": "embryon",
+      "name": "Embryon cosmique",
+      "portrait": "embryon",
+      "role": "exploration",
+      "power_def": 3,
+      "power_exp": 8,
+      "power_atk": 4,
+      "hp": 18
+    },
+    {
+      "id": "colonie",
+      "name": "Colonie unanime",
+      "portrait": "colonie",
+      "role": "assaut",
+      "power_def": 4,
+      "power_exp": 2,
+      "power_atk": 6,
+      "hp": 26
+    },
+    {
+      "id": "archee",
+      "name": "Archée des sources",
+      "portrait": "archee",
+      "role": "assaut",
+      "power_def": 4,
+      "power_exp": 2,
+      "power_atk": 6,
+      "hp": 23
+    },
+    {
+      "id": "germe",
+      "name": "Germe divin",
+      "portrait": "germe",
+      "role": "defense",
+      "power_def": 9,
+      "power_exp": 3,
+      "power_atk": 3,
+      "hp": 46
+    },
+    {
+      "id": "tardigrade",
+      "name": "Tardigrade cuirassé",
+      "portrait": "tardigrade",
+      "role": "defense",
+      "power_def": 9,
+      "power_exp": 4,
+      "power_atk": 3,
+      "hp": 46
+    },
+    {
+      "id": "copepode",
+      "name": "Copépode flèche",
+      "portrait": "copepode",
+      "role": "exploration",
+      "power_def": 1,
+      "power_exp": 9,
+      "power_atk": 3,
+      "hp": 26
+    },
+    {
+      "id": "foraminifere",
+      "name": "Foraminifère ciselé",
+      "portrait": "foraminifere",
+      "role": "defense",
+      "power_def": 6,
+      "power_exp": 3,
+      "power_atk": 2,
+      "hp": 34
+    },
+    {
+      "id": "dinoflagelle",
+      "name": "Dinoflagellé incandescent",
+      "portrait": "dinoflagelle",
+      "role": "exploration",
+      "power_def": 2,
+      "power_exp": 6,
+      "power_atk": 2,
+      "hp": 17
+    },
+    {
+      "id": "rotifere",
+      "name": "Rotifère tourbillon",
+      "portrait": "rotifere",
+      "role": "exploration",
+      "power_def": 1,
+      "power_exp": 7,
+      "power_atk": 1,
+      "hp": 16
+    },
+    {
+      "id": "nudibranche",
+      "name": "Nudibranche arc-en-ciel",
+      "portrait": "nudibranche",
+      "role": "exploration",
+      "power_def": 1,
+      "power_exp": 6,
+      "power_atk": 2,
+      "hp": 20
+    },
+    {
+      "id": "salpe",
+      "name": "Chaîne de salpes",
+      "portrait": "salpe",
+      "role": "defense",
+      "power_def": 7,
+      "power_exp": 2,
+      "power_atk": 1,
+      "hp": 46
+    },
+    {
+      "id": "ctenophore",
+      "name": "Cténophore prismatique",
+      "portrait": "ctenophore",
+      "role": "exploration",
+      "power_def": 2,
+      "power_exp": 6,
+      "power_atk": 2,
+      "hp": 17
+    },
+    {
+      "id": "chiton",
+      "name": "Chiton blindé",
+      "portrait": "chiton",
+      "role": "defense",
+      "power_def": 9,
+      "power_exp": 2,
+      "power_atk": 3,
+      "hp": 54
+    },
+    {
+      "id": "limace_abysse",
+      "name": "Limace des abysses",
+      "portrait": "limace_abysse",
+      "role": "assaut",
+      "power_def": 1,
+      "power_exp": 3,
+      "power_atk": 9,
+      "hp": 32
+    },
+    {
+      "id": "oursin_fantome",
+      "name": "Oursin fantôme",
+      "portrait": "oursin_fantome",
+      "role": "defense",
+      "power_def": 8,
+      "power_exp": 4,
+      "power_atk": 4,
+      "hp": 50
+    },
+    {
+      "id": "nautile",
+      "name": "Nautile ancien",
+      "portrait": "nautile",
+      "role": "defense",
+      "power_def": 8,
+      "power_exp": 3,
+      "power_atk": 4,
+      "hp": 42
+    },
+    {
+      "id": "ammonite",
+      "name": "Ammonite spirale",
+      "portrait": "ammonite",
+      "role": "defense",
+      "power_def": 9,
+      "power_exp": 4,
+      "power_atk": 3,
+      "hp": 46
+    },
+    {
+      "id": "ostracode",
+      "name": "Ostracode scellé",
+      "portrait": "ostracode",
+      "role": "defense",
+      "power_def": 9,
+      "power_exp": 4,
+      "power_atk": 3,
+      "hp": 46
+    },
+    {
+      "id": "anemone",
+      "name": "Anémone vénéneuse",
+      "portrait": "anemone",
+      "role": "assaut",
+      "power_def": 2,
+      "power_exp": 1,
+      "power_atk": 7,
+      "hp": 22
+    },
+    {
+      "id": "corail",
+      "name": "Corail vivant",
+      "portrait": "corail",
+      "role": "defense",
+      "power_def": 7,
+      "power_exp": 3,
+      "power_atk": 1,
+      "hp": 42
+    },
+    {
+      "id": "eponge",
+      "name": "Éponge poreuse",
+      "portrait": "eponge",
+      "role": "defense",
+      "power_def": 9,
+      "power_exp": 2,
+      "power_atk": 3,
+      "hp": 46
+    },
+    {
+      "id": "vers_tube",
+      "name": "Ver à panache",
+      "portrait": "vers_tube",
+      "role": "defense",
+      "power_def": 9,
+      "power_exp": 4,
+      "power_atk": 3,
+      "hp": 54
+    },
+    {
+      "id": "crevette_aveugle",
+      "name": "Crevette aveugle",
+      "portrait": "crevette_aveugle",
+      "role": "exploration",
+      "power_def": 2,
+      "power_exp": 7,
+      "power_atk": 1,
+      "hp": 22
+    },
+    {
+      "id": "crabe_yeti",
+      "name": "Crabe yéti",
+      "portrait": "crabe_yeti",
+      "role": "defense",
+      "power_def": 7,
+      "power_exp": 4,
+      "power_atk": 1,
+      "hp": 42
+    },
+    {
+      "id": "pieuvre_spectrale",
+      "name": "Pieuvre spectrale",
+      "portrait": "pieuvre_spectrale",
+      "role": "assaut",
+      "power_def": 4,
+      "power_exp": 4,
+      "power_atk": 8,
+      "hp": 27
+    },
+    {
+      "id": "calmar_vampire",
+      "name": "Calmar vampire",
+      "portrait": "calmar_vampire",
+      "role": "assaut",
+      "power_def": 2,
+      "power_exp": 4,
+      "power_atk": 8,
+      "hp": 27
+    },
+    {
+      "id": "anguille_gouffre",
+      "name": "Anguille du gouffre",
+      "portrait": "anguille_gouffre",
+      "role": "assaut",
+      "power_def": 4,
+      "power_exp": 1,
+      "power_atk": 7,
+      "hp": 22
+    },
+    {
+      "id": "poisson_vipere",
+      "name": "Poisson-vipère",
+      "portrait": "poisson_vipere",
+      "role": "assaut",
+      "power_def": 4,
+      "power_exp": 1,
+      "power_atk": 7,
+      "hp": 22
+    },
+    {
+      "id": "requin_lanterne",
+      "name": "Requin-lanterne nain",
+      "portrait": "requin_lanterne",
+      "role": "assaut",
+      "power_def": 4,
+      "power_exp": 2,
+      "power_atk": 6,
+      "hp": 26
+    },
+    {
+      "id": "etoile_epineuse",
+      "name": "Étoile épineuse",
+      "portrait": "etoile_epineuse",
+      "role": "defense",
+      "power_def": 8,
+      "power_exp": 2,
+      "power_atk": 4,
+      "hp": 50
+    },
+    {
+      "id": "concombre_bio",
+      "name": "Concombre luminescent",
+      "portrait": "concombre_bio",
+      "role": "exploration",
+      "power_def": 4,
+      "power_exp": 8,
+      "power_atk": 4,
+      "hp": 24
+    },
+    {
+      "id": "myxine",
+      "name": "Myxine noueuse",
+      "portrait": "myxine",
+      "role": "assaut",
+      "power_def": 4,
+      "power_exp": 2,
+      "power_atk": 6,
+      "hp": 20
+    },
+    {
+      "id": "isopode",
+      "name": "Isopode géant",
+      "portrait": "isopode",
+      "role": "defense",
+      "power_def": 7,
+      "power_exp": 3,
+      "power_atk": 1,
+      "hp": 38
+    },
+    {
+      "id": "balane",
+      "name": "Balane couronnée",
+      "portrait": "balane",
+      "role": "defense",
+      "power_def": 8,
+      "power_exp": 2,
+      "power_atk": 4,
+      "hp": 42
+    },
+    {
+      "id": "polype",
+      "name": "Polype bourgeonnant",
+      "portrait": "polype",
+      "role": "exploration",
+      "power_def": 4,
+      "power_exp": 9,
+      "power_atk": 3,
+      "hp": 23
+    },
+    {
+      "id": "meduse_boite",
+      "name": "Méduse-boîte",
+      "portrait": "meduse_boite",
+      "role": "assaut",
+      "power_def": 3,
+      "power_exp": 4,
+      "power_atk": 8,
+      "hp": 30
+    },
+    {
+      "id": "siphonophore",
+      "name": "Siphonophore ruban",
+      "portrait": "siphonophore",
+      "role": "exploration",
+      "power_def": 4,
+      "power_exp": 9,
+      "power_atk": 3,
+      "hp": 20
+    },
+    {
+      "id": "plancton_cuirasse",
+      "name": "Plancton cuirassé",
+      "portrait": "plancton_cuirasse",
+      "role": "defense",
+      "power_def": 6,
+      "power_exp": 3,
+      "power_atk": 2,
+      "hp": 38
+    },
+    {
+      "id": "algue_chantante",
+      "name": "Algue chantante",
+      "portrait": "algue_chantante",
+      "role": "exploration",
+      "power_def": 4,
+      "power_exp": 9,
+      "power_atk": 3,
+      "hp": 23
+    },
+    {
+      "id": "champignon_abyssal",
+      "name": "Champignon abyssal",
+      "portrait": "champignon_abyssal",
+      "role": "defense",
+      "power_def": 8,
+      "power_exp": 2,
+      "power_atk": 4,
+      "hp": 46
+    },
+    {
+      "id": "virus_couronne",
+      "name": "Virus couronné",
+      "portrait": "virus_couronne",
+      "role": "assaut",
+      "power_def": 1,
+      "power_exp": 1,
+      "power_atk": 7,
+      "hp": 22
+    },
+    {
+      "id": "bacterie",
+      "name": "Bactérie blindée",
+      "portrait": "bacterie",
+      "role": "defense",
+      "power_def": 6,
+      "power_exp": 4,
+      "power_atk": 2,
+      "hp": 42
+    },
+    {
+      "id": "protozoaire",
+      "name": "Protozoaire danseur",
+      "portrait": "protozoaire",
+      "role": "exploration",
+      "power_def": 1,
+      "power_exp": 7,
+      "power_atk": 1,
+      "hp": 16
+    },
+    {
+      "id": "levure",
+      "name": "Levure dormante",
+      "portrait": "levure",
+      "role": "defense",
+      "power_def": 8,
+      "power_exp": 4,
+      "power_atk": 4,
+      "hp": 50
+    },
+    {
+      "id": "lichen",
+      "name": "Lichen glacial",
+      "portrait": "lichen",
+      "role": "defense",
+      "power_def": 9,
+      "power_exp": 3,
+      "power_atk": 3,
+      "hp": 50
+    },
+    {
+      "id": "moisissure",
+      "name": "Moisissure reine",
+      "portrait": "moisissure",
+      "role": "assaut",
+      "power_def": 3,
+      "power_exp": 3,
+      "power_atk": 9,
+      "hp": 32
+    }
   ]
 }
