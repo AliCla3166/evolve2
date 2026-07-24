@@ -6,7 +6,9 @@ import type { CSSProperties, ReactNode } from "react";
 
 const UI = "/assets/ui";
 
-/** Panneau membrane 9-slice (variant standard, noyau, tooltip). */
+/** Vignette sobre (refonte lisibilité Phase 7) : le pixel art vit dans les
+ *  sprites/cartes/scène, les CONTENEURS restent calmes et lisibles.
+ *  variant : membrane = standard · noyau = bord renforcé · tooltip = compact. */
 export function Panel({
   variant = "membrane",
   children,
@@ -18,18 +20,10 @@ export function Panel({
   className?: string;
   style?: CSSProperties;
 }) {
-  const slice = variant === "tooltip" ? 20 : 30;
+  const cls =
+    variant === "noyau" ? "tile tile-strong" : variant === "tooltip" ? "tile tile-compact" : "tile";
   return (
-    <div
-      className={`pixelated ${className}`}
-      style={{
-        borderStyle: "solid",
-        borderWidth: slice / 2,
-        borderImage: `url(${UI}/age01_cell_ui_panel_${variant}_v001.png) ${slice} fill round`,
-        imageRendering: "pixelated",
-        ...style,
-      }}
-    >
+    <div className={`${cls} ${className}`} style={style}>
       {children}
     </div>
   );
@@ -50,7 +44,7 @@ export function PixelButton({
   className?: string;
   href?: string;
 }) {
-  const cls = `pixel-btn pixelated relative select-none px-6 py-2 text-xs tracking-widest text-cell-cyan ${className}`;
+  const cls = `pixel-btn relative select-none px-5 py-2 text-xs tracking-widest text-cell-cyan ${className}`;
   if (href && !disabled) {
     return (
       <Link href={href} className={`inline-flex items-center justify-center ${cls}`}>

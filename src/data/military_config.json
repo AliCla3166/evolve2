@@ -66,10 +66,10 @@
       { "id": "abysse", "name": "Jardin des abysses", "tier": 3, "duration_h": [9, 12], "risk": [0.32, 0.45], "difficulty": [38, 55], "rewards": ["signaux", "adn", "enzyme"], "fragments": [2, 4], "boost_chance": 0.25 }
     ],
     "reward_hours_by_tier": {
-      "$comment": "Récompense en ressources ≈ N heures de la production horaire TOTALE courante de la cellule, répartie sur les ressources listées.",
-      "1": [2, 4],
-      "2": [4, 7],
-      "3": [7, 12]
+      "$comment": "Récompense en ressources ≈ N heures de la production horaire TOTALE courante de la cellule, répartie sur les ressources listées. Recalibré Phase 7 (simulate_full.py) : avec [2,4]/[4,7]/[7,12], un joueur assidu tirait 42 % de son revenu des expéditions — elles doivent rester un bonus (~30 % max).",
+      "1": [1.5, 2.5],
+      "2": [2.5, 4.5],
+      "3": [4.5, 7.5]
     }
   },
   "pathogens": {

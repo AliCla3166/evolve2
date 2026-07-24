@@ -94,3 +94,15 @@
   3. **Firestore rules** : ajouter `match /saves_v2/{uid} { allow read, write: if request.auth != null && request.auth.uid == uid; }` (les règles v1 ne couvrent probablement que `saves/`).
 - Prod actuelle (sans variables) : affiche "sync cloud à configurer" — déploiement sans risque.
 - Point de reprise suivant — Phase 7 (équilibrage), et activation Firebase dès qu'Ali ouvre l'app desktop (je peux faire les 3 actions via son Chrome) ou les fait à la main.
+
+## 2026-07-23 — Phase 7 : équilibrage 90 jours + refonte lisibilité de l'UI
+- **Simulateur complet** `tools/economy/simulate_full.py` : lit les TROIS configs livrées (source de vérité), simule un joueur réaliste PAR SESSIONS (3 archétypes : assidu 85⚡/4 sessions, régulier 65⚡/2, dilettante 40⚡/1) avec chantiers gloutons, expéditions 2 slots, recrutement défensif, pêche, fragments, vagues et événements. 30 graines par archétype.
+- **Découverte de design validée** : à "tout Nv4", presque tous les coûts Nv5 (2528) dépassent le cap de stockage (2400) — seul le Noyau Nv5 est jouable et débloque le cap. Le jeu force "le Noyau d'abord" : porte naturelle de l'économie calibrée, PAS un bug (le premier simulateur 24/7 la traversait sans la voir ; un vrai joueur construit ce qui est vert).
+- **Résultats après recalibrage** (reward_hours_by_tier réduit à [1.5,2.5]/[2.5,4.5]/[4.5,7.5] — avant : un assidu tirait 42 % de son revenu des expéditions) :
+  - assidu : tout Nv5 à **j86** · 34 % du revenu via expéditions ;
+  - régulier : tout Nv5 à **j91** ✅ (cible 90 ±10 %) · 20 % ;
+  - dilettante : tout Nv5 à **j105** · 15 %.
+  - Vagues repoussées ~97 % (annoncées + contre-jeu = comportement voulu, pertes légères sinon), 12 espèces collectées dans tous les runs, 1,2-3,2 Mythiques par partie.
+- **Refonte lisibilité** (retour d'Ali : "interface plus simple, vignettes classes, pas un UI stylisé illisible") : `Panel` ne rend plus les 9-slice membrane mais des VIGNETTES sobres (`.tile` : fond profond, bord fin cyan, coins arrondis ; variantes strong/compact), `PixelButton` abandonne les sprites de boutons pour un bouton simple (le texte définit la largeur — plus AUCUN débordement possible). Le pixel art reste là où il brille : scène Canvas, sprites, portraits, CadreFrame des cartes, icônes, fonds. Changement en UN point (composants partagés) → tous les écrans restylés d'un coup, vérifiés par screenshots (titre, scène, panneau bâtiment, Noyau, Mare, collection, rapports, tutoriel).
+- Les PNG de boutons/panneaux du kit Phase 1 restent dans public/assets/ui/ (réutilisables), mais ne sont plus référencés par le code.
+- Point de reprise suivant — **Phase 8 : polish & release** (PWA installable, icônes, réglages, passe perfs, QA multi-device) + activation Firebase (checklist ci-dessus) + sprites dédiés PixelLab quand les crédits reviennent.

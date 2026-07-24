@@ -61,23 +61,42 @@ body {
 }
 .animate-card-reveal { animation: card-reveal 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
 
-/* Bouton pixel art 4 états */
+/* ===== Refonte lisibilité (Phase 7) : vignettes sobres + boutons simples.
+   Le pixel art vit dans la scène, les sprites, les cartes et les icônes —
+   les conteneurs et boutons restent calmes pour que le texte respire. ===== */
+
+.tile {
+  background: rgba(7, 16, 28, 0.92);
+  border: 1px solid rgba(109, 246, 255, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.tile-strong {
+  border-color: rgba(109, 246, 255, 0.4);
+  box-shadow: 0 0 16px rgba(109, 246, 255, 0.07), 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.tile-compact {
+  border-radius: 8px;
+}
+
+/* Bouton simple : le texte définit la largeur, plus jamais de débordement. */
 .pixel-btn {
-  border: none;
-  background: url("/assets/ui/age01_cell_ui_btn_normal_v001.png") center / 100% 100% no-repeat;
-  image-rendering: pixelated;
-  min-width: 128px;
+  border: 1px solid rgba(109, 246, 255, 0.45);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(18, 42, 62, 0.95), rgba(9, 20, 34, 0.95));
   min-height: 40px;
 }
 .pixel-btn:hover:not(:disabled) {
-  background-image: url("/assets/ui/age01_cell_ui_btn_hover_v001.png");
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(109, 246, 255, 0.25);
 }
 .pixel-btn:active:not(:disabled) {
-  background-image: url("/assets/ui/age01_cell_ui_btn_pressed_v001.png");
   transform: translateY(1px);
+  background: linear-gradient(180deg, rgba(9, 20, 34, 0.95), rgba(18, 42, 62, 0.95));
 }
 .pixel-btn:disabled {
-  background-image: url("/assets/ui/age01_cell_ui_btn_disabled_v001.png");
-  color: #6a8a96;
+  color: #5d7d89;
+  border-color: rgba(109, 246, 255, 0.15);
+  opacity: 0.6;
   cursor: not-allowed;
 }
