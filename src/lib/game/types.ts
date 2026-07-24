@@ -1,8 +1,12 @@
 /* Types du GameState — Âge 1 : Cellule.
    Aucune valeur d'équilibrage ici : tout le tuning vient de src/data/economy_config.json. */
 
-/** Ressources suivies par le moteur (les ressources "hors_perimetre" du JSON — combat,
- *  rubis, age — ne sont pas encore simulées). */
+import type { BastionState } from "./bastion/types";
+
+/** Ressources suivies par le moteur. `combat` ("Monnaie de combat") est simulée depuis
+ *  l'intégration du mini-jeu Bastion-Défense (gagnée en vagues jouées, dépensée dans sa
+ *  Boutique) — non plafonnée par le stockage cellulaire (cf. resourceCap), pas affichée au
+ *  HUD principal. `rubis`/`age` restent hors périmètre (non simulées). */
 export type ResourceId =
   | "energie"
   | "vitalite"
@@ -11,7 +15,8 @@ export type ResourceId =
   | "biomasse"
   | "enzyme"
   | "lipide"
-  | "signaux";
+  | "signaux"
+  | "combat";
 
 /** Les 12 bâtiments de l'Âge 1 (peche/defense/raid : designed=false, verrouillés "À venir"). */
 export type BuildingId =
@@ -211,4 +216,7 @@ export interface GameState {
   cardAssignments: CardAssignments;
   /** Dernière prise à révéler (null si déjà vue). */
   lastCatch: LastCatch | null;
+
+  /* ----- Bastion-Défense jouable (intégration profonde, 24/07) ----- */
+  bastion: BastionState;
 }

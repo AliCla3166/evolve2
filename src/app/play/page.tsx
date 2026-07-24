@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BastionPanel } from "@/components/game/BastionPanel";
 import { BuildingSheet } from "@/components/game/BuildingSheet";
 import { CardReveal } from "@/components/game/CardReveal";
 import { CellScene } from "@/components/game/CellScene";
@@ -27,17 +28,28 @@ import { fmtDuration } from "@/lib/game/format";
 import { hydrateActiveSlot, useGame } from "@/lib/game/store";
 import type { BuildingId } from "@/lib/game/types";
 
-/** Alerte vague imminente (moins de 12 h) — visible sans ouvrir le Noyau. */
-function WaveWarning() {
+/** Alerte vague imminente (moins de 12 h) — visible sans ouvrir le Noyau.
+ *  `onOpenBastion` permet de sauter directement dans le combat en direct. */
+function WaveWarning({ onOpenBastion }: { onOpenBastion: () => void }) {
   const nextAttackAt = useGame((s) => s.nextAttackAt);
   const now = useGame((s) => s.lastTick);
   const remaining = nextAttackAt - now;
   if (nextAttackAt <= 0 || remaining <= 0 || remaining > 12 * 3_600_000) return null;
   return (
-    <Panel variant="tooltip" className="px-3 py-1 text-center" style={{ background: "rgba(30, 5, 20, 0.85)" }}>
+    <Panel
+      variant="tooltip"
+      className="flex items-center justify-between gap-2 px-3 py-1 text-center"
+      style={{ background: "rgba(30, 5, 20, 0.85)" }}
+    >
       <span className="text-[11px] text-red-400">
-        🦠 Vague de pathogènes dans {fmtDuration(remaining)} — vérifie ta défense au Noyau.
+        🦠 Vague de pathogènes dans {fmtDuration(remaining)} — vérifie ta défense au Bastion.
       </span>
+      <button
+        onClick={onOpenBastion}
+        className="shrink-0 rounded border border-red-400/50 px-2 py-0.5 text-[10px] text-red-300 hover:bg-red-400/10"
+      >
+        ⚔️ Défendre
+      </button>
     </Panel>
   );
 }
@@ -49,9 +61,9 @@ export default function PlayPage() {
   const reports = useGame((s) => s.reports);
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const [selected, setSelected] = useState<BuildingId | null>(null);
-  const [panel, setPanel] = useState<"habits" | "noyau" | "mare" | "reports" | "settings" | null>(
-    null,
-  );
+  const [panel, setPanel] = useState<
+    "habits" | "noyau" | "mare" | "bastion" | "reports" | "settings" | null
+  >(null);
   // Sync cloud active pendant le jeu (push périodique + arrière-plan).
   const { user: cloudUser, status: cloudStatus } = useCloudSync();
 
@@ -144,7 +156,7 @@ export default function PlayPage() {
           <TutorialCoach />
 
           {/* Alerte pathogène imminente */}
-          <WaveWarning />
+          <WaveWarning onOpenBastion={() => setPanel("bastion")} />
 
           {/* File de construction (1 slot) */}
           <QueueBanner />
@@ -155,12 +167,26 @@ export default function PlayPage() {
       )}
 
       {/* Panneau d'amélioration (bottom sheet) */}
-      {selected && <BuildingSheet id={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <BuildingSheet
+          id={selected}
+          onClose={() => setSelected(null)}
+          onPlay={
+            selected === "defense"
+              ? () => {
+                  setSelected(null);
+                  setPanel("bastion");
+                }
+              : undefined
+          }
+        />
+      )}
 
       {/* Overlays */}
       {panel === "habits" && <HabitsPanel onClose={() => setPanel(null)} />}
       {panel === "noyau" && <NoyauHub onClose={() => setPanel(null)} />}
       {panel === "mare" && <MarePanel onClose={() => setPanel(null)} />}
+      {panel === "bastion" && <BastionPanel onClose={() => setPanel(null)} />}
       {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
       {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
       <EventModal />

@@ -1,0 +1,115 @@
+{
+  "$comment": "Tuning du mini-jeu jouable Bastion-Défense (intégration profonde, 24/07). Les CRÉATURES de combat ne sont PAS ici : ce sont les espèces de La Mare (mare_config.json), pont via cardAssignments.defense — rôle 'defense' => barracks, rôle 'assaut' => mortier. Ce fichier ne couvre que ce qui n'est pas une créature : tourelles/murs/pièges/support, les pathogènes (ennemis, réutilisent des portraits d'espèces déjà générés pour l'art uniquement, stats indépendantes), le tuning des vagues et les coûts de Boutique. Rien en dur dans le code TypeScript — tout se lit d'ici, comme military_config.json/mare_config.json.",
+
+  "slots": {
+    "turret_total": 6,
+    "vanguard_count": 2,
+    "barracks_total": 4,
+    "mortar_total": 2,
+    "support_total": 3
+  },
+
+  "rarity_acc": [0.78, 0.83, 0.88, 0.91, 0.94, 0.97],
+
+  "reserve": { "base_cap": 3, "max_cap": 10, "cost_base": 20, "cost_growth": 1.35 },
+  "tree_cap": { "base_level": 2, "max_level": 5, "cost_base": 60, "cost_growth": 1.6 },
+  "foundations": { "max_level": 3, "per_level_mult": 0.06, "cost_base": 45, "cost_growth": 1.7 },
+  "in_wave_respawn": { "cost": 90 },
+
+  "slot_unlock_cost": {
+    "turret": { "base": 30, "growth": 1.45 },
+    "barracks": { "base": 35, "growth": 1.45 },
+    "mortar": { "base": 55, "growth": 1.6 }
+  },
+
+  "recruit_building_cost": { "base": 18, "growth": 1.08 },
+
+  "buildings": [
+    { "id": "t_spore", "name": "Tourelle à spores", "category": "turret", "rarity": "commune",
+      "dmg": 7, "rate": 1.2, "range": 820, "cost": 16,
+      "desc": "Tourelle fixe, couvre tout le champ depuis sa position." },
+    { "id": "t_electrique", "name": "Tourelle électrique", "category": "turret", "rarity": "rare",
+      "dmg": 12, "rate": 1.6, "range": 820, "cost": 26,
+      "desc": "Cadence de tir rapide." },
+    { "id": "t_flamme", "name": "Tourelle lance-flammes", "category": "turret", "rarity": "peucommune",
+      "dmg": 5, "rate": 5.0, "range": 95, "cost": 18,
+      "desc": "Portée très courte, mais dégâts continus dévastateurs à qui s'approche." },
+    { "id": "t_sniper", "name": "Tourelle longue-vue", "category": "turret", "rarity": "epique",
+      "dmg": 46, "rate": 0.35, "range": 1100, "cost": 48,
+      "desc": "Portée immense, très lente, ne vise qu'une seule cible — mais dévastatrice." },
+    { "id": "t_chaine", "name": "Tourelle à décharge", "category": "turret", "rarity": "rare",
+      "dmg": 10, "rate": 1.1, "range": 820, "chainCount": 4, "chainRadius": 100, "cost": 30,
+      "desc": "Chaque tir arque vers plusieurs ennemis proches, comme une décharge électrique." },
+    { "id": "t_abyssale", "name": "Tourelle abyssale", "category": "turret", "rarity": "legendaire",
+      "dmg": 22, "rate": 1.8, "range": 820, "splash": 55, "cost": 58,
+      "desc": "Chaque tir éclabousse les ennemis proches de la cible." },
+    { "id": "w_chitine", "name": "Muraille chitineuse", "category": "wall", "rarity": "commune",
+      "blockHp": 120, "cost": 10,
+      "desc": "Bloque le passage au point posé, encaisse sans attaquer." },
+    { "id": "w_regen", "name": "Muraille régénérante", "category": "wall", "rarity": "epique",
+      "blockHp": 170, "regenPerWave": 14, "cost": 38,
+      "desc": "Répare une partie de ses PV à chaque nouvelle vague." },
+    { "id": "tr_acide", "name": "Piège acide", "category": "trap", "rarity": "peucommune",
+      "burst": 38, "radius": 70, "cost": 14,
+      "desc": "Explose une fois par vague au passage d'un ennemi à proximité." },
+    { "id": "tr_collant", "name": "Piège collant", "category": "trap", "rarity": "rare",
+      "burst": 24, "radius": 75, "slowPct": 0.5, "slowDur": 3, "cost": 24,
+      "desc": "Explose et ralentit les ennemis à proximité." },
+    { "id": "s_enzyme", "name": "Catalyseur enzymatique", "category": "support", "rarity": "rare",
+      "effect": "dmgMult", "value": 0.12, "cost": 26,
+      "desc": "+12% dégâts de toute la garnison." },
+    { "id": "s_oeil", "name": "Œil collectif", "category": "support", "rarity": "mythique",
+      "effect": "rangeMult", "value": 0.3, "cost": 80,
+      "desc": "+30% de portée pour toute la garnison." },
+    { "id": "s_frappe", "name": "Frappe orbitale", "category": "support", "rarity": "epique",
+      "active": true, "chargeKills": 16, "effect": "strikeAll", "value": 40, "cost": 45,
+      "desc": "Pouvoir actif : se charge en 16 éliminations, puis inflige 40 dégâts à tous les ennemis visibles d'un tap." },
+    { "id": "s_bouclier", "name": "Bouclier d'urgence", "category": "support", "rarity": "legendaire",
+      "active": true, "chargeKills": 22, "effect": "shieldBurst", "value": 0.35, "cost": 60,
+      "desc": "Pouvoir actif : se charge en 22 éliminations, puis soigne le Noyau de 35% de ses PV max et le rend invulnérable 2 s." }
+  ],
+
+  "barracks_tree": [
+    { "a": { "name": "Carapace", "desc": "+25% PV", "mod": { "hpMult": 1.25 } },
+      "b": { "name": "Griffes", "desc": "+25% dégâts", "mod": { "dmgMult": 1.25 } } },
+    { "a": { "name": "Régénération", "desc": "+20% PV en plus", "mod": { "hpMult": 1.20 } },
+      "b": { "name": "Épines", "desc": "+20% dégâts en plus", "mod": { "dmgMult": 1.20 } } },
+    { "a": { "name": "Fortification", "desc": "+25% PV", "mod": { "hpMult": 1.25 } },
+      "b": { "name": "Frénésie", "desc": "+20% cadence", "mod": { "rateMult": 1.20 } } },
+    { "a": { "name": "Rempart", "desc": "+30% PV", "mod": { "hpMult": 1.30 } },
+      "b": { "name": "Berserker", "desc": "+30% dégâts, +15% cadence", "mod": { "dmgMult": 1.30, "rateMult": 1.15 } } },
+    { "a": { "name": "Titan", "desc": "+50% PV", "mod": { "hpMult": 1.5 } },
+      "b": { "name": "Destructeur", "desc": "+50% dégâts", "mod": { "dmgMult": 1.5 } } }
+  ],
+
+  "unit_combat": {
+    "$comment": "Dérivation des stats de combat d'une créature de La Mare assignée en défense/assaut. hp/dmg viennent de cardHp/cardPowerDef/cardPowerAtk (cards.ts) — la précision vient de rarity_acc[bestRarity].",
+    "barracks_rate": 0.9,
+    "barracks_squad_base": 2,
+    "barracks_squad_per_rarity": 0.4,
+    "mortar_rate": 0.45,
+    "mortar_range": 260,
+    "mortar_splash_radius": 60
+  },
+
+  "pathogens": {
+    "$comment": "Ennemis du mini-jeu jouable. L'art réutilise (via cardArt) le portrait d'une espèce de La Mare déjà générée — aucun nouvel asset. Ce sont des stats de combat indépendantes, pas des cartes assignables.",
+    "roster": [
+      { "id": "virus_couronne", "name": "Virus couronné", "hp": 20, "dmg": 5, "speed": 36, "unlock": 1 },
+      { "id": "isopode", "name": "Isopode blindé", "hp": 60, "dmg": 9, "speed": 18, "unlock": 1, "ranged": true, "atkRange": 120 },
+      { "id": "copepode", "name": "Essaim de copépodes", "hp": 11, "dmg": 3, "speed": 48, "unlock": 3 },
+      { "id": "polype", "name": "Polype éclateur", "hp": 32, "dmg": 7, "speed": 27, "unlock": 6, "ranged": true, "atkRange": 140 },
+      { "id": "myxine", "name": "Myxine rampante", "hp": 46, "dmg": 8, "speed": 23, "unlock": 9 }
+    ],
+    "boss": { "id": "crabe_yeti", "name": "Crabe-yéti", "hp": 260, "dmg": 18, "speed": 12, "ranged": true, "atkRange": 130, "value": 26 },
+    "boss_every": 5
+  },
+
+  "wave": {
+    "count_base": 4, "count_per_wave": 0.55,
+    "hp_mult_per_wave": 0.15, "dmg_mult_per_wave": 0.10,
+    "spawn_gap_base": 0.85, "spawn_gap_per_wave": 0.018, "spawn_gap_min": 0.32,
+    "num_types_base": 3, "num_types_max": 5, "num_types_per_waves": 6,
+    "combat_reward_base": 14, "combat_reward_per_wave": 2.2
+  }
+}

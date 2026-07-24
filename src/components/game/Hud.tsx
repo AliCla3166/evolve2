@@ -29,6 +29,7 @@ const COLORS: Record<ResourceId, string> = {
   enzyme: "var(--teal)",
   lipide: "#ffd15c",
   signaux: "#c48bff",
+  combat: "#ffcf4d",
 };
 
 function icon(res: ResourceId) {

@@ -247,6 +247,9 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   const energie = useGame((s) => s.resources.energie);
   const collection = useGame((s) => s.collection);
   const assignments = useGame((s) => s.cardAssignments);
+  // Le plafond "défense" alimente la réserve plaçable du Bastion-Défense jouable —
+  // dynamique et achetable en Boutique, cf. bastion.reserveCap (store.toggleCardAssign).
+  const defenseCap = useGame((s) => s.bastion.reserveCap);
   const buyJeton = useGame((s) => s.buyJeton);
   const spendJeton = useGame((s) => s.spendJeton);
   const landCatch = useGame((s) => s.landCatch);
@@ -440,7 +443,11 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
             {/* Bonus d'assignation */}
             <p className="text-center text-[11px] text-cell-teal/70">
               Cartes assignées : 🛡️ +{fmtInt(defBonus)} défense · 🧭 +{fmtInt(expBonus)} exploration
-              {" "}({assignments.defense.length}/{MARE.assign_slots.defense} · {assignments.expedition.length}/{MARE.assign_slots.expedition})
+              {" "}({assignments.defense.length}/{defenseCap} · {assignments.expedition.length}/{MARE.assign_slots.expedition})
+            </p>
+            <p className="text-center text-[10px] text-cell-teal/50">
+              🛡️ Défense : bonus passif de la cellule ET réserve plaçable du Bastion-Défense jouable
+              (plafond achetable dans sa Boutique).
             </p>
 
             {/* La collection : toutes les espèces de MARE.species (62 au 24/07) */}

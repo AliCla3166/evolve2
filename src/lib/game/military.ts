@@ -13,6 +13,8 @@ import {
 } from "./cards";
 import { resourceCap, totalProductionPerHour } from "./economy";
 import { dayKey, ENERGY_CAP } from "./habits";
+import { liveWaveCombatReward } from "./bastion/config";
+import type { LiveWaveResult } from "./bastion/types";
 import type {
   Expedition,
   GameState,
@@ -107,6 +109,11 @@ export interface MilitaryConfig {
 export const MILITARY = rawConfig as unknown as MilitaryConfig;
 
 export const UNIT_IDS: UnitId[] = ["garde", "sonde", "phage"];
+
+/** Durée de vie max du verrou bastion.liveBattleActive (cf. applyMilitary) — largement
+ *  au-dessus de la durée réelle d'un combat (quelques dizaines de secondes, cf. engine.ts),
+ *  purement un filet de sécurité contre un onglet fermé/un crash en plein combat. */
+const LIVE_BATTLE_GRACE_MS = 20 * 60_000;
 
 /* ---------- PRNG déterministe (mulberry32, un pas par tirage) ---------- */
 
@@ -380,18 +387,11 @@ function resolveExpedition(state: GameState, exp: Expedition): void {
   );
 }
 
-function resolvePathogenWave(state: GameState, at: number): void {
+/** Récompense/pénalité communes à une vague repoussée ou perdue — partagées par la
+ *  résolution auto (comparaison de puissance) et la résolution en direct (bataille
+ *  jouée dans le Bastion-Défense), pour que les deux chemins restent équivalents. */
+function applyWaveOutcome(state: GameState, success: boolean, lines: string[]): void {
   const p = MILITARY.pathogens;
-  const estimated = estimatedWavePower(state, at);
-  const wavePower = estimated * (1 + draw(state, [-p.wave_variance, p.wave_variance]));
-  const def = defensePower(state);
-  const wave = state.waveCount + 1;
-  const success = def >= wavePower;
-  const lines = [
-    `Puissance de la vague : ${fmt(wavePower)}`,
-    `Défense de la cellule : ${fmt(def)}`,
-  ];
-
   if (success) {
     for (const [res, amount] of Object.entries(p.victory_reward)) {
       addResource(state, res, amount);
@@ -399,7 +399,7 @@ function resolvePathogenWave(state: GameState, at: number): void {
     }
   } else {
     for (const res of Object.keys(state.resources) as ResourceId[]) {
-      if (res === "energie" || res === "vitalite") continue;
+      if (res === "energie" || res === "vitalite" || res === "combat") continue;
       const loss = state.resources[res] * p.defeat_resource_loss_ratio;
       if (loss > 0.5) {
         state.resources[res] -= loss;
@@ -413,6 +413,21 @@ function resolvePathogenWave(state: GameState, at: number): void {
     }
     lines.push("Renforce ta garnison au Noyau avant la prochaine vague.");
   }
+}
+
+function resolvePathogenWave(state: GameState, at: number): void {
+  const p = MILITARY.pathogens;
+  const estimated = estimatedWavePower(state, at);
+  const wavePower = estimated * (1 + draw(state, [-p.wave_variance, p.wave_variance]));
+  const def = defensePower(state);
+  const wave = state.waveCount + 1;
+  const success = def >= wavePower;
+  const lines = [
+    `Puissance de la vague : ${fmt(wavePower)}`,
+    `Défense de la cellule : ${fmt(def)}`,
+  ];
+
+  applyWaveOutcome(state, success, lines);
 
   state.waveCount = wave;
   pushReport(
@@ -421,6 +436,45 @@ function resolvePathogenWave(state: GameState, at: number): void {
     success ? `🛡️ Vague ${wave} repoussée !` : `🦠 Vague ${wave} — la membrane a cédé`,
     lines,
     at,
+    success,
+  );
+}
+
+/** Résout EN DIRECT la vague actuellement planifiée (`state.nextAttackAt`), à partir du
+ *  résultat de la bataille jouée dans le Bastion-Défense (cf. bastion/engine.ts). Avance
+ *  `waveCount`/`nextAttackAt` exactement comme `resolvePathogenWave`, pour que ce chemin
+ *  manuel et le chemin auto (offline) restent parfaitement interchangeables — si le joueur
+ *  ignore l'alerte ou est hors ligne, l'auto-résolution reprend la main sans rien casser. */
+export function resolveLiveWave(state: GameState, result: LiveWaveResult, now: number): void {
+  const p = MILITARY.pathogens;
+  // La vague EN COURS de planification est celle qu'on vient de jouer — même si elle
+  // n'était pas encore échue (fenêtre d'alerte de 12h, cf. WaveWarning).
+  const at = state.nextAttackAt > 0 ? state.nextAttackAt : now;
+  const wave = state.waveCount + 1;
+  const success = result.won;
+  const lines = [
+    `Combat mené en direct — ${result.kills} élimination${result.kills > 1 ? "s" : ""}, ` +
+      `bastion à ${Math.round(result.bastionHpFrac * 100)} % PV.`,
+  ];
+
+  applyWaveOutcome(state, success, lines);
+
+  const combatGain = liveWaveCombatReward(result);
+  addResource(state, "combat", combatGain);
+  lines.push(`+${fmt(combatGain)} monnaie de combat`);
+
+  state.waveCount = wave;
+  state.bastion.liveWaveCount += 1;
+  state.bastion.liveBattleActive = false;
+  state.bastion.liveBattleStartedAt = 0;
+  state.nextAttackAt = at + draw(state, p.interval_h) * 3_600_000;
+
+  pushReport(
+    state,
+    "pathogene",
+    success ? `⚔️ Vague ${wave} repoussée en direct !` : `⚔️ Vague ${wave} — défaite en direct`,
+    lines,
+    now,
     success,
   );
 }
@@ -541,11 +595,22 @@ export function applyMilitary(state: GameState, now: number): void {
     for (const exp of due) resolveExpedition(state, exp);
   }
 
-  // Vagues de pathogènes (rattrapage offline : toutes les vagues passées).
-  while (state.nextAttackAt <= now) {
-    const at = state.nextAttackAt;
-    resolvePathogenWave(state, at);
-    state.nextAttackAt = at + draw(state, p.interval_h) * 3_600_000;
+  // Vagues de pathogènes (rattrapage offline : toutes les vagues passées) — SAUF si une
+  // bataille en direct est en cours pour cette même vague (cf. Bastion-Défense) : on ne
+  // veut pas auto-résoudre PAR-DESSUS un combat que le joueur est en train de jouer.
+  // Verrou borné dans le temps (LIVE_BATTLE_GRACE_MS) : un onglet fermé/crash en plein
+  // combat ne doit jamais geler l'auto-résolution pour de bon.
+  const battleLockActive =
+    state.bastion.liveBattleActive && now - state.bastion.liveBattleStartedAt <= LIVE_BATTLE_GRACE_MS;
+  if (battleLockActive) {
+    // rien à faire : resolveLiveWave (appelée par le store à la fin du combat) s'en charge.
+  } else {
+    if (state.bastion.liveBattleActive) state.bastion.liveBattleActive = false; // verrou abandonné : on le libère
+    while (state.nextAttackAt <= now) {
+      const at = state.nextAttackAt;
+      resolvePathogenWave(state, at);
+      state.nextAttackAt = at + draw(state, p.interval_h) * 3_600_000;
+    }
   }
 
   // Événements aléatoires (rattrapage plafonné — pas de spam après une longue absence).

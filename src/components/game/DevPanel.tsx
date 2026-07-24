@@ -11,6 +11,7 @@ import { useGame } from "@/lib/game/store";
 
 export function DevPanel() {
   const devGrant = useGame((s) => s.devGrant);
+  const devGrantBastionTestCards = useGame((s) => s.devGrantBastionTestCards);
 
   return (
     <Panel variant="noyau" className="space-y-2 p-3" style={{ borderColor: "rgba(255, 84, 214, 0.4)" }}>
@@ -40,6 +41,9 @@ export function DevPanel() {
         </PixelButton>
         <PixelButton className="!py-1 text-[10px]" onClick={() => devGrant({ fragments: 8 })}>
           +8 FRAGMENTS
+        </PixelButton>
+        <PixelButton className="!py-1 text-[10px]" onClick={devGrantBastionTestCards}>
+          ⚔️ CARTES BASTION TEST
         </PixelButton>
       </div>
     </Panel>

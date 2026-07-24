@@ -76,9 +76,13 @@ function ProdLine({ prod, empty }: { prod: Record<string, number>; empty: string
 export function BuildingSheet({
   id,
   onClose,
+  onPlay,
 }: {
   id: BuildingId;
   onClose: () => void;
+  /** Ouvre le mini-jeu jouable associé (pour l'instant : uniquement id === "defense",
+   *  le Bastion-Défense — "raid" reste hors périmètre, cf. PLAN.md). */
+  onPlay?: () => void;
 }) {
   const resources = useGame((s) => s.resources);
   const buildings = useGame((s) => s.buildings);
@@ -108,7 +112,9 @@ export function BuildingSheet({
       {/* Voile de fermeture */}
       <div className="fixed inset-0 z-20 bg-black/50" onClick={onClose} />
 
-      <div className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md animate-sheet-up px-2 pb-2 sm:max-w-lg">
+      {/* z-50 (comme le SlotInspector du Bastion) : la nav basse fixe est en z-40 et
+          intercepterait sinon les taps sur le bouton d'action, tout en bas de la sheet. */}
+      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md animate-sheet-up px-2 pb-2 sm:max-w-lg">
         {/* Fond opaque : le remplissage du panneau membrane est semi-transparent */}
         <Panel variant="noyau" className="p-3" style={{ background: "rgba(5, 11, 20, 0.96)" }}>
           {/* En-tête : sprite + nom + niveau + fermer */}
@@ -138,6 +144,8 @@ export function BuildingSheet({
                   Niveau {level}/{max}
                   {level === 0 && " — non construit"}
                 </div>
+              ) : id === "defense" ? (
+                <div className="text-[11px] text-cell-lime/80">Mini-jeu jouable — économie séparée</div>
               ) : (
                 <div className="text-[11px] text-cell-teal/50">Mini-jeu en préparation</div>
               )}
@@ -158,6 +166,15 @@ export function BuildingSheet({
           >
             {buildingPurpose(id)}
           </p>
+
+          {/* Bastion-Défense : mini-jeu jouable indépendant (pas de niveau/production ici) */}
+          {!designed && id === "defense" && onPlay && (
+            <div className="mt-2">
+              <PixelButton className="w-full text-xs" onClick={onPlay}>
+                ⚔️ JOUER
+              </PixelButton>
+            </div>
+          )}
 
           {/* Corps selon l'état */}
           {!designed ? null : (

@@ -29,7 +29,7 @@ export const BUILDING_PURPOSE: Record<BuildingId, string> = {
   peche:
     "Mini-jeu de pêche dédié à venir dans une future mise à jour. En attendant, la pêche se joue déjà depuis l'onglet MARE de la navigation basse.",
   defense:
-    "Mini-jeu Bastion-Défense à venir. En attendant, la défense de la cellule se gère depuis l'onglet NOYAU (recrutement de Gardes membranaires).",
+    "Mini-jeu Bastion-Défense jouable : place tes créatures assignées (onglet MARE, 🛡️ défense) en barracks/mortiers, des tourelles/murs/pièges recrutés dans sa Boutique, puis défends le Noyau en direct à chaque vague. Si tu ne joues pas la vague, la défense passive (Gardes membranaires + cartes assignées) prend le relais automatiquement.",
   raid:
     "Mini-jeu Bastion-Raid à venir. En attendant, les expéditions se gèrent depuis l'onglet NOYAU.",
 };
@@ -56,6 +56,8 @@ export const RESOURCE_PURPOSE: Record<ResourceId, string> = {
     "Produit par le Réservoir lipidique. Nécessaire pour améliorer le Producteur de biomasse et la Membrane, et pour recruter des Sondes ciliées.",
   signaux:
     "Produit par le Capteur de signaux. Nécessaire pour améliorer le Producteur de biomasse, le Centre de mutation et le Noyau, et pour recruter des Phages assaillants.",
+  combat:
+    "Monnaie de combat — gagnée en remportant des vagues au Bastion-Défense (jouable). Sert uniquement dans sa Boutique : emplacements, réserve, spécialisations, recrutement de tourelles/murs/pièges.",
 };
 
 export function resourcePurpose(id: ResourceId): string {

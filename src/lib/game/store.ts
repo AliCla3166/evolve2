@@ -13,6 +13,30 @@ import {
   levelCost,
   maxLevel,
 } from "./economy";
+import { freshBastionState } from "./bastion/config";
+import {
+  buyFoundations,
+  buyInWaveRespawn,
+  buyReserveCap,
+  buySlotUnlock,
+  buySpecCap,
+  chooseTreeOption,
+  draftWithBastion,
+  moveFieldStructure,
+  moveOrSwapBarracks,
+  moveOrSwapMortar,
+  moveOrSwapSupport,
+  moveOrSwapTurret,
+  placeBuildingFromReserve,
+  placeSpeciesCard,
+  recruitBuilding,
+  recycleBuilding,
+  removeFieldStructureToReserve,
+  removeSpeciesFromSlot,
+  removeSupportToReserve,
+  removeTurretToReserve,
+} from "./bastion/actions";
+import type { FieldStructure, LiveWaveResult } from "./bastion/types";
 import {
   addDaysToKey,
   clampHabitValue,
@@ -39,6 +63,7 @@ import {
   rand,
   recruitCost,
   resolveChoiceEvent,
+  resolveLiveWave,
 } from "./military";
 import { applyTick } from "./tick";
 import { getActiveSlot, setActiveSlot, slotHasSave, slotStorageKey, type SaveSlot } from "./slot";
@@ -52,7 +77,7 @@ import {
 } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 6;
 export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
@@ -77,6 +102,10 @@ interface GameActions {
     jetons?: number;
     fragments?: number;
   }) => void;
+  /** Mode dev UNIQUEMENT : capture instantanément une créature de défense et une
+   *  d'assaut (rareté Rare), assignées en défense — raccourci pour tester le pont
+   *  La Mare -> Bastion sans dépendre du tirage de pêche. */
+  devGrantBastionTestCards: () => void;
   /** Tick du moteur — appelé par un setInterval 1 s côté client,
    *  et une seule fois au chargement pour le gros tick de rattrapage offline. */
   collectTick: (now?: number) => void;
@@ -113,6 +142,57 @@ interface GameActions {
   clearLastCatch: () => void;
   /** Adopte une sauvegarde (sync cloud) — remplace l'état local entier. */
   adoptSave: (incoming: GameState) => void;
+  /* ----- Bastion-Défense jouable (intégration profonde) ----- */
+  /** Place une créature (pont La Mare -> Bastion, cardAssignments.defense) sur un
+   *  slot barracks/mortier actif et vide, selon son rôle (defense/assaut). */
+  placeBastionCreature: (
+    speciesId: string,
+    kind: "barracks" | "mortar",
+    slotId: string,
+  ) => boolean;
+  /** Retire la créature d'un slot barracks/mortier — elle redevient disponible en réserve. */
+  removeBastionCreature: (kind: "barracks" | "mortar", slotId: string) => void;
+  /** Tirage pondéré payé en monnaie de combat : ajoute un bâtiment à la réserve. */
+  recruitBastionBuilding: () => boolean;
+  /** Recycle un bâtiment de la réserve contre la moitié de son coût en monnaie de combat. */
+  recycleBastionBuilding: (uid: number) => boolean;
+  /** Pose un bâtiment de la réserve sur un slot tourelle/support ou librement (mur/piège). */
+  placeBastionBuilding: (
+    uid: number,
+    kind: "turret" | "support" | "wall" | "trap",
+    target: { slotId?: string; supportIndex?: number; x?: number; y?: number },
+  ) => boolean;
+  /** Retire un bâtiment posé (tourelle/support/structure) vers la réserve. */
+  removeBastionTurretToReserve: (slotId: string) => boolean;
+  removeBastionSupportToReserve: (index: number) => boolean;
+  removeBastionStructureToReserve: (structUid: number) => boolean;
+  /** Déplace/échange deux slots tourelle/mortier/barracks (spécialisation attachée au slot). */
+  moveBastionSlot: (
+    kind: "turret" | "mortar" | "barracks",
+    fromId: string,
+    toId: string,
+  ) => boolean;
+  moveBastionSupport: (fromIndex: number, toIndex: number) => boolean;
+  moveBastionStructure: (uid: number, x: number, y: number) => boolean;
+  /** Achats Boutique Bastion (monnaie de combat, indépendante de l'économie principale). */
+  buyBastionSlotUnlock: (kind: "turret" | "barracks" | "mortar") => boolean;
+  buyBastionReserveCap: () => boolean;
+  buyBastionSpecCap: () => boolean;
+  buyBastionFoundations: () => boolean;
+  buyBastionInWaveRespawn: () => boolean;
+  /** Choisit la branche a/b au palier suivant de l'arborescence d'une barracks. */
+  chooseBastionTreeOption: (slotId: string, choice: "a" | "b") => boolean;
+  /** À appeler QUAND le combat en direct démarre (avant BastionScene.startBattle) : pose
+   *  le verrou bastion.liveBattleActive AVANT le tick de rattrapage, pour que la vague sur
+   *  le point d'être jouée ne soit pas auto-résolue par-dessus si nextAttackAt est déjà
+   *  échue au moment du tap (cf. JOURNAL.md, bug détecté en vérification). */
+  beginBastionBattle: () => void;
+  /** Pousse le résultat d'une bataille jouée en direct dans le Report/l'économie —
+   *  avance nextAttackAt/waveCount exactement comme l'auto-résolution offline.
+   *  `survivingStructures` (murs/pièges avec leurs PV mis à jour, ceux détruits en
+   *  moins) remplace bastion.fieldStructures si fourni — les dégâts de bataille sont
+   *  éphémères côté moteur (engine.ts) mais doivent être répercutés sur l'état persisté. */
+  finishBastionBattle: (result: LiveWaveResult, survivingStructures?: FieldStructure[]) => void;
 }
 
 export type GameStore = GameState & GameActions;
@@ -167,6 +247,7 @@ function gameSlice(s: GameStore): GameState {
     collection: s.collection,
     cardAssignments: s.cardAssignments,
     lastCatch: s.lastCatch,
+    bastion: s.bastion,
   };
 }
 
@@ -208,6 +289,22 @@ export const useGame = create<GameStore>()(
           jetons: Math.max(0, Math.min(MARE.jetons.max_stock, s.jetons + (patch.jetons ?? 0))),
           fragments: Math.max(0, s.fragments + (patch.fragments ?? 0)),
         });
+      },
+
+      devGrantBastionTestCards: () => {
+        if (get().activeSlot !== "dev") return; // garde-fou : jamais en perso
+        const now = Date.now();
+        const s = applyTick(gameSlice(get()), now);
+        // Choix fixes (reproductibles) : une défense (barracks) et une assaut (mortier),
+        // rareté Rare — aucune des deux ne double comme skin d'ennemi (cf. bastion_config.pathogens).
+        addCatch(s, "crustace", 2, now, "peche");
+        addCatch(s, "predateur", 2, now, "peche");
+        const defense = [...new Set([...s.cardAssignments.defense, "crustace", "predateur"])].slice(
+          0,
+          s.bastion.reserveCap,
+        );
+        s.cardAssignments = { ...s.cardAssignments, defense };
+        set(s);
       },
 
       collectTick: (now = Date.now()) => {
@@ -471,7 +568,10 @@ export const useGame = create<GameStore>()(
           expedition: state.cardAssignments.expedition.filter((id) => id !== speciesId),
         };
         if (!inSlot) {
-          if (next[slot].length >= MARE.assign_slots[slot]) return false; // slot plein
+          // "défense" alimente la réserve plaçable du Bastion-Défense jouable — son plafond est
+          // désormais bastion.reserveCap (dynamique, achetable), pas la constante statique du JSON.
+          const cap = slot === "defense" ? state.bastion.reserveCap : MARE.assign_slots.expedition;
+          if (next[slot].length >= cap) return false; // slot plein
           next[slot] = [...next[slot], speciesId];
         }
         set({ cardAssignments: next });
@@ -486,6 +586,148 @@ export const useGame = create<GameStore>()(
         // Défense en profondeur : les champs absents (vieille sauvegarde cloud)
         // prennent les défauts du schéma courant.
         set({ ...freshGameState(Date.now()), ...incoming, lastCatch: null });
+      },
+
+      /* ----- Bastion-Défense jouable (intégration profonde) ----- */
+
+      placeBastionCreature: (speciesId, kind, slotId) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!placeSpeciesCard(s, speciesId, kind, slotId)) return false;
+        set(s);
+        return true;
+      },
+
+      removeBastionCreature: (kind, slotId) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        removeSpeciesFromSlot(s, kind, slotId);
+        set(s);
+      },
+
+      recruitBastionBuilding: () => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!recruitBuilding(s)) return false;
+        set(s);
+        return true;
+      },
+
+      recycleBastionBuilding: (uid) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!recycleBuilding(s, uid)) return false;
+        set(s);
+        return true;
+      },
+
+      placeBastionBuilding: (uid, kind, target) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!placeBuildingFromReserve(s, uid, kind, target)) return false;
+        set(s);
+        return true;
+      },
+
+      removeBastionTurretToReserve: (slotId) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!removeTurretToReserve(s, slotId)) return false;
+        set(s);
+        return true;
+      },
+
+      removeBastionSupportToReserve: (index) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!removeSupportToReserve(s, index)) return false;
+        set(s);
+        return true;
+      },
+
+      removeBastionStructureToReserve: (structUid) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!removeFieldStructureToReserve(s, structUid)) return false;
+        set(s);
+        return true;
+      },
+
+      moveBastionSlot: (kind, fromId, toId) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        const fn =
+          kind === "turret" ? moveOrSwapTurret : kind === "mortar" ? moveOrSwapMortar : moveOrSwapBarracks;
+        if (!fn(s, fromId, toId)) return false;
+        set(s);
+        return true;
+      },
+
+      moveBastionSupport: (fromIndex, toIndex) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!moveOrSwapSupport(s, fromIndex, toIndex)) return false;
+        set(s);
+        return true;
+      },
+
+      moveBastionStructure: (uid, x, y) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!moveFieldStructure(s, uid, x, y)) return false;
+        set(s);
+        return true;
+      },
+
+      buyBastionSlotUnlock: (kind) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!buySlotUnlock(s, kind)) return false;
+        set(s);
+        return true;
+      },
+
+      buyBastionReserveCap: () => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!buyReserveCap(s)) return false;
+        set(s);
+        return true;
+      },
+
+      buyBastionSpecCap: () => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!buySpecCap(s)) return false;
+        set(s);
+        return true;
+      },
+
+      buyBastionFoundations: () => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!buyFoundations(s)) return false;
+        set(s);
+        return true;
+      },
+
+      buyBastionInWaveRespawn: () => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!buyInWaveRespawn(s)) return false;
+        set(s);
+        return true;
+      },
+
+      chooseBastionTreeOption: (slotId, choice) => {
+        const s = draftWithBastion(applyTick(gameSlice(get()), Date.now()));
+        if (!chooseTreeOption(s, slotId, choice)) return false;
+        set(s);
+        return true;
+      },
+
+      beginBastionBattle: () => {
+        const now = Date.now();
+        // Le verrou est posé AVANT le tick de rattrapage (et non après) : si nextAttackAt
+        // est déjà échue au moment du tap, on ne veut PAS que ce même tick auto-résolve la
+        // vague que le joueur s'apprête justement à jouer en direct.
+        const pre = draftWithBastion(gameSlice(get()));
+        pre.bastion.liveBattleActive = true;
+        pre.bastion.liveBattleStartedAt = now;
+        const s = applyTick(pre, now);
+        set(s);
+      },
+
+      finishBastionBattle: (result, survivingStructures) => {
+        const now = Date.now();
+        const s = draftWithBastion(applyTick(gameSlice(get()), now));
+        if (survivingStructures) s.bastion.fieldStructures = survivingStructures;
+        resolveLiveWave(s, result, now);
+        set(s);
       },
     }),
     {
@@ -550,6 +792,20 @@ export const useGame = create<GameStore>()(
           state.pendingEvent = null;
           state.fragments = 0;
           state.rngSeed = ((state.createdAt || 1) % 2147483647) | 1;
+        }
+        // v4 -> v5 : intégration profonde du mini-jeu jouable Bastion-Défense — nouvelle
+        // ressource `combat` (absente des vieilles sauvegardes) + tout l'état de partie du Bastion.
+        if (version < 5 || state.bastion === undefined) {
+          if (state.resources && state.resources.combat === undefined) {
+            state.resources.combat = 0;
+          }
+          state.bastion = freshBastionState();
+        }
+        // v5 -> v6 : verrou liveBattleActive/liveBattleStartedAt (anti double-résolution
+        // entre un combat en direct et l'auto-résolution offline, cf. JOURNAL.md).
+        if (version < 6 || state.bastion.liveBattleActive === undefined) {
+          state.bastion.liveBattleActive = false;
+          state.bastion.liveBattleStartedAt = 0;
         }
         state.saveVersion = SAVE_VERSION;
         return state;

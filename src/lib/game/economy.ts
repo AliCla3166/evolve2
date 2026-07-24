@@ -3,6 +3,7 @@
    aucun nombre d'équilibrage en dur dans ce fichier. */
 
 import rawConfig from "@/data/economy_config.json";
+import { freshBastionState } from "./bastion/config";
 import type { BuildingId, GameState, ResourceId } from "./types";
 
 /* ---------- Typage de la structure réelle du JSON ---------- */
@@ -191,6 +192,7 @@ export const RESOURCE_IDS: ResourceId[] = [
   "enzyme",
   "lipide",
   "signaux",
+  "combat",
 ];
 
 /** Stocks de départ : starting_stock_per_producible_resource pour les 6 productibles, 0 sinon. */
@@ -255,5 +257,6 @@ export function freshGameState(now: number): GameState {
     collection: {},
     cardAssignments: { defense: [], expedition: [] },
     lastCatch: null,
+    bastion: freshBastionState(),
   };
 }
