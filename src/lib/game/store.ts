@@ -95,9 +95,16 @@ interface GameActions {
   toggleCardAssign: (speciesId: string, slot: "defense" | "expedition") => boolean;
   /** Ferme la modal de révélation. */
   clearLastCatch: () => void;
+  /** Adopte une sauvegarde (sync cloud) — remplace l'état local entier. */
+  adoptSave: (incoming: GameState) => void;
 }
 
 export type GameStore = GameState & GameActions;
+
+/** Export de la sauvegarde courante (sync cloud). */
+export function exportSave(): GameState {
+  return gameSlice(useGame.getState());
+}
 
 /** Extrait la partie GameState pure du store (sans les actions). */
 function gameSlice(s: GameStore): GameState {
@@ -403,6 +410,12 @@ export const useGame = create<GameStore>()(
 
       clearLastCatch: () => {
         set({ lastCatch: null });
+      },
+
+      adoptSave: (incoming) => {
+        // Défense en profondeur : les champs absents (vieille sauvegarde cloud)
+        // prennent les défauts du schéma courant.
+        set({ ...freshGameState(Date.now()), ...incoming, lastCatch: null });
       },
     }),
     {

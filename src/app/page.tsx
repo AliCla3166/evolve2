@@ -6,6 +6,7 @@
 
 import { useEffect } from "react";
 import { PixelButton } from "@/components/ui/Pixel";
+import { CloudStatus } from "@/components/game/CloudStatus";
 import { portraitSrc } from "@/components/game/ProfileCreate";
 import { useGame } from "@/lib/game/store";
 
@@ -104,9 +105,8 @@ export default function Home() {
         </div>
       )}
 
-      <span className="rounded-full border border-cell-cyan/30 px-4 py-1 text-xs tracking-widest text-cell-cyan/60">
-        Sauvegarde locale sur cet appareil · sync cloud à venir
-      </span>
+      {/* Connexion Google / statut de sync (local si non configuré) */}
+      {hasHydrated && <CloudStatus />}
     </main>
   );
 }

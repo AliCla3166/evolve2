@@ -83,3 +83,14 @@
 - **Vérification Playwright** : achat jeton → ferrage → 3 taps timés (lecture DOM de la zone/curseur) → carte révélée ✅ → fusion de 9 fragments → 2e carte ✅ → assignation en expédition → bonus « Cartes assignées » visible dans les offres du Noyau ✅. Build + eslint verts.
 - Reste connu : équilibrage pêche/cartes jamais simulé (Phase 7), assets dédiés PixelLab en attente de crédits, Firebase en attente d'Ali.
 - Point de reprise suivant — **Phase 7 : équilibrage 90 jours** (extension du simulateur Python : unités, expéditions, pêche, événements, cartes → recalibrage economy/military/mare_config), ou Firebase, ou Phase 8 (polish/PWA/release).
+
+## 2026-07-23 — Sync cloud Firebase (code complet, activation en attente d'Ali)
+- **Code livré, 100 % optionnel** : sans variables `NEXT_PUBLIC_FIREBASE_*`, le jeu est strictement identique (local). Avec : bouton "☁️ SYNC GOOGLE" sur l'écran titre, indicateur ☁️ dans l'en-tête de /play, push périodique (90 s) + à la mise en arrière-plan.
+- **Architecture** : projet Firebase v1 réutilisé (`evolve-game-ebc60`, auth Google) mais collection SÉPARÉE `saves_v2/{uid}` — la sauvegarde v1 (`saves/{uid}`) n'est jamais touchée. GameState stocké en blob JSON (robuste). Conflit à la connexion : la sauvegarde au `lastTick` le plus récent gagne, puis push. localStorage reste le cache local permanent (architecture en adaptateur, comme prévu au PLAN §3).
+- Fichiers : `src/lib/cloud/firebase.ts` (SDK, gated env), `src/lib/cloud/useCloudSync.ts` (hook monté sur titre + /play), `src/components/game/CloudStatus.tsx`, actions store `adoptSave`/`exportSave`, `.env.local.example`. Dépendance : firebase.
+- **⚠️ ACTIVATION — 3 actions restantes (Ali, ~3 min, via son Chrome ou à la main)** :
+  1. **Vercel** (projet evolve2 → Settings → Environment Variables, env Production+Preview) : créer les 6 variables du `.env.local.example` avec les valeurs du bloc `FIREBASE_CONFIG` de `evolve-game/index.html` (repo v1, ~l.3548), puis Redeploy.
+  2. **Firebase console** (projet evolve-game-ebc60 → Authentication → Settings → Authorized domains) : ajouter `evolve2-nine.vercel.app`.
+  3. **Firestore rules** : ajouter `match /saves_v2/{uid} { allow read, write: if request.auth != null && request.auth.uid == uid; }` (les règles v1 ne couvrent probablement que `saves/`).
+- Prod actuelle (sans variables) : affiche "sync cloud à configurer" — déploiement sans risque.
+- Point de reprise suivant — Phase 7 (équilibrage), et activation Firebase dès qu'Ali ouvre l'app desktop (je peux faire les 3 actions via son Chrome) ou les fait à la main.

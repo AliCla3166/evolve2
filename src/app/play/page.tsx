@@ -20,6 +20,8 @@ import { QueueBanner } from "@/components/game/QueueBanner";
 import { ReportsPanel } from "@/components/game/ReportsPanel";
 import { TutorialCoach } from "@/components/game/TutorialCoach";
 import { NavIcon, Panel } from "@/components/ui/Pixel";
+import { cloudConfigured } from "@/lib/cloud/firebase";
+import { useCloudSync } from "@/lib/cloud/useCloudSync";
 import { fmtDuration } from "@/lib/game/format";
 import { useGame } from "@/lib/game/store";
 import type { BuildingId } from "@/lib/game/types";
@@ -46,6 +48,8 @@ export default function PlayPage() {
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const [selected, setSelected] = useState<BuildingId | null>(null);
   const [panel, setPanel] = useState<"noyau" | "mare" | "reports" | null>(null);
+  // Sync cloud active pendant le jeu (push périodique + arrière-plan).
+  const { user: cloudUser, status: cloudStatus } = useCloudSync();
 
   const unseen = reports.filter((r) => r.ts > reportsSeenAt).length;
 
@@ -95,6 +99,22 @@ export default function PlayPage() {
             <span className="flex-1 truncate text-xs tracking-widest text-cell-cyan">
               {profile.nomOrganisme}
             </span>
+            {cloudConfigured && (
+              <span
+                className="text-xs"
+                title={
+                  !cloudUser
+                    ? "Sync cloud : non connecté (écran titre)"
+                    : cloudStatus === "synced"
+                      ? "Sync cloud : à jour"
+                      : cloudStatus === "error"
+                        ? "Sync cloud : erreur — le local fait foi"
+                        : "Sync cloud : en cours…"
+                }
+              >
+                {!cloudUser ? "☁️⋯" : cloudStatus === "synced" ? "☁️✓" : cloudStatus === "error" ? "☁️✗" : "☁️…"}
+              </span>
+            )}
             <Link
               href="/"
               className="text-[10px] tracking-widest text-cell-teal/60 hover:text-cell-teal"
