@@ -38,11 +38,37 @@ export interface SpeciesConfig {
   hp: number;
 }
 
+/** Mise en scène d'une révélation, pour une rareté donnée (piste 7). */
+export interface RevealStepConfig {
+  /** Durée TOTALE de la montée du halo avant l'apparition de la carte. */
+  charge_ms: number;
+  /** Nombre d'étincelles de la gerbe (0 = aucune). */
+  sparks: number;
+  /** Amplitude de la secousse d'écran, en pixels (0 = aucune). */
+  shake: number;
+  /** Motif navigator.vibrate (alternance vibration/pause, ms). */
+  vibrate: number[];
+}
+
+export interface RevealConfig {
+  by_rarity: RevealStepConfig[];
+  tease: {
+    /** Probabilité de teasing, par rareté réelle. */
+    chance_by_rarity: number[];
+    /** Nombre maximal de crans au-dessus de la rareté réelle. */
+    max_overshoot: number;
+    hold_ms: number;
+    fallback_ms: number;
+    vibrate: number[];
+  };
+}
+
 export interface MareConfig {
   jetons: { cost_energie: number; max_stock: number };
   fragments_per_card: number;
   fragment_card_rarity_floor: number;
   rarities: RarityConfig[];
+  reveal: RevealConfig;
   fishing: {
     bar_height: number;
     /** Plancher d'équité de la hauteur de fenêtre (cf. $comment du JSON). */
@@ -73,6 +99,12 @@ export function speciesConfig(id: string): SpeciesConfig | undefined {
 
 export function rarityConfig(index: number): RarityConfig {
   return MARE.rarities[Math.min(MARE.rarities.length - 1, Math.max(0, index))];
+}
+
+/** Mise en scène de la révélation pour une rareté (durée de charge, gerbe, secousse, vibration). */
+export function revealConfig(index: number): RevealStepConfig {
+  const list = MARE.reveal.by_rarity;
+  return list[Math.min(list.length - 1, Math.max(0, index))];
 }
 
 export function cardArt(speciesId: string): string {
@@ -194,6 +226,28 @@ export function rollSpecies(roll: number): string {
   return SPECIES_IDS[Math.min(SPECIES_IDS.length - 1, Math.floor(roll * SPECIES_IDS.length))];
 }
 
+/** Sommet du halo pendant la charge de révélation (piste 7).
+ *
+ *  Renvoie la rareté réelle dans le cas normal, et une rareté STRICTEMENT
+ *  supérieure quand le teasing de quasi-réussite se déclenche : le halo monte
+ *  au-dessus du résultat, s'y maintient, puis retombe sur la vraie rareté.
+ *  Le tirage est fait par l'appelant avec le PRNG seedé du moteur, comme pour
+ *  la rareté et l'espèce — la mise en scène est donc rejouable à l'identique.
+ *
+ *  `roll` sert deux fois (déclenchement puis amplitude) : c'est volontaire,
+ *  ça économise un pas de PRNG et les deux usages sont décorrélés (un `roll`
+ *  juste sous le seuil donne une amplitude quelconque, pas systématiquement +1). */
+export function rollRevealTease(roll: number, rarity: number): number {
+  const t = MARE.reveal.tease;
+  const top = MARE.rarities.length - 1;
+  const chance = t.chance_by_rarity[Math.min(top, Math.max(0, rarity))] ?? 0;
+  if (chance <= 0 || roll >= chance || rarity >= top) return rarity;
+  // Amplitude : 1..max_overshoot crans au-dessus, plafonnée par la rareté maximale.
+  const span = Math.max(1, Math.round(t.max_overshoot));
+  const step = 1 + Math.floor(((roll / chance) * span) % span);
+  return Math.min(top, rarity + step);
+}
+
 /** Ajoute une prise à la collection (mute le draft) et décrit le résultat. */
 export function addCatch(
   state: GameState,
@@ -201,6 +255,8 @@ export function addCatch(
   rarity: number,
   now: number,
   source: "peche" | "fragments",
+  /** Sommet du halo pendant la charge (cf. rollRevealTease). Défaut : la rareté réelle. */
+  teaseTo?: number,
 ): void {
   const prev = state.collection[speciesId];
   const prevLevel = prev ? cardLevel(prev.count) : 0;
@@ -220,5 +276,6 @@ export function addCatch(
     level: cardLevel(entry.count),
     leveledUp: !!prev && cardLevel(entry.count) > prevLevel,
     source,
+    teaseTo: Math.max(rarity, teaseTo ?? rarity),
   };
 }

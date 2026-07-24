@@ -171,6 +171,10 @@ export interface LastCatch {
   leveledUp: boolean;
   /** Origine : "peche" ou "fragments". */
   source: "peche" | "fragments";
+  /** Sommet atteint par le halo pendant la charge : > rarity = teasing de
+   *  quasi-réussite (le halo monte trop haut puis retombe). Absent sur les
+   *  sauvegardes antérieures à la piste 7 — l'UI retombe alors sur `rarity`. */
+  teaseTo?: number;
 }
 
 /** Micro-tutoriel 3 étapes (Phase 4) :

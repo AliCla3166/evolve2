@@ -61,6 +61,61 @@ body {
 }
 .animate-card-reveal { animation: card-reveal 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
 
+/* ===== Révélation graduée par rareté (piste 7 du diagnostic UX) =====
+   Avant : UNE animation de 0,45 s pour six raretés — le tirage ne se désirait
+   pas. Ici la carte se mérite : le halo monte par paliers de couleur pendant
+   une durée réglée dans mare_config.json (0,3 s pour une commune, 1,8 s pour
+   une mythique), il peut monter trop haut puis retomber (teasing de quasi-
+   réussite), et l'apparition secoue l'écran et projette une gerbe d'étincelles
+   à partir de la rareté 3. Toutes les valeurs arrivent en variables CSS posées
+   en ligne par CardReveal.tsx : aucun nombre de réglage n'est figé ici. */
+
+@keyframes reveal-charge {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+/* Cercle flou plutôt que dégradé : `background-color` s'interpole vraiment
+   d'une couleur de rareté à la suivante, là où un `background-image` en
+   radial-gradient saute d'un palier à l'autre sans transition. */
+.reveal-halo {
+  border-radius: 9999px;
+  background-color: var(--halo, #7fd7c4);
+  filter: blur(34px);
+  transition: background-color 0.24s linear, opacity 0.24s linear;
+  animation: reveal-charge 0.62s ease-in-out infinite;
+}
+
+@keyframes reveal-shake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  12% { transform: translate3d(calc(var(--shake) * -1px), calc(var(--shake) * 0.5px), 0); }
+  28% { transform: translate3d(calc(var(--shake) * 0.85px), calc(var(--shake) * -0.7px), 0); }
+  46% { transform: translate3d(calc(var(--shake) * -0.6px), calc(var(--shake) * 0.4px), 0); }
+  64% { transform: translate3d(calc(var(--shake) * 0.4px), calc(var(--shake) * 0.25px), 0); }
+  82% { transform: translate3d(calc(var(--shake) * -0.2px), 0, 0); }
+}
+.reveal-shake { animation: reveal-shake 0.46s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+
+/* Une étincelle part du centre vers (--dx, --dy) en se contractant. */
+@keyframes reveal-spark {
+  0% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+  70% { opacity: 0.9; }
+  100% { transform: translate3d(var(--dx), var(--dy), 0) scale(0.15); opacity: 0; }
+}
+.reveal-spark {
+  animation: reveal-spark var(--spark-ms, 760ms) cubic-bezier(0.12, 0.72, 0.3, 1) forwards;
+  animation-delay: var(--spark-delay, 0ms);
+}
+
+/* Accessibilité : « réduire les animations » est un vrai réglage système, pas
+   une préférence esthétique — on garde l'information (couleur, gerbe absente,
+   carte visible) et on supprime le mouvement. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal-halo { animation: none; opacity: 0.9; }
+  .reveal-shake { animation: none; }
+  .reveal-spark { display: none; }
+  .animate-card-reveal { animation: none; }
+}
+
 /* ===== Refonte lisibilité (Phase 7) : vignettes sobres + boutons simples.
    Le pixel art vit dans la scène, les sprites, les cartes et les icônes —
    les conteneurs et boutons restent calmes pour que le texte respire. ===== */

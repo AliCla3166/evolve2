@@ -60,6 +60,7 @@ import {
   addCatch,
   MARE,
   rollRarity,
+  rollRevealTease,
   rollSpecies,
   SPECIES_IDS,
 } from "./cards";
@@ -669,8 +670,12 @@ export const useGame = create<GameStore>()(
         if (roll < luck) rarity = Math.min(MARE.rarities.length - 1, rarity + 1);
         [roll, seed] = rand(seed);
         const species = rollSpecies(roll);
+        // Un pas de PRNG de plus pour la mise en scène (halo qui monte trop haut
+        // puis retombe) : elle est ainsi rejouable, comme la rareté et l'espèce.
+        [roll, seed] = rand(seed);
+        const teaseTo = rollRevealTease(roll, rarity);
         s.rngSeed = seed;
-        addCatch(s, species, rarity, now, "peche");
+        addCatch(s, species, rarity, now, "peche", teaseTo);
         set(s);
       },
 
@@ -683,8 +688,10 @@ export const useGame = create<GameStore>()(
         const rarity = rollRarity(roll, 0, MARE.fragment_card_rarity_floor);
         [roll, seed] = rand(seed);
         const species = rollSpecies(roll);
+        [roll, seed] = rand(seed);
+        const teaseTo = rollRevealTease(roll, rarity);
         s.rngSeed = seed;
-        addCatch(s, species, rarity, now, "fragments");
+        addCatch(s, species, rarity, now, "fragments", teaseTo);
         set(s);
         return true;
       },

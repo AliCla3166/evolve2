@@ -74,6 +74,110 @@
       "power_mult": 4.5
     }
   ],
+  "reveal": {
+    "$comment": "Mise en scene de la revelation de carte (piste 7 du diagnostic UX). Avant : UNE animation de 0,45 s pour six raretes et deux motifs de vibration pour six niveaux — le tirage ne se DESIRAIT pas. Ici tout est gradue par rarete : duree de charge, secousse, gerbe d'etincelles, motif de vibration. Aucun nouvel asset : CSS + DOM. Ces valeurs sont du RESSENTI, pas de l'equilibrage — elles ne touchent ni les poids de rarete ni l'economie, on peut les regler sans repasser le simulateur.",
+    "by_rarity_comment": "Un bloc par rarete, dans l'ordre de 'rarities'. charge_ms = duree TOTALE de la montee du halo avant l'apparition de la carte ; elle est repartie en (indice + 1) paliers de couleur, donc une commune fait un seul palier de 300 ms et une mythique six paliers de 300 ms. Regle assumee : la commune (46 % des tirages) reste aussi rapide qu'avant la piste 7 — faire attendre 1,8 s pour le resultat le plus frequent transformerait la mise en scene en peage. sparks = nombre d'etincelles de la gerbe, shake = amplitude de la secousse d'ecran en pixels (0 = aucune).",
+    "vibrate_comment": "Six motifs au lieu de deux (millisecondes, alternance vibration/pause comme navigator.vibrate). Ils montent en nombre d'impulsions ET se terminent par une impulsion longue a partir de l'epique : le doigt doit pouvoir distinguer une commune d'une mythique SANS regarder l'ecran. Rappel : navigator.vibrate n'existe pas sur iOS Safari (cf. prefs.ts) — c'est le design sonore de l'etape suivante qui portera le retour haptique la-bas.",
+    "by_rarity": [
+      {
+        "charge_ms": 300,
+        "sparks": 0,
+        "shake": 0,
+        "vibrate": [
+          10
+        ]
+      },
+      {
+        "charge_ms": 520,
+        "sparks": 0,
+        "shake": 0,
+        "vibrate": [
+          14,
+          45,
+          14
+        ]
+      },
+      {
+        "charge_ms": 840,
+        "sparks": 8,
+        "shake": 0,
+        "vibrate": [
+          16,
+          40,
+          16,
+          40,
+          24
+        ]
+      },
+      {
+        "charge_ms": 1180,
+        "sparks": 18,
+        "shake": 4,
+        "vibrate": [
+          12,
+          32,
+          12,
+          32,
+          12,
+          32,
+          55
+        ]
+      },
+      {
+        "charge_ms": 1480,
+        "sparks": 28,
+        "shake": 7,
+        "vibrate": [
+          10,
+          26,
+          10,
+          26,
+          10,
+          26,
+          10,
+          26,
+          80
+        ]
+      },
+      {
+        "charge_ms": 1800,
+        "sparks": 40,
+        "shake": 11,
+        "vibrate": [
+          8,
+          22,
+          8,
+          22,
+          8,
+          22,
+          8,
+          22,
+          8,
+          22,
+          120
+        ]
+      }
+    ],
+    "tease": {
+      "$comment": "Le teasing de quasi-reussite : le halo monte AU-DESSUS de la rarete reelle, s'y maintient, puis retombe. C'est le ressort le plus efficace du genre gacha, et il est ici sans danger : aucune monnaie reelle, aucun achat, rien a vendre au joueur — le seul enjeu est emotionnel. Deux garde-fous de design : (1) chance nulle sur la commune, pour que le tirage le plus frequent reste instantane et honnete ; (2) chance nulle sur la mythique, qui n'a rien au-dessus d'elle. Un teasing trop frequent apprendrait au joueur a ne plus croire le halo, ce qui detruirait le signal : ~1 tirage teasable sur 4 est le plafond que je m'autorise.",
+      "chance_by_rarity": [
+        0,
+        0.16,
+        0.22,
+        0.26,
+        0.28,
+        0
+      ],
+      "max_overshoot": 2,
+      "hold_ms": 430,
+      "fallback_ms": 320,
+      "vibrate": [
+        40,
+        70,
+        14
+      ]
+    }
+  },
   "fishing": {
     "$comment": "Physique de la barre (position/vitesse en fractions 0..1 de la piste par seconde) : maintenir = accélération vers le haut (rise_accel + gravity, net positif), relâcher = seule la gravité agit (négative). drag amortit la vitesse (exp(-drag*dt), indépendant du framerate). bar_height/bar_height_min : hauteur de la fenêtre de capture, réduite par bar_mult (plancher d'équité comme l'ex zone_min). fill_rate/drain_rate : progression du succès par seconde de chevauchement/non-chevauchement (drain_rate scalé par drain_mult de la rareté). start_progress : 0.5 pour ne pas punir/favoriser le tout début. quality_luck (inchangé de la v1) : bonus de chance de rareté selon le ratio de temps passé en chevauchement, discrétisé en 4 paliers (0..3).",
     "bar_height": 0.26,
