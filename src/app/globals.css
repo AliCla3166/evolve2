@@ -53,6 +53,14 @@ body {
 }
 .animate-sheet-up { animation: sheet-up 0.22s ease-out; }
 
+/* Révélation de carte (Mare) : pop + lueur */
+@keyframes card-reveal {
+  0% { transform: scale(0.4) rotate(-6deg); opacity: 0; }
+  60% { transform: scale(1.08) rotate(1.5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.animate-card-reveal { animation: card-reveal 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+
 /* Bouton pixel art 4 états */
 .pixel-btn {
   border: none;

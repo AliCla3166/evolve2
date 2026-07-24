@@ -25,10 +25,18 @@ import {
   STREAK_MILESTONES,
 } from "./habits";
 import {
+  addCatch,
+  MARE,
+  rollRarity,
+  rollSpecies,
+  SPECIES_IDS,
+} from "./cards";
+import {
   availableUnits,
   canRecruit,
   dailyOffers,
   MILITARY,
+  rand,
   recruitCost,
   resolveChoiceEvent,
 } from "./military";
@@ -42,7 +50,7 @@ import {
 } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
 export type HabitPatch = Partial<
@@ -74,6 +82,19 @@ interface GameActions {
   chooseEventOption: (optionIndex: number) => void;
   /** Marque les rapports comme lus (badge). */
   markReportsSeen: () => void;
+  /* ----- La Mare & les cartes (Phase 6) ----- */
+  /** Achète 1 jeton de pêche contre de l'énergie. */
+  buyJeton: () => boolean;
+  /** Consomme 1 jeton au ferrage d'une paillette (avant la tension). */
+  spendJeton: () => boolean;
+  /** Capture réussie : tire l'espèce (PRNG seedé), quality = chance d'amélioration de rareté. */
+  landCatch: (rarityIndex: number, quality: number) => void;
+  /** Fusionne fragments_per_card fragments en une carte (rareté plancher Rare). */
+  fuseFragments: () => boolean;
+  /** Assigne/retire une carte d'un slot défense/expédition. */
+  toggleCardAssign: (speciesId: string, slot: "defense" | "expedition") => boolean;
+  /** Ferme la modal de révélation. */
+  clearLastCatch: () => void;
 }
 
 export type GameStore = GameState & GameActions;
@@ -102,6 +123,10 @@ function gameSlice(s: GameStore): GameState {
     pendingEvent: s.pendingEvent,
     fragments: s.fragments,
     rngSeed: s.rngSeed,
+    jetons: s.jetons,
+    collection: s.collection,
+    cardAssignments: s.cardAssignments,
+    lastCatch: s.lastCatch,
   };
 }
 
@@ -304,6 +329,82 @@ export const useGame = create<GameStore>()(
       markReportsSeen: () => {
         set({ reportsSeenAt: Date.now() });
       },
+
+      buyJeton: () => {
+        const now = Date.now();
+        const s = applyTick(gameSlice(get()), now);
+        const cost = MARE.jetons.cost_energie;
+        if (s.jetons >= MARE.jetons.max_stock || s.resources.energie < cost) return false;
+        set({
+          ...s,
+          resources: { ...s.resources, energie: s.resources.energie - cost },
+          jetons: s.jetons + 1,
+        });
+        return true;
+      },
+
+      spendJeton: () => {
+        const now = Date.now();
+        const s = applyTick(gameSlice(get()), now);
+        if (s.jetons <= 0) return false;
+        set({ ...s, jetons: s.jetons - 1 });
+        return true;
+      },
+
+      landCatch: (rarityIndex, quality) => {
+        const now = Date.now();
+        const s = applyTick(gameSlice(get()), now);
+        let rarity = Math.min(MARE.rarities.length - 1, Math.max(0, Math.round(rarityIndex)));
+        // Tension parfaite : chance d'améliorer la rareté d'un cran (quality_luck).
+        const luck =
+          MARE.tension.quality_luck[
+            Math.min(MARE.tension.quality_luck.length - 1, Math.max(0, quality))
+          ] ?? 0;
+        let [roll, seed] = rand(s.rngSeed);
+        if (roll < luck) rarity = Math.min(MARE.rarities.length - 1, rarity + 1);
+        [roll, seed] = rand(seed);
+        const species = rollSpecies(roll);
+        s.rngSeed = seed;
+        addCatch(s, species, rarity, now, "peche");
+        set(s);
+      },
+
+      fuseFragments: () => {
+        const now = Date.now();
+        const s = applyTick(gameSlice(get()), now);
+        if (s.fragments < MARE.fragments_per_card) return false;
+        s.fragments -= MARE.fragments_per_card;
+        let [roll, seed] = rand(s.rngSeed);
+        const rarity = rollRarity(roll, 0, MARE.fragment_card_rarity_floor);
+        [roll, seed] = rand(seed);
+        const species = rollSpecies(roll);
+        s.rngSeed = seed;
+        addCatch(s, species, rarity, now, "fragments");
+        set(s);
+        return true;
+      },
+
+      toggleCardAssign: (speciesId, slot) => {
+        const state = get();
+        if (!state.collection[speciesId] || !SPECIES_IDS.includes(speciesId)) return false;
+        const other: "defense" | "expedition" = slot === "defense" ? "expedition" : "defense";
+        const inSlot = state.cardAssignments[slot].includes(speciesId);
+        const next = {
+          defense: state.cardAssignments.defense.filter((id) => id !== speciesId),
+          expedition: state.cardAssignments.expedition.filter((id) => id !== speciesId),
+        };
+        if (!inSlot) {
+          if (next[slot].length >= MARE.assign_slots[slot]) return false; // slot plein
+          next[slot] = [...next[slot], speciesId]; // (retirée de l'autre slot au passage)
+        }
+        void other;
+        set({ cardAssignments: next });
+        return true;
+      },
+
+      clearLastCatch: () => {
+        set({ lastCatch: null });
+      },
     }),
     {
       name: SAVE_KEY,
@@ -319,6 +420,12 @@ export const useGame = create<GameStore>()(
         const state = persisted as GameState;
         if (version < 2 || state.tutorialStep === undefined) {
           state.tutorialStep = TUTORIAL_DONE;
+        }
+        if (version < 4 || state.jetons === undefined) {
+          state.jetons = 0;
+          state.collection = {};
+          state.cardAssignments = { defense: [], expedition: [] };
+          state.lastCatch = null;
         }
         if (version < 3 || state.units === undefined) {
           state.units = { garde: 0, sonde: 0, phage: 0 };

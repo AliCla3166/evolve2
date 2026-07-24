@@ -121,6 +121,39 @@ export interface PendingEvent {
   expiresAt: number;
 }
 
+/* ---------- La Mare & les cartes (Phase 6) ---------- */
+
+/** Indices de rareté 0..5 (commune → mythique), cf. mare_config.json. */
+export type RarityIndex = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Entrée de collection d'une espèce : les doublons montent le niveau,
+ *  la meilleure rareté pêchée habille la carte. */
+export interface CardEntry {
+  /** Nombre total de prises de cette espèce (niveaux via level_thresholds). */
+  count: number;
+  /** Meilleure rareté attrapée (0..5). */
+  bestRarity: number;
+  firstCaughtAt: number;
+}
+
+/** Affectation des cartes : passerelle pêche → couche militaire. */
+export interface CardAssignments {
+  defense: string[];
+  expedition: string[];
+}
+
+/** Dernière prise (affichée par la modal de révélation, puis effacée). */
+export interface LastCatch {
+  speciesId: string;
+  rarity: number;
+  isNew: boolean;
+  newBestRarity: boolean;
+  level: number;
+  leveledUp: boolean;
+  /** Origine : "peche" ou "fragments". */
+  source: "peche" | "fragments";
+}
+
 /** Micro-tutoriel 3 étapes (Phase 4) :
  *  0 = valider une habitude · 1 = lancer une construction ·
  *  2 = comprendre le timer · 3 = terminé (TUTORIAL_DONE).
@@ -164,8 +197,18 @@ export interface GameState {
   /** Prochain événement aléatoire (ms) — 0 = à planifier au premier tick. */
   nextEventAt: number;
   pendingEvent: PendingEvent | null;
-  /** Fragments de carte (préparent la Phase 6 — la Mare & les cartes). */
+  /** Fragments de carte (8 fusionnent en une carte, rareté plancher Rare). */
   fragments: number;
   /** Graine du PRNG déterministe du moteur (avance à chaque tirage). */
   rngSeed: number;
+
+  /* ----- La Mare & les cartes (Phase 6) ----- */
+  /** Jetons de pêche (achetés en énergie, 1 par lancer). */
+  jetons: number;
+  /** Collection par espèce (12 espèces, cf. mare_config.json). */
+  collection: Record<string, CardEntry>;
+  /** Cartes assignées en défense / expédition. */
+  cardAssignments: CardAssignments;
+  /** Dernière prise à révéler (null si déjà vue). */
+  lastCatch: LastCatch | null;
 }

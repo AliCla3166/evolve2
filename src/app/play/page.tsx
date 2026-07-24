@@ -8,10 +8,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BuildingSheet } from "@/components/game/BuildingSheet";
+import { CardReveal } from "@/components/game/CardReveal";
 import { CellScene } from "@/components/game/CellScene";
 import { EventModal } from "@/components/game/EventModal";
 import { HabitsPanel } from "@/components/game/HabitsPanel";
 import { Hud } from "@/components/game/Hud";
+import { MarePanel } from "@/components/game/MarePanel";
 import { NoyauHub } from "@/components/game/NoyauHub";
 import { ProfileCreate, portraitSrc } from "@/components/game/ProfileCreate";
 import { QueueBanner } from "@/components/game/QueueBanner";
@@ -43,7 +45,7 @@ export default function PlayPage() {
   const reports = useGame((s) => s.reports);
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const [selected, setSelected] = useState<BuildingId | null>(null);
-  const [panel, setPanel] = useState<"noyau" | "reports" | null>(null);
+  const [panel, setPanel] = useState<"noyau" | "mare" | "reports" | null>(null);
 
   const unseen = reports.filter((r) => r.ts > reportsSeenAt).length;
 
@@ -126,14 +128,16 @@ export default function PlayPage() {
       {/* Panneau d'amélioration (bottom sheet) */}
       {selected && <BuildingSheet id={selected} onClose={() => setSelected(null)} />}
 
-      {/* Overlays Phase 5 */}
+      {/* Overlays Phase 5 & 6 */}
       {panel === "noyau" && <NoyauHub onClose={() => setPanel(null)} />}
+      {panel === "mare" && <MarePanel onClose={() => setPanel(null)} />}
       {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
       <EventModal />
+      <CardReveal />
 
       {/* Nav basse : Noyau (unités/expéditions) & Rapports */}
       {hasHydrated && profile && (
-        <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-cell-cyan/20 bg-abyss/90 backdrop-blur-sm">
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-cell-cyan/20 bg-abyss/90 backdrop-blur-sm">
           <div className="mx-auto flex max-w-md items-center justify-around py-1.5 sm:max-w-2xl">
             <button
               onClick={() => {
@@ -151,6 +155,13 @@ export default function PlayPage() {
             >
               <NavIcon id="units" size={26} active={panel === "noyau"} />
               <span className="text-[9px] tracking-widest text-cell-teal/70">NOYAU</span>
+            </button>
+            <button
+              onClick={() => setPanel(panel === "mare" ? null : "mare")}
+              className="flex flex-col items-center gap-0.5 px-4"
+            >
+              <NavIcon id="mare" size={26} active={panel === "mare"} />
+              <span className="text-[9px] tracking-widest text-cell-teal/70">MARE</span>
             </button>
             <button
               onClick={() => setPanel(panel === "reports" ? null : "reports")}

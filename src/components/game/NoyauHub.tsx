@@ -10,6 +10,7 @@ import { fmtDuration, fmtInt } from "@/lib/game/format";
 import {
   availableUnits,
   canRecruit,
+  cardExpeditionBonus,
   dailyOffers,
   defensePower,
   estimatedWavePower,
@@ -79,6 +80,7 @@ export function NoyauHub({ onClose }: { onClose: () => void }) {
   const state = useGame.getState();
   const avail = availableUnits(state);
   const offers = dailyOffers(state, now);
+  const cardBonus = cardExpeditionBonus(state);
   const cap = unitCap(buildings);
   const total = totalUnits(units);
   const def = defensePower(state);
@@ -192,7 +194,7 @@ export function NoyauHub({ onClose }: { onClose: () => void }) {
         <h2 className="pt-1 text-xs uppercase tracking-[0.3em] text-cell-cyan">Destinations du jour</h2>
         {offers.map((offer, i) => {
           const opened = openOffer === i;
-          const chance = successChance(offer, squad);
+          const chance = successChance(offer, squad, cardBonus);
           return (
             <Panel key={`${offer.destId}-${i}`} variant="membrane" className="p-2" style={{ background: "rgba(5, 11, 20, 0.75)" }}>
               <button
@@ -230,6 +232,11 @@ export function NoyauHub({ onClose }: { onClose: () => void }) {
                       <Stepper value={squad[u]} max={avail[u]} onChange={(v) => setSquad({ ...squad, [u]: v })} />
                     </div>
                   ))}
+                  {(cardBonus.exp > 0 || cardBonus.atk > 0) && (
+                    <p className="text-[10px] text-cell-teal/60">
+                      🃏 Cartes assignées : +{cardBonus.exp} exploration · +{cardBonus.atk} assaut
+                    </p>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className={`text-xs ${chance >= 0.7 ? "text-cell-lime" : chance >= 0.4 ? "text-cell-teal" : "text-red-400"}`}>
                       Succès estimé : {Math.round(chance * 100)} %

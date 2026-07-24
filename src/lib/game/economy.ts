@@ -221,7 +221,7 @@ export function resourceName(res: ResourceId): string {
 
 export function freshGameState(now: number): GameState {
   return {
-    saveVersion: 3,
+    saveVersion: 4,
     tutorialStep: 0, // nouveau joueur : micro-tutoriel actif après création du profil
     resources: startingResources(),
     buildings: startingBuildings(),
@@ -250,5 +250,10 @@ export function freshGameState(now: number): GameState {
     pendingEvent: null,
     fragments: 0,
     rngSeed: (now % 2147483647) | 1,
+    // ----- La Mare & les cartes (Phase 6) — tuning dans mare_config.json -----
+    jetons: 0,
+    collection: {},
+    cardAssignments: { defense: [], expedition: [] },
+    lastCatch: null,
   };
 }

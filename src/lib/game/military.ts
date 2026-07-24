@@ -6,6 +6,11 @@
    jour calendaire), jamais stockées. */
 
 import rawConfig from "@/data/military_config.json";
+import {
+  cardsDefenseBonus,
+  cardsExpeditionAtkBonus,
+  cardsExpeditionExpBonus,
+} from "./cards";
 import { resourceCap, totalProductionPerHour } from "./economy";
 import { dayKey, ENERGY_CAP } from "./habits";
 import type {
@@ -184,13 +189,15 @@ export function squadAtkPower(squad: Record<UnitId, number>): number {
   return UNIT_IDS.reduce((s, id) => s + (squad[id] ?? 0) * unitConfig(id).power_atk, 0);
 }
 
-/** Puissance défensive de la cellule : gardes DISPONIBLES + bonus Membrane/Noyau. */
+/** Puissance défensive de la cellule : gardes DISPONIBLES + bonus Membrane/Noyau
+ *  + cartes assignées en défense (Phase 6). */
 export function defensePower(state: GameState): number {
   const avail = availableUnits(state);
   return (
     avail.garde * unitConfig("garde").power_def +
     (state.buildings.membrane ?? 0) * MILITARY.pathogens.defense_membrane_bonus_per_level +
-    Math.max(1, state.buildings.noyau ?? 1) * MILITARY.pathogens.defense_noyau_bonus_per_level
+    Math.max(1, state.buildings.noyau ?? 1) * MILITARY.pathogens.defense_noyau_bonus_per_level +
+    cardsDefenseBonus(state)
   );
 }
 
@@ -252,20 +259,33 @@ export function dailyOffers(state: GameState, now: number): DestinationOffer[] {
   }));
 }
 
-/** Chance de succès affichée/utilisée pour une escouade sur une offre. */
+/** Chance de succès affichée/utilisée pour une escouade sur une offre.
+ *  `bonus` = apport des cartes assignées en expédition (Phase 6). */
 export function successChance(
   offer: { risk: number; difficulty: number },
   squad: Record<UnitId, number>,
+  bonus?: { exp?: number; atk?: number },
 ): number {
   const s = MILITARY.expeditions.success;
-  const expPower = squadExpPower(squad);
+  const expPower = squadExpPower(squad) + (bonus?.exp ?? 0);
+  const atkPower = squadAtkPower(squad) + (bonus?.atk ?? 0);
   const riskEff =
-    offer.risk * (1 - Math.min(0.5, squadAtkPower(squad) / Math.max(1, offer.difficulty)));
+    offer.risk * (1 - Math.min(0.5, atkPower / Math.max(1, offer.difficulty)));
   const p =
     s.base +
     s.ratio_weight * Math.min(1, expPower / Math.max(1, offer.difficulty)) -
     s.risk_weight * riskEff;
   return Math.min(s.max, Math.max(s.min, p));
+}
+
+/** Bonus des cartes assignées en expédition, prêt à passer à successChance. */
+export function cardExpeditionBonus(
+  state: Pick<GameState, "collection" | "cardAssignments">,
+): { exp: number; atk: number } {
+  return {
+    exp: cardsExpeditionExpBonus(state),
+    atk: cardsExpeditionAtkBonus(state),
+  };
 }
 
 /* ---------- Helpers d'état (mutent le DRAFT de applyTick uniquement) ---------- */
@@ -298,7 +318,7 @@ const fmt = (n: number) => Math.round(n).toLocaleString("fr-FR");
 
 function resolveExpedition(state: GameState, exp: Expedition): void {
   const cfg = MILITARY.expeditions;
-  const p = successChance(exp, exp.squad);
+  const p = successChance(exp, exp.squad, cardExpeditionBonus(state));
   const success = drawUnit(state) < p;
   const lines: string[] = [
     `Escouade : ${UNIT_IDS.filter((u) => exp.squad[u] > 0)
