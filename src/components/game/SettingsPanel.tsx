@@ -4,8 +4,9 @@
 "use client";
 
 import { useState } from "react";
-import { Panel, PixelButton } from "@/components/ui/Pixel";
+import { Panel, PixelButton, Switch } from "@/components/ui/Pixel";
 import { DevPanel } from "@/components/game/DevPanel";
+import { NotifSettings } from "@/components/game/NotifSettings";
 import { SlotSwitch } from "@/components/game/SlotSwitch";
 import { cloudConfigured } from "@/lib/cloud/firebase";
 import { freshGameState } from "@/lib/game/economy";
@@ -14,9 +15,10 @@ import { GAME_VERSION, getPrefs, setPref, type Prefs } from "@/lib/prefs";
 import { playCue, syncAudioPrefs, unlockAudio } from "@/lib/audio";
 import type { GameState } from "@/lib/game/types";
 
-/** Interrupteur de préférence locale. Extrait ici parce qu'il y en a désormais
- *  trois : dupliquer vingt lignes de balisage trois fois est le meilleur moyen
- *  de les voir diverger à la première retouche de style. */
+/** Ligne de préférence locale (vibrations / sons / ambiance). Le dessin de
+ *  l'interrupteur lui-même vit dans `Switch` (Pixel.tsx) depuis l'étape 9 : les
+ *  rappels ont leur propre stockage et ne peuvent pas passer par `keyof Prefs`,
+ *  mais les deux doivent rester rigoureusement identiques à l'œil. */
 function PrefToggle({
   pref,
   title,
@@ -35,24 +37,16 @@ function PrefToggle({
         <div className="text-xs text-cell-cyan">{title}</div>
         <div className="text-[11px] text-cell-teal/60">{hint}</div>
       </div>
-      <button
-        role="switch"
-        aria-checked={on}
-        aria-label={title}
-        onClick={() => {
+      <Switch
+        on={on}
+        label={title}
+        onToggle={() => {
           const next = !on;
           setPref(pref, next);
           setOn(next);
           onChange?.(next);
         }}
-        className={`h-7 w-12 shrink-0 rounded-full border transition ${
-          on ? "border-cell-lime bg-cell-lime/30" : "border-cell-teal/40 bg-abyss"
-        }`}
-      >
-        <span
-          className={`block h-5 w-5 rounded-full bg-cell-cyan transition ${on ? "translate-x-6" : "translate-x-1"}`}
-        />
-      </button>
+      />
     </Panel>
   );
 }
@@ -158,6 +152,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           hint="Fond sous-marin très discret, coupé par défaut."
           onChange={() => syncAudioPrefs()}
         />
+
+        {/* Rappels (piste 2) — masqué si le navigateur ne sait pas notifier */}
+        <NotifSettings />
 
         {/* Sauvegarde */}
         <Panel className="space-y-2 p-3">

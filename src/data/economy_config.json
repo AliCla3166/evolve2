@@ -180,7 +180,7 @@
       }
     },
     "adn": {
-      "name": "Generateur d'ADN",
+      "name": "Générateur d'ADN",
       "family": "producteur",
       "role": "producer",
       "designed": true,
@@ -255,7 +255,7 @@
       }
     },
     "proteine": {
-      "name": "Synthetiseur de proteines",
+      "name": "Synthétiseur de protéines",
       "family": "producteur",
       "role": "producer",
       "designed": true,
@@ -405,7 +405,7 @@
       }
     },
     "enzyme": {
-      "name": "Reacteur enzymatique",
+      "name": "Réacteur enzymatique",
       "family": "producteur",
       "role": "producer",
       "designed": true,
@@ -480,7 +480,7 @@
       }
     },
     "lipide": {
-      "name": "Reservoir lipidique",
+      "name": "Réservoir lipidique",
       "family": "producteur",
       "role": "producer",
       "designed": true,
@@ -690,7 +690,7 @@
       }
     },
     "peche": {
-      "name": "Centre Peche / Collection",
+      "name": "Centre Pêche / Collection",
       "family": "centre_specialise",
       "role": "minigame_gate",
       "designed": false,
@@ -705,7 +705,7 @@
       "levels": {}
     },
     "defense": {
-      "name": "Bastion - Defense",
+      "name": "Bastion-Défense",
       "family": "centre_specialise",
       "role": "minigame_gate",
       "designed": false,
@@ -720,7 +720,7 @@
       "levels": {}
     },
     "raid": {
-      "name": "Bastion - Raid",
+      "name": "Bastion-Raid",
       "family": "centre_specialise",
       "role": "minigame_gate",
       "designed": false,

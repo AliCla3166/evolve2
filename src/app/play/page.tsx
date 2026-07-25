@@ -35,6 +35,7 @@ import { portalTarget } from "@/lib/game/scene";
 import { installAudio, playCue } from "@/lib/audio";
 import { useOverlay, scrollToTop } from "@/lib/overlay";
 import { hydrateActiveSlot, useGame } from "@/lib/game/store";
+import { startNotificationScheduler, subscribeNotificationOpen } from "@/lib/notifications";
 import type { BuildingId } from "@/lib/game/types";
 
 /** Alerte vague imminente (moins de 12 h) — visible sans ouvrir le Noyau.
@@ -65,6 +66,19 @@ function WaveWarning({ onOpenBastion }: { onOpenBastion: () => void }) {
 
 /** Panneaux plein écran montés par-dessus la base. */
 type PanelId = "habits" | "noyau" | "mare" | "bastion" | "reports" | "settings" | null;
+
+/* Les rappels (piste 2) transportent leur destination sous forme de chaîne :
+   elle vient du JSON de config, puis transite par une notification système et
+   parfois par la barre d'adresse. Autant dire qu'elle n'est pas digne de
+   confiance — on ne monte que ce qui figure dans cette liste. */
+const PANEL_IDS: ReadonlyArray<Exclude<PanelId, null>> = [
+  "habits",
+  "noyau",
+  "mare",
+  "bastion",
+  "reports",
+  "settings",
+];
 
 /* ============================ Navigation basse ============================
    Piste 10 du diagnostic, trois corrections d'un coup :
@@ -273,6 +287,28 @@ export default function PlayPage() {
     const id = setInterval(() => useGame.getState().collectTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, [hasHydrated]);
+
+  /* Rappels (piste 2). Le planificateur ne démarre qu'une fois la sauvegarde
+     chargée : calculer un planning sur un état vierge produirait un rappel
+     d'habitudes pour une journée qui, en base, est peut-être déjà validée. */
+  useEffect(() => {
+    if (!hasHydrated) return;
+    return startNotificationScheduler(() => useGame.getState());
+  }, [hasHydrated]);
+
+  /* Clic sur un rappel -> le panneau concerné. Un seul abonnement absorbe les
+     deux chemins (message du service worker si l'app tournait déjà, `?panel=`
+     si le clic vient de la lancer). L'ouverture arrive forcément de façon
+     asynchrone : poser l'état en synchrone dans le corps d'un effet romprait
+     la règle `react-hooks/set-state-in-effect` du projet. */
+  useEffect(() => {
+    return subscribeNotificationOpen((target) => {
+      const id = PANEL_IDS.find((p) => p === target) ?? null;
+      setSelected(null);
+      setPanelState(id);
+      if (id) playCue("panel_open");
+    });
+  }, []);
 
   return (
     <main

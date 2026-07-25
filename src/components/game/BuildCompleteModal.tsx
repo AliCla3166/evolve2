@@ -13,6 +13,7 @@
 
 import { useEffect } from "react";
 import { Panel, PixelButton } from "@/components/ui/Pixel";
+import { NotifOptIn } from "@/components/game/NotifOptIn";
 import {
   buildingProductionPerHour,
   getBuildingConfig,
@@ -172,6 +173,13 @@ export function BuildCompleteModal({ onNext }: { onNext?: (id: BuildingId) => vo
               SUPERBE
             </PixelButton>
           )}
+
+          {/* Rappels (piste 2) : le diagnostic demande la permission ICI et pas
+              ailleurs — « juste après la première fin de chantier, quand le
+              joueur vient de comprendre ce qu'il rate ». Placé SOUS les boutons
+              pour ne pas disputer l'écran à l'action principale ; le composant
+              ne rend rien tant que le moment n'est pas venu. */}
+          <NotifOptIn />
         </Panel>
       </div>
     </div>

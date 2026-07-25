@@ -36,6 +36,9 @@
   --color-cell-teal: var(--teal);
   --color-cell-lime: var(--lime);
   --color-cell-magenta: var(--magenta);
+  /* Couleur d'alerte unique du jeu (etape 8) : stockage sature, vague
+     imminente, rappels bloques par le navigateur. */
+  --color-cell-amber: var(--amber);
 }
 
 body {

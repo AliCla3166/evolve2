@@ -139,6 +139,46 @@ export function ResourceBar({
   );
 }
 
+/** Interrupteur on/off. Extrait ici à l'étape 9 : il vivait dans `PrefToggle`
+ *  (Réglages), typé sur `keyof Prefs` donc inutilisable pour les rappels, qui
+ *  ont leur propre stockage. Deux balisages jumeaux dans deux fichiers auraient
+ *  divergé à la première retouche de style — il n'y en a plus qu'un. */
+export function Switch({
+  on,
+  onToggle,
+  label,
+  disabled = false,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  /** Nom accessible : le bouton n'a aucun texte à l'intérieur. */
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onToggle}
+      /* La piste reste à 28 px (c'est un interrupteur, pas un bouton) mais la
+         CIBLE fait bien 44 px de haut : le doigt vise la zone, pas le dessin. */
+      className={`tap flex shrink-0 items-center justify-center ${disabled ? "opacity-40" : ""}`}
+    >
+      <span
+        className={`flex h-7 w-12 items-center rounded-full border transition ${
+          on ? "border-cell-lime bg-cell-lime/30" : "border-cell-teal/40 bg-abyss"
+        }`}
+      >
+        <span
+          className={`block h-5 w-5 rounded-full bg-cell-cyan transition ${on ? "translate-x-6" : "translate-x-1"}`}
+        />
+      </span>
+    </button>
+  );
+}
+
 export type Rarity =
   | "commune"
   | "peucommune"

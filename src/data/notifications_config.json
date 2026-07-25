@@ -1,0 +1,89 @@
+{
+  "$comment": "Notifications de rappel (piste 2 du diagnostic UX). Regle du projet : AUCUN nombre de reglage ni aucun texte visible ne vit dans le TypeScript — src/lib/notifications.ts ne fait qu'interpreter ce fichier. Les $comment sont volontairement sans accent (convention du depot) ; les chaines affichees au joueur, elles, sont accentuees normalement.",
+
+  "schedule": {
+    "$comment": "Le jeu n'a PAS de serveur push. On planifie donc localement : la page recalcule la liste des rappels a echeance et la depose dans IndexedDB, ou le service worker vient la lire quand le systeme le reveille. horizon_h borne ce qu'on planifie d'avance (au-dela, la page aura re-synchronise dix fois) ; poll_seconds est la cadence du declencheur cote page ; stale_after_h evite qu'un rappel de chantier vieux de trois jours ne sonne au reveil du navigateur.",
+    "horizon_h": 72,
+    "poll_seconds": 60,
+    "stale_after_h": 12,
+    "fired_history": 60,
+    "suppress_when_visible": true,
+    "periodic_sync_tag": "evolve-rappels",
+    "periodic_sync_min_interval_h": 6
+  },
+
+  "quiet_hours": {
+    "$comment": "Heures locales pendant lesquelles rien ne sonne. Un jeu de discipline qui reveille son joueur a 3 h du matin perd sa permission de notifier des le lendemain. Chaque categorie decide ce qu'elle fait en heures calmes via son champ `quiet` : defer (repousse a la fin du creneau), skip (abandonne — un rappel perime ne vaut rien) ou ignore (le joueur a lui-meme choisi l'heure).",
+    "start_h": 22,
+    "end_h": 8
+  },
+
+  "permission": {
+    "$comment": "Moment de la demande : pas au premier lancement (refus quasi automatique) mais juste apres la PREMIERE fin de chantier, quand le joueur vient de comprendre qu'il aurait pu rater l'evenement. On passe d'abord par une demande maison — le prompt natif ne se joue qu'une fois par installation, on ne le brule pas sur un joueur qui allait dire non. max_asks compte NOS demandes, pas celles du systeme.",
+    "ask_after_first_build": true,
+    "max_asks": 2,
+    "reask_after_days": 14,
+    "prompt_title": "Je te préviens quand c'est prêt ?",
+    "prompt_body": "Un chantier fini, une vague à défendre, ta journée à noter. Rien d'autre — et tu choisis quoi recevoir dans les Réglages.",
+    "prompt_accept": "ACTIVER",
+    "prompt_decline": "NON MERCI",
+    "prompt_granted": "✅ C'est activé — je te préviens.",
+    "prompt_denied": "Notifications bloquées par le navigateur. Tu peux les rouvrir dans les réglages du site.",
+    "settings_title": "Rappels",
+    "settings_hint": "Quatre rappels au maximum, jamais entre 22 h et 8 h.",
+    "settings_blocked": "Ton navigateur les bloque pour ce site — à rouvrir dans ses réglages.",
+    "settings_ask": "ACTIVER LES RAPPELS",
+    "settings_hour_label": "Heure du rappel d'habitudes"
+  },
+
+  "categories": [
+    {
+      "id": "habitudes",
+      "$comment": "Le seul rappel qui sert directement le pilier n°1 du PLAN (compagnon de discipline). Formule comme un service rendu, jamais comme un appat : pas de « ta cellule meurt », pas de compteur qui menace. Il ne part QUE si la journee n'a encore aucune habitude validee — rappeler a quelqu'un de faire ce qu'il a deja fait est la meilleure facon de se faire couper. `quiet: ignore` parce que l'heure est choisie par le joueur lui-meme.",
+      "label": "Rappel d'habitudes",
+      "hint": "À l'heure que tu choisis, seulement si ta journée n'est pas encore notée.",
+      "default_on": true,
+      "default_hour": 20,
+      "default_minute": 30,
+      "quiet": "ignore",
+      "panel": "habits",
+      "title": "Ta journée n'est pas encore notée",
+      "body": "Une minute pour saisir tes habitudes — c'est ce qui alimente ta cellule."
+    },
+    {
+      "id": "chantier",
+      "$comment": "L'evenement le plus invisible du jeu : un chantier de 40 h se terminait sans que rien ne le dise a un joueur absent. `quiet: defer` — une fin de chantier n'est pas perissable, elle attend 8 h du matin sans rien perdre.",
+      "label": "Chantier terminé",
+      "hint": "Quand un proto-organe entre en service, même absent.",
+      "default_on": true,
+      "quiet": "defer",
+      "panel": null,
+      "title": "Chantier achevé",
+      "body": "{batiment} niveau {niveau} vient d'entrer en service."
+    },
+    {
+      "id": "vague",
+      "$comment": "lead_h = 2 : la banniere WaveWarning ne s'affiche que dans les 12 dernieres heures ET uniquement app ouverte. `quiet: skip` — une vague annoncee apres coup ne sert a rien, mieux vaut se taire (l'auto-resolution hors ligne reste le filet de securite, cf. military.ts).",
+      "label": "Vague imminente",
+      "hint": "2 h avant l'attaque, le temps d'aller la jouer au Bastion.",
+      "default_on": true,
+      "lead_h": 2,
+      "quiet": "skip",
+      "panel": "bastion",
+      "title": "Vague de pathogènes dans {dans}",
+      "body": "Ta défense t'attend au Bastion — tu peux la jouer en direct."
+    },
+    {
+      "id": "evenement",
+      "$comment": "Le seul contenu reellement perissable du jeu (choice_expiry_h = 24 dans military_config.json). lead_h = 3 laisse le temps d'ouvrir l'app. `quiet: skip`, meme raison que la vague.",
+      "label": "Décision qui expire",
+      "hint": "3 h avant qu'une occasion ne se referme.",
+      "default_on": true,
+      "lead_h": 3,
+      "quiet": "skip",
+      "panel": null,
+      "title": "Une décision expire bientôt",
+      "body": "Il te reste {restant} pour choisir — après, l'occasion est passée."
+    }
+  ]
+}

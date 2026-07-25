@@ -95,22 +95,30 @@ TIME_BUDGET_HOURS = {
 assert abs(sum(TIME_BUDGET_HOURS.values()) - BUILD_HOURS_BUDGET) < 1.0, \
     "Les budgets temps doivent sommer a BUILD_HOURS_BUDGET"
 
+# ATTENTION : `name` est la SEULE chaine de ce fichier qui soit lue par un
+# joueur. Elle traverse export_json.py -> economy_config.json -> l'interface du
+# jeu (fiche de batiment, file de chantier, celebration de fin de chantier) et,
+# depuis l'etape 9, jusqu'au texte des notifications systeme. Elle est donc
+# accentuee normalement, contrairement au reste du fichier (outillage, convention
+# ASCII du depot). Ne pas "corriger" ces accents.
 BUILDING_META = {
-    "noyau":    {"name": "Noyau primordial",            "family": "structure_centrale", "role": "meta"},
-    "membrane": {"name": "Membrane protectrice",          "family": "structure_centrale", "role": "support"},
-    "adn":      {"name": "Generateur d'ADN",              "family": "producteur",         "role": "producer", "resource": "adn"},
-    "proteine": {"name": "Synthetiseur de proteines",     "family": "producteur",         "role": "producer", "resource": "proteine"},
-    "biomasse": {"name": "Producteur de biomasse",        "family": "producteur",         "role": "producer", "resource": "biomasse"},
-    "enzyme":   {"name": "Reacteur enzymatique",          "family": "producteur",         "role": "producer", "resource": "enzyme"},
-    "lipide":   {"name": "Reservoir lipidique",           "family": "producteur",         "role": "producer", "resource": "lipide"},
-    "signaux":  {"name": "Capteur de signaux",            "family": "producteur",         "role": "producer", "resource": "signaux"},
-    "mutation": {"name": "Centre de mutation",            "family": "centre_specialise",  "role": "sink"},
+    "noyau":    {"name": "Noyau primordial",             "family": "structure_centrale", "role": "meta"},
+    "membrane": {"name": "Membrane protectrice",         "family": "structure_centrale", "role": "support"},
+    "adn":      {"name": "Générateur d'ADN",             "family": "producteur",         "role": "producer", "resource": "adn"},
+    "proteine": {"name": "Synthétiseur de protéines",    "family": "producteur",         "role": "producer", "resource": "proteine"},
+    "biomasse": {"name": "Producteur de biomasse",       "family": "producteur",         "role": "producer", "resource": "biomasse"},
+    "enzyme":   {"name": "Réacteur enzymatique",         "family": "producteur",         "role": "producer", "resource": "enzyme"},
+    "lipide":   {"name": "Réservoir lipidique",          "family": "producteur",         "role": "producer", "resource": "lipide"},
+    "signaux":  {"name": "Capteur de signaux",           "family": "producteur",         "role": "producer", "resource": "signaux"},
+    "mutation": {"name": "Centre de mutation",           "family": "centre_specialise",  "role": "sink"},
 }
 
+# Meme regle pour les trois stubs : "Bastion-Défense" est la graphie deja retenue
+# partout dans le code du mini-jeu (BastionPanel, BastionScene, MarePanel).
 OUT_OF_SCOPE_BUILDINGS = {
-    "peche":    {"name": "Centre Peche / Collection", "family": "centre_specialise", "note": "Mini-jeu de peche non finalise. Ce fichier ne definit pas ses niveaux/couts/temps ; a completer une fois le mini-jeu specifie."},
-    "defense":  {"name": "Bastion - Defense",         "family": "centre_specialise", "note": "Mini-jeu de Bastion Defense non finalise. Idem, hors perimetre de ce modele."},
-    "raid":     {"name": "Bastion - Raid",            "family": "centre_specialise", "note": "Mini-jeu de Bastion Raid non finalise. Idem, hors perimetre de ce modele."},
+    "peche":    {"name": "Centre Pêche / Collection", "family": "centre_specialise", "note": "Mini-jeu de peche non finalise. Ce fichier ne definit pas ses niveaux/couts/temps ; a completer une fois le mini-jeu specifie."},
+    "defense":  {"name": "Bastion-Défense",           "family": "centre_specialise", "note": "Mini-jeu de Bastion Defense non finalise. Idem, hors perimetre de ce modele."},
+    "raid":     {"name": "Bastion-Raid",              "family": "centre_specialise", "note": "Mini-jeu de Bastion Raid non finalise. Idem, hors perimetre de ce modele."},
 }
 
 # ============================================================
