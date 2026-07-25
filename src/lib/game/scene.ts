@@ -79,12 +79,14 @@ export const SOCKETS: Record<BuildingId, Socket> = {
    Piste 10 + piste 9b : un tap sur un portail ouvre directement l'écran
    concerné, et le cadenas disparaît (il annonçait « verrouillé » un contenu
    parfaitement ouvert). */
-export type PortalTarget = "bastion" | "mare" | "noyau";
+export type PortalTarget = "bastion" | "mare" | "noyau" | "derive";
 
 export const PORTALS: Partial<Record<BuildingId, PortalTarget>> = {
   defense: "bastion",
   peche: "mare",
-  raid: "noyau",
+  /* Le socle « Raid » ouvrait le Noyau faute d'écran dédié. Il a maintenant le
+     sien : La Dérive, la carte des eaux (cf. docs/PLAN_DERIVE.md). */
+  raid: "derive",
 };
 
 export function portalTarget(id: BuildingId): PortalTarget | null {

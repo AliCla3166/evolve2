@@ -68,12 +68,15 @@ export interface SectorDef {
   foyers: FoyerDef[];
 }
 
-interface NatureDef {
+export interface NatureDef {
   name: string;
   desc: string;
   assault: boolean;
   repeatable: boolean;
   requires_percee?: boolean;
+  /** Glyphe et couleur d'accent du noeud sur la carte (cf. territoire_config.json). */
+  icon: string;
+  color: string;
 }
 
 interface VestigeDef {
@@ -253,6 +256,20 @@ export function territoireIncomePerHour(
     out[res] = Math.min(out[res] ?? 0, (prodPerHour[res] ?? 0) * cap);
   }
   return out;
+}
+
+/** Revenu horaire d'UN gisement capturé, avant le plafond global `total_income_cap_ratio`
+ *  (celui-ci s'applique ressource par ressource sur la somme, cf. territoireIncomePerHour).
+ *  Sert à la fiche d'un foyer : le joueur doit voir ce que CE gisement lui rapporte,
+ *  et le panneau affiche à part le total réellement encaissé. */
+export function foyerIncomePerHour(
+  t: TerritoireState,
+  foyer: FoyerDef,
+  prodPerHour: Partial<Record<ResourceId, number>>,
+): number {
+  if (foyer.nature !== "gisement" || !foyer.resource) return 0;
+  if (!isCaptured(t, foyer.id)) return 0;
+  return (prodPerHour[foyer.resource] ?? 0) * gisementRatio(devLevel(t, foyer.id));
 }
 
 /** Durée d'accumulation retenue au prochain encaissement, bornée par offline_cap_h.

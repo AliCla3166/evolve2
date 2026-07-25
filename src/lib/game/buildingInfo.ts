@@ -31,7 +31,7 @@ export const BUILDING_PURPOSE: Record<BuildingId, string> = {
   defense:
     "Mini-jeu Bastion-Défense jouable : place tes créatures assignées (onglet MARE, 🛡️ défense) en barracks/mortiers, des tourelles/murs/pièges recrutés dans sa Boutique, puis défends le Noyau en direct à chaque vague. Si tu ne joues pas la vague, la défense passive (Gardes membranaires + cartes assignées) prend le relais automatiquement.",
   raid:
-    "Mini-jeu Bastion-Raid à venir. En attendant, les expéditions se gèrent depuis l'onglet NOYAU.",
+    "La Dérive : la carte des eaux autour de la cellule, en quatre secteurs qui s'ouvrent au fil de tes paliers. Vingt-neuf foyers à prendre en lançant une sortie quand tu veux — gisements qui produisent même hors ligne, vestiges aux bonus permanents, sites d'expédition, caches, antres de boss et un abîme sans fin. C'est ici que se joue la progression de long terme.",
 };
 
 export function buildingPurpose(id: BuildingId): string {

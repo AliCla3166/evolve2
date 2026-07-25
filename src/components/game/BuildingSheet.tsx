@@ -85,8 +85,9 @@ export function BuildingSheet({
 }: {
   id: BuildingId;
   onClose: () => void;
-  /** Ouvre le mini-jeu jouable associé (pour l'instant : uniquement id === "defense",
-   *  le Bastion-Défense — "raid" reste hors périmètre, cf. PLAN.md). */
+  /** Ouvre l'écran jouable associé. Filet de sécurité uniquement : depuis que
+   *  "defense", "peche" et "raid" sont des PORTAILS (cf. scene.ts), un tap sur
+   *  leur socle ouvre directement l'écran sans passer par cette fiche. */
   onPlay?: () => void;
 }) {
   const resources = useGame((s) => s.resources);

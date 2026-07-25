@@ -22,6 +22,7 @@ import { ObjectiveStrip } from "@/components/game/ObjectiveStrip";
 import { QueueBanner } from "@/components/game/QueueBanner";
 import { ReportsPanel } from "@/components/game/ReportsPanel";
 import { SettingsPanel } from "@/components/game/SettingsPanel";
+import { TerritoirePanel } from "@/components/game/TerritoirePanel";
 import { TutorialCoach } from "@/components/game/TutorialCoach";
 import { WelcomeBackModal } from "@/components/game/WelcomeBackModal";
 import { NavIcon, Panel } from "@/components/ui/Pixel";
@@ -65,7 +66,7 @@ function WaveWarning({ onOpenBastion }: { onOpenBastion: () => void }) {
 }
 
 /** Panneaux plein écran montés par-dessus la base. */
-type PanelId = "habits" | "noyau" | "mare" | "bastion" | "reports" | "settings" | null;
+type PanelId = "habits" | "noyau" | "mare" | "derive" | "bastion" | "reports" | "settings" | null;
 
 /* Les rappels (piste 2) transportent leur destination sous forme de chaîne :
    elle vient du JSON de config, puis transite par une notification système et
@@ -75,6 +76,7 @@ const PANEL_IDS: ReadonlyArray<Exclude<PanelId, null>> = [
   "habits",
   "noyau",
   "mare",
+  "derive",
   "bastion",
   "reports",
   "settings",
@@ -418,6 +420,7 @@ export default function PlayPage() {
       {panel === "habits" && <HabitsPanel onClose={() => setPanel(null)} />}
       {panel === "noyau" && <NoyauHub onClose={() => setPanel(null)} />}
       {panel === "mare" && <MarePanel onClose={() => setPanel(null)} />}
+      {panel === "derive" && <TerritoirePanel onClose={() => setPanel(null)} />}
       {panel === "bastion" && <BastionPanel onClose={() => setPanel(null)} />}
       {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
       {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}

@@ -32,6 +32,7 @@ import {
   bonusValue,
   cacheLoot,
   foyerDef,
+  guaranteedDestIds,
   natureDef,
   TERRITOIRE_ANTRES,
 } from "./territoire";
@@ -189,6 +190,13 @@ function drawUnit(state: GameState): number {
   return v;
 }
 
+/** Nom affichable d'une destination d'expédition, par son id de config.
+ *  Utilisé par la fiche d'un « site d'expédition » de La Dérive, qui doit annoncer
+ *  QUELLE destination sa capture rend définitivement disponible. */
+export function destinationName(destId: string): string | null {
+  return MILITARY.expeditions.destinations.find((d) => d.id === destId)?.name ?? null;
+}
+
 /* ---------- Unités ---------- */
 
 export function unitConfig(id: UnitId): UnitConfig {
@@ -303,6 +311,13 @@ export function dailyOffers(state: GameState, now: number): DestinationOffer[] {
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(local([0, i + 1])) % (i + 1);
     [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  // Sites d'expédition capturés sur La Dérive : leur destination remonte en tête du
+  // tirage, donc elle est TOUJOURS proposée. Le nombre d'offres, lui, ne bouge pas
+  // (daily_slots est calibré) — on gagne de la maîtrise, jamais du débit.
+  const guaranteed = new Set(guaranteedDestIds(state.territoire));
+  if (guaranteed.size > 0) {
+    pool.sort((a, b) => Number(guaranteed.has(b.id)) - Number(guaranteed.has(a.id)));
   }
   return pool.slice(0, cfg.daily_slots).map((t) => ({
     destId: t.id,
