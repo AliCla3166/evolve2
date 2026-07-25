@@ -6,60 +6,37 @@
   "map": {
     "$comment": "Un secteur par ecran (mobile) : coordonnees en pourcentage 0..100 dans le repere du secteur affiche. Le fond est dessine au Canvas, pas d'asset a produire.",
     "coord_space": 100,
-    "node_radius_pct": 6.5
+    "node_radius_pct": 6.5,
+    "$comment_relais": "Les relais de derive : les destinations d'expedition du jour n'appartiennent a aucun secteur, elles derivent avec le joueur. On les pose donc sur la meme bande haute quel que soit le secteur affiche, hors de la trajectoire de tous les foyers de tous les secteurs (aucun foyer au-dessus de y=24). Le port est le point d'embarquement des escouades, en bas de carte, sous tous les foyers (aucun foyer sous y=82). Le nombre de fentes doit rester egal a military_config.expeditions.daily_slots.",
+    "relais": {
+      "radius_pct": 4.6,
+      "color": "#7ee8fa",
+      "icon": "⚓",
+      "port": { "x": 50, "y": 96 },
+      "slots": [
+        { "x": 16, "y": 10 },
+        { "x": 38, "y": 8 },
+        { "x": 62, "y": 8 },
+        { "x": 84, "y": 10 }
+      ]
+    }
   },
 
   "natures": {
     "$comment": "Les six natures de foyer. `assault` = ce foyer se prend en gagnant une sortie a son palier. `icon` et `color` servent au rendu de la carte (TerritoireScene.tsx) : ils vivent ici et pas dans le TypeScript, comme les icones d'unite de military_config.json. Aucun asset a produire : un glyphe suffit et reste lisible a la taille d'un noeud.",
     "gisement": {
       "name": "Gisement",
-      "desc": "Rapporte une ressource en continu, meme hors ligne. Se developpe en 5 niveaux.",
+      "desc": "Rapporte une ressource en continu, même hors ligne. Se développe niveau après niveau, et chaque niveau ouvre une place d'équipage.",
       "assault": true,
       "repeatable": false,
       "icon": "💎",
       "color": "#a6ff3d"
     },
-    "expedition": {
-      "name": "Site d'expédition",
-      "desc": "Une fois pris, cette destination devient disponible en permanence au Noyau.",
-      "assault": true,
-      "repeatable": false,
-      "icon": "🧭",
-      "color": "#6df6ff"
-    },
-    "vestige": {
-      "name": "Vestige",
-      "desc": "Bonus global permanent, acquis une seule fois.",
-      "assault": true,
-      "repeatable": false,
-      "icon": "🏺",
-      "color": "#c48bff"
-    },
-    "cache": {
-      "name": "Cache",
-      "desc": "Butin unique : ressources, fragments et monnaie de combat.",
-      "assault": true,
-      "repeatable": false,
-      "icon": "📦",
-      "color": "#ffd15c"
-    },
-    "antre": {
-      "name": "Antre",
-      "desc": "Un boss. Coûte une Percée pour être assailli — le rendez-vous du soir.",
-      "assault": true,
-      "repeatable": false,
-      "requires_percee": true,
-      "icon": "👑",
-      "color": "#ff6b6b"
-    },
-    "abime": {
-      "name": "Abîme",
-      "desc": "Sans fin. Se rejoue indéfiniment, toujours calé sur votre palier du moment.",
-      "assault": true,
-      "repeatable": true,
-      "icon": "🌀",
-      "color": "#ff8bd6"
-    }
+    "expedition": { "name": "Site d'expédition", "desc": "Une fois pris, cette destination devient disponible en permanence au Noyau.", "assault": true, "repeatable": false, "icon": "🧭", "color": "#6df6ff" },
+    "vestige": { "name": "Vestige", "desc": "Bonus global permanent, acquis une seule fois.", "assault": true, "repeatable": false, "icon": "🏺", "color": "#c48bff" },
+    "cache": { "name": "Cache", "desc": "Butin unique : ressources, fragments et monnaie de combat.", "assault": true, "repeatable": false, "icon": "📦", "color": "#ffd15c" },
+    "antre": { "name": "Antre", "desc": "Un boss. Coûte une Percée pour être assailli — le rendez-vous du soir.", "assault": true, "repeatable": false, "requires_percee": true, "icon": "👑", "color": "#ff6b6b" },
+    "abime": { "name": "Abîme", "desc": "Sans fin. Se rejoue indéfiniment, toujours calé sur votre palier du moment.", "assault": true, "repeatable": true, "icon": "🌀", "color": "#ff8bd6" }
   },
 
   "income": {
@@ -78,7 +55,36 @@
     "cost_hours_base": 8,
     "cost_hours_growth": 1.7,
     "cost_combat_base": 25,
-    "cost_combat_growth": 1.6
+    "cost_combat_growth": 1.6,
+    "$comment_profond": "ETAPE D — AUCUN PLAFOND. Au-dela de income.max_level, le developpement continue sans fin. Le cout en RESSOURCE cesse alors de croitre (il reste fige au cout du dernier palier calibre) : le stockage de la base est fini, une exigence en heures de production qui grimperait indefiniment finirait par depasser la reserve maximale et creerait exactement le mur que cette etape supprime. Toute la croissance passe donc dans la MONNAIE DE COMBAT, qui n'est plafonnee par aucun stockage (resourceCap renvoie Infinity pour 'combat') et qui se gagne en re-conquerant des foyers a des paliers toujours plus hauts. La boucle est fermee et sans terminus : on se bat pour developper, on developpe pour que les reconquetes paient plus.",
+    "deep_cost_combat_growth": 1.32
+  },
+
+  "reconquete": {
+    "$comment": "ETAPE D — QU'ON NE VOIE JAMAIS LA FIN. Ce que seul l'Abime faisait devient la regle de toute la carte : un foyer pris se re-defie indefiniment. Son palier remonte AU-DESSUS du joueur (palier_offset) et gagne palier_step par reconquete deja menee, si bien qu'aucun foyer ne redevient jamais une formalite. Un foyer n'affiche donc plus 'termine' mais 'palier 34 - 4e reconquete'.",
+    "$comment_equilibre": "Aucun bonus de vestige n'est re-accorde : territoireBonus() compte une CAPTURE, pas des passages. Une reconquete ne paie qu'en monnaie de combat, en fragments et en ressources indexees sur la production du moment — deux economies hors du calibrage 90 jours (le simulateur ne modele ni la monnaie de combat ni le territoire). Le revenu horaire, lui, reste borne par income.total_income_cap_ratio quoi qu'il arrive.",
+    "palier_offset": 2,
+    "palier_step": 3,
+    "combat_base": 40,
+    "combat_per_palier": 7,
+    "hours_base": 1.2,
+    "hours_per_palier": 0.05,
+    "fragments_every_runs": 3,
+    "$comment_profond": "deep_loot_gain : chaque niveau de developpement AU-DELA de income.max_level ne rend plus davantage de ressources par heure (le plafond dur du revenu tient), il augmente de 12 % le butin de reconquete de ce foyer. Les niveaux profonds gardent donc une valeur reelle et non bornee, dans la seule economie que rien ne calibre.",
+    "deep_loot_gain": 0.12
+  },
+
+  "recolte": {
+    "$comment": "LA RECOLTE (etape B) — le circuit de Grow Castle boucle ici : on peche une creature, on la POSTE sur un gisement capture, elle y travaille en boucle a l'ecran et le gisement rend davantage. Le rendement d'un gisement devient base_ratio * mult_per_level^dev * MULTIPLICATEUR D'EQUIPAGE. L'equipage n'introduit aucune donnee par espece : sa puissance de recolte est derivee des trois puissances deja portees par les 62 especes (poids dans mare_config.json -> recolte.stat_weights).",
+    "$comment_slots": "Le nombre de places d'un gisement suit son developpement : slots_base + slots_per_dev * dev, soit 1 place a la prise et 6 a plein developpement. Developper un gisement n'augmente donc plus seulement son rendement, il ouvre aussi de la place pour la collection — les deux progressions se nourrissent.",
+    "$comment_plafond": "mult_max borne l'apport d'un equipage a x2,0. Combine au plafond dur income.total_income_cap_ratio (0,4), qui suit EXACTEMENT le meme facteur d'equipage (cf. territoire.ts), la carte plafonne a 80 % de la production de base par ressource au lieu de 40 % — et seulement pour un joueur qui a peche, capture, developpe ET poste. La promesse d'origine tient : la carte n'egale jamais la base a elle seule. Une sauvegarde sans equipage se comporte au bit pres comme avant l'etape B.",
+    "$comment_slots_max": "Le developpement n'a plus de plafond (etape D) mais les places d'equipage, si : au-dela de six portraits en orbite autour d'un noeud, la carte devient illisible sur un telephone. slots_max = 6 vaut exactement slots_base + slots_per_dev * income.max_level, donc rien ne change pour une partie existante.",
+    "slots_base": 1,
+    "slots_per_dev": 1,
+    "slots_max": 6,
+    "bonus_per_creature": 0.08,
+    "bonus_per_power": 0.006,
+    "mult_max": 2.0
   },
 
   "vestiges": {
@@ -181,7 +187,17 @@
         { "id": "s4_fumeur", "name": "Fumeur abyssal", "nature": "expedition", "palier": 48, "x": 46, "y": 76, "dest_id": "fumeur" },
         { "id": "s4_vessie", "name": "Vessie fossile", "nature": "vestige", "palier": 52, "x": 58, "y": 44, "bonus": "storage_mult", "value": 0.15 },
         { "id": "s4_veine", "name": "Veine hadale", "nature": "gisement", "palier": 58, "x": 72, "y": 68, "resource": "adn" },
-        { "id": "s4_antre_leviathan", "name": "Antre du léviathan cellulaire", "nature": "antre", "palier": 65, "x": 86, "y": 34, "boss_name": "Léviathan cellulaire", "bonus": "production_mult", "value": 0.08 }
+        {
+          "id": "s4_antre_leviathan",
+          "name": "Antre du léviathan cellulaire",
+          "nature": "antre",
+          "palier": 65,
+          "x": 86,
+          "y": 34,
+          "boss_name": "Léviathan cellulaire",
+          "bonus": "production_mult",
+          "value": 0.08
+        }
       ]
     }
   ]

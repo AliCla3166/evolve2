@@ -5,8 +5,15 @@
    défense ou expédition (passerelle vers la couche militaire). */
 
 import rawConfig from "@/data/mare_config.json";
-import { bonusValue } from "./territoire";
-import type { CardAssignments, CardEntry, GameState } from "./types";
+import {
+  bonusValue,
+  crewMult,
+  crewOf,
+  crewSlots,
+  TERRITOIRE_RECOLTE,
+  type CrewMultOf,
+} from "./territoire";
+import type { CardAssignments, CardEntry, GameState, TerritoireState } from "./types";
 
 /* ---------- Typage de la config ---------- */
 
@@ -87,6 +94,9 @@ export interface MareConfig {
   level_thresholds: number[];
   level_power_bonus: number;
   assign_slots: { defense: number; expedition: number };
+  /** Poids de dérivation de la puissance de RÉCOLTE (étape B) : aucune donnée
+   *  nouvelle par espèce, la stat se calcule sur les trois puissances existantes. */
+  recolte: { stat_weights: { def: number; exp: number; atk: number } };
   species: SpeciesConfig[];
 }
 
@@ -171,6 +181,80 @@ export function cardPowerAtk(speciesId: string, entry: CardEntry): number {
 export function cardHp(speciesId: string, entry: CardEntry): number {
   const sp = speciesConfig(speciesId);
   return sp ? Math.round(sp.hp * cardMult(entry)) : 0;
+}
+
+/** Puissance de RÉCOLTE d'une carte (étape B). Stat entièrement DÉRIVÉE des trois
+ *  puissances déjà portées par les 62 espèces, pondérées par mare_config -> recolte :
+ *  les exploratrices sont les meilleures récolteuses, mais aucune espèce n'est nulle
+ *  au travail — une commune gardée longtemps finit par valoir un poste. Zéro donnée
+ *  nouvelle par espèce, zéro nouvelle formule de puissance. */
+export function cardPowerRec(speciesId: string, entry: CardEntry): number {
+  const sp = speciesConfig(speciesId);
+  if (!sp) return 0;
+  const w = MARE.recolte.stat_weights;
+  const raw = sp.power_def * w.def + sp.power_exp * w.exp + sp.power_atk * w.atk;
+  return Math.round(raw * cardMult(entry));
+}
+
+/* ---------- L'équipage d'un gisement (étape B) ----------
+
+   cards.ts est le SEUL module qui voit à la fois la collection (mare_config.json) et
+   la carte (territoire.ts) — territoire.ts ne peut pas nous importer en retour sans
+   créer un cycle. La jointure des deux vit donc ici, et territoire.ts la reçoit sous
+   forme de callback, exactement comme il reçoit déjà `prodPerHour`. */
+
+/** Apport d'UNE créature au rendement d'un gisement : une prime de présence, plus
+ *  une part indexée sur sa puissance de récolte. Poster n'importe qui aide un peu ;
+ *  poster la bonne carte, montée en niveau, aide beaucoup. */
+export function creatureRecolteBonus(speciesId: string, entry: CardEntry): number {
+  const r = TERRITOIRE_RECOLTE;
+  return r.bonus_per_creature + r.bonus_per_power * cardPowerRec(speciesId, entry);
+}
+
+/** Bonus BRUT (non borné) de l'équipage d'un gisement, places excédentaires ignorées. */
+export function crewBonus(
+  state: Pick<GameState, "collection" | "territoire">,
+  foyerId: string,
+): number {
+  const ids = crewOf(state.territoire, foyerId).slice(0, crewSlots(state.territoire, foyerId));
+  let sum = 0;
+  for (const id of ids) {
+    const entry = state.collection[id];
+    if (entry) sum += creatureRecolteBonus(id, entry);
+  }
+  return sum;
+}
+
+/** Multiplicateur de rendement du gisement, borné par recolte.mult_max. */
+export function foyerCrewMult(
+  state: Pick<GameState, "collection" | "territoire">,
+  foyerId: string,
+): number {
+  return crewMult(crewBonus(state, foyerId));
+}
+
+/** Le callback attendu par territoireIncomePerHour / territoireAccrual.
+ *  Mémoïsé : le tick appelle ce callback une fois par gisement capturé et par seconde. */
+export function crewMultOf(
+  state: Pick<GameState, "collection" | "territoire">,
+): CrewMultOf {
+  const cache = new Map<string, number>();
+  return (foyerId: string) => {
+    const hit = cache.get(foyerId);
+    if (hit !== undefined) return hit;
+    const value = foyerCrewMult(state, foyerId);
+    cache.set(foyerId, value);
+    return value;
+  };
+}
+
+/** Une espèce est-elle disponible pour être postée / assignée ailleurs ?
+ *  (Sert à griser une carte déjà au travail dans les listes de choix.) */
+export function crewSlotsFree(
+  t: TerritoireState,
+  foyerId: string,
+): number {
+  return Math.max(0, crewSlots(t, foyerId) - crewOf(t, foyerId).length);
 }
 
 /* ---------- Bonus d'assignation (passerelle vers le militaire) ---------- */

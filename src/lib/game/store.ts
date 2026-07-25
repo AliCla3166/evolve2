@@ -18,6 +18,7 @@ import {
   OFFLINE_REPORT,
   resourceCap,
   SAVE_VERSION,
+  stateProductionPerHour,
   totalProductionPerHour,
 } from "./economy";
 import { effectiveReserveCap, freshBastionState } from "./bastion/config";
@@ -84,9 +85,10 @@ import {
 import { applyMilestoneReward, MILESTONES, milestoneView } from "./milestones";
 import {
   bonusValue,
+  crewOf,
+  crewSlots,
   devCost,
   devLevel,
-  foyerAvailable,
   foyerDef,
   freshTerritoireState,
   isCaptured,
@@ -103,9 +105,11 @@ import {
   TUTORIAL_DONE,
   type BuildingId,
   type BuildTask,
+  type FoyerState,
   type GameState,
   type HabitDayEntry,
   type ResourceId,
+  type TerritoireState,
   type UnitId,
 } from "./types";
 
@@ -197,6 +201,10 @@ interface GameActions {
   fuseFragments: () => boolean;
   /** Assigne/retire une carte d'un slot défense/expédition. */
   toggleCardAssign: (speciesId: string, slot: "defense" | "expedition") => boolean;
+  /** Poste/retire une créature à l'équipage de récolte d'un gisement capturé.
+   *  Exclusivité stricte : une créature ne tient qu'UN poste à la fois (défense,
+   *  expédition, ou un seul gisement) — la poster la retire d'office d'ailleurs. */
+  toggleCrew: (foyerId: string, speciesId: string) => boolean;
   /** Ferme la modal de révélation. */
   clearLastCatch: () => void;
   /** Adopte une sauvegarde (sync cloud) — remplace l'état local entier. */
@@ -301,6 +309,23 @@ export function hydrateActiveSlot(): void {
   void Promise.resolve(useGame.persist.rehydrate()).then(() => {
     useGame.setState({ activeSlot: slot });
   });
+}
+
+/** Retire une espèce de TOUS les équipages de récolte de la carte.
+ *  Renvoie l'objet d'origine si elle n'était postée nulle part — pas de nouvel objet,
+ *  donc pas de re-rendu inutile des sélecteurs qui lisent `territoire`. */
+function stripFromCrews(t: TerritoireState, speciesId: string): TerritoireState {
+  let touched = false;
+  const foyers: Record<string, FoyerState> = {};
+  for (const [id, st] of Object.entries(t.foyers)) {
+    if (st.crew?.includes(speciesId)) {
+      touched = true;
+      foyers[id] = { ...st, crew: st.crew.filter((s) => s !== speciesId) };
+    } else {
+      foyers[id] = st;
+    }
+  }
+  return touched ? { ...t, foyers } : t;
 }
 
 /** Extrait la partie GameState pure du store (sans les actions). */
@@ -769,7 +794,57 @@ export const useGame = create<GameStore>()(
           if (next[slot].length >= cap) return false; // slot plein
           next[slot] = [...next[slot], speciesId];
         }
-        set({ cardAssignments: next });
+        // Exclusivité : une créature en défense ou en expédition quitte son poste de
+        // récolte. Sans ça, la même carte compterait deux fois (bonus militaire ET
+        // rendement de gisement) et se verrait travailler sur la carte tout en étant
+        // censée garder le Bastion — incohérent à l'écran comme à l'équilibrage.
+        const territoire = inSlot ? get().territoire : stripFromCrews(get().territoire, speciesId);
+        set({ cardAssignments: next, territoire });
+        return true;
+      },
+
+      toggleCrew: (foyerId, speciesId) => {
+        const state = get();
+        if (!state.collection[speciesId] || !SPECIES_IDS.includes(speciesId)) return false;
+        const foyer = foyerDef(foyerId);
+        // On ne poste que sur un gisement effectivement pris : c'est le lieu qui
+        // porte l'équipage, il faut donc qu'il nous appartienne.
+        if (!foyer || foyer.nature !== "gisement") return false;
+        if (!isCaptured(state.territoire, foyerId)) return false;
+
+        const current = crewOf(state.territoire, foyerId);
+        if (current.includes(speciesId)) {
+          const st = state.territoire.foyers[foyerId];
+          set({
+            territoire: {
+              ...state.territoire,
+              foyers: {
+                ...state.territoire.foyers,
+                [foyerId]: { ...st, crew: current.filter((id) => id !== speciesId) },
+              },
+            },
+          });
+          return true;
+        }
+
+        if (current.length >= crewSlots(state.territoire, foyerId)) return false; // gisement plein
+        // Exclusivité, dans l'autre sens : poster une créature la retire de la défense,
+        // des expéditions et de tout autre gisement.
+        const base = stripFromCrews(state.territoire, speciesId);
+        const st = base.foyers[foyerId];
+        set({
+          cardAssignments: {
+            defense: state.cardAssignments.defense.filter((id) => id !== speciesId),
+            expedition: state.cardAssignments.expedition.filter((id) => id !== speciesId),
+          },
+          territoire: {
+            ...base,
+            foyers: {
+              ...base.foyers,
+              [foyerId]: { ...st, crew: [...(st.crew ?? []), speciesId] },
+            },
+          },
+        });
         return true;
       },
 
@@ -943,7 +1018,8 @@ export const useGame = create<GameStore>()(
 
         const foyer = targetId ? foyerDef(targetId) : null;
         if (targetId && !foyer) return false;
-        if (foyer && !foyerAvailable(s.territoire, foyer)) return false;
+        // Étape D : aucun foyer ne se ferme jamais — un foyer pris se reprend à un
+        // palier relevé. Seule l'ouverture du secteur garde encore la porte.
         if (foyer && !sectorUnlocked(sectorOfFoyer(foyer.id)!, s.waveCount)) return false;
         // Un antre ne s'ouvre qu'avec une Percée : c'est la récompense du Bilan du soir.
         if (foyer && natureDef(foyer.nature).requires_percee && !perceeOptionId) return false;
@@ -991,7 +1067,13 @@ export const useGame = create<GameStore>()(
         const foyer = foyerDef(foyerId);
         if (!foyer || !isCaptured(s.territoire, foyerId)) return false;
         const dev = devLevel(s.territoire, foyerId);
-        const cost = devCost(foyer, dev, totalProductionPerHour(s.buildings));
+        /* `stateProductionPerHour` et non `totalProductionPerHour` : la fiche du foyer
+           affiche le coût avec ce calcul-là (vestiges `production_mult` compris). Les
+           deux divergeaient dès qu'un vestige de production était pris — l'écran
+           annonçait un prix, le moteur en prélevait un autre. Le devis est désormais
+           calculé une seule façon, et c'est celle qui reflète la production réelle :
+           un développement coûte N heures de ce que le joueur produit VRAIMENT. */
+        const cost = devCost(foyer, dev, stateProductionPerHour(s));
         if (!cost) return false;
         if (s.resources[cost.resource] < cost.amount) return false;
         if (s.resources.combat < cost.combat) return false;
@@ -1204,6 +1286,16 @@ export const useGame = create<GameStore>()(
         // de sortie, le champ n'a donc jamais valu autre chose que `false`.
         if (version < 13 || state.bastion.sortiePerceeId === undefined) {
           state.bastion.sortiePerceeId = null;
+        }
+        // v13 -> v14 : l'équipage de récolte. Chaque foyer déjà pris reçoit un équipage
+        // VIDE — et c'est exactement la bonne valeur : un équipage vide vaut un
+        // multiplicateur de 1, donc le revenu d'un joueur existant ne bouge pas d'un
+        // point tant qu'il n'a posté personne. Il découvre simplement, sur la fiche de
+        // ses gisements, une place de travail qui l'attend.
+        if (version < 14) {
+          for (const st of Object.values(state.territoire?.foyers ?? {})) {
+            if (st.crew === undefined) st.crew = [];
+          }
         }
         state.saveVersion = SAVE_VERSION;
         return state;

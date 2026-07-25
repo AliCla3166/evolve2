@@ -12,13 +12,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { cardArt } from "@/lib/game/cards";
+import { dailyOffers } from "@/lib/game/military";
 import { useGame } from "@/lib/game/store";
 import {
   assaultPalier,
+  crewOf,
   devLevel,
-  foyerAvailable,
+  devSoftCap,
   isCaptured,
-  maxDevLevel,
   natureDef,
   SECTORS,
   sectorUnlocked,
@@ -26,6 +28,26 @@ import {
   type FoyerDef,
   type SectorDef,
 } from "@/lib/game/territoire";
+
+/* ---------- Cache d'images (module-level, partagé entre montages) ----------
+   Même patron que CellScene : les portraits des créatures postées aux gisements
+   sont déjà sur disque, on ne produit aucun asset pour les animer. */
+
+const imgCache = new Map<string, HTMLImageElement>();
+
+function getImage(src: string): HTMLImageElement {
+  let img = imgCache.get(src);
+  if (!img) {
+    img = new Image();
+    img.src = src;
+    imgCache.set(src, img);
+  }
+  return img;
+}
+
+function ready(img: HTMLImageElement): boolean {
+  return img.complete && img.naturalWidth > 0;
+}
 
 /* ---------- Petites aides de dessin ---------- */
 
@@ -64,11 +86,139 @@ const SNOW_COUNT = 46;
 /** Durée du halo qui salue une capture toute fraîche. */
 const CAPTURE_RING_MS = 1400;
 
+/* ---------- L'ÉQUIPAGE AU TRAVAIL (étape B) -------------------------------
+   Ce que le joueur voit, et qui manquait : les créatures qu'il a pêchées puis
+   postées sur un gisement y travaillent réellement à l'écran — elles tournent
+   autour du nœud, plongent dedans, et remontent une bulle de ressource. Un
+   gisement sans équipage reste strictement inerte : rien ne change pour une
+   partie qui n'a encore posté personne. */
+
+/** Un cycle de travail complet : plonger, arracher, remonter. */
+const CREW_CYCLE_MS = 2400;
+/** Tour d'orbite complet autour du gisement. */
+const CREW_ORBIT_MS = 11000;
+/** Cadence d'émission des bulles, DIVISÉE par la taille de l'équipage :
+ *  six créatures au travail font six fois plus de bulles qu'une seule. */
+const MOTE_EVERY_MS = 1150;
+/** Durée de vie d'une bulle qui remonte. */
+const MOTE_LIFE_MS = 2100;
+/** Plafond global de bulles à l'écran — garde-fou de performance. */
+const MOTE_MAX = 90;
+
+/* ---------- LA FAUNE DE FOND (étape C) ------------------------------------
+   Ce qui distingue un secteur d'un autre ne doit pas être qu'une teinte : la
+   zone photique voit passer des bancs rapides, l'abîme de grandes masses lentes.
+   Tout est TRACÉ (aucun asset) et déterministe (aucun Math.random) : la même
+   carte rejoue exactement la même chorégraphie d'un montage à l'autre. */
+
+/** Traversée complète du champ par une silhouette, en secondes. */
+const DRIFTER_CROSS_S = 52;
+
+/** Hachage déterministe id + sel -> 0..1 (même utilitaire que CellScene). */
+function hashed(s: string, salt: number): number {
+  let h = (2166136261 ^ salt) >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return (h % 100000) / 100000;
+}
+
+/** Silhouette d'un nageur : un corps fuselé et une caudale, tracés à l'origine,
+ *  orientés vers la droite. L'appelant s'occupe du placement et de l'échelle. */
+function drifterPath(ctx: CanvasRenderingContext2D, len: number, ondul: number): void {
+  const h = len * 0.3;
+  ctx.beginPath();
+  ctx.moveTo(len * 0.5, 0);
+  ctx.quadraticCurveTo(len * 0.1, -h, -len * 0.3, -h * 0.42 + ondul * h * 0.3);
+  ctx.lineTo(-len * 0.5, -h * 0.85 + ondul * h);
+  ctx.quadraticCurveTo(-len * 0.4, 0, -len * 0.5, h * 0.85 + ondul * h);
+  ctx.lineTo(-len * 0.3, h * 0.42 + ondul * h * 0.3);
+  ctx.quadraticCurveTo(len * 0.1, h, len * 0.5, 0);
+  ctx.closePath();
+}
+
+/** Une bulle de ressource remontant d'un gisement en cours d'exploitation. */
+interface Mote {
+  x: number;
+  y: number;
+  born: number;
+  drift: number;
+  rise: number;
+  r: number;
+  color: string;
+}
+
+/* ---------- LE REVENU QUI TOMBE (étape C) ---------------------------------
+   Une bulle sur cinq ne se dissout pas : elle part vers le port, traverse la
+   carte et s'y écrase en éclat. C'est le chaînon visuel qui manquait — le
+   joueur voit littéralement la matière arrachée par SES créatures rejoindre sa
+   base, au lieu de lire un nombre qui monte dans un panneau. */
+
+/** Durée du trajet gisement -> port. */
+const CONVOY_MS = 3200;
+/** Plafond de convois simultanés — garde-fou de performance. */
+const CONVOY_MAX = 24;
+/** Une bulle sur N devient un convoi (sinon la carte se transforme en autoroute). */
+const CONVOY_EVERY = 5;
+
+/** Une charge de ressource en route vers le port. */
+interface Convoy {
+  x: number;
+  y: number;
+  born: number;
+  bow: number;
+  r: number;
+  color: string;
+}
+
+/** Préfixe qui distingue, dans une même zone cliquable, un relais d'expédition
+ *  (`@courant`) d'un foyer de secteur (`s1_herbier`). Le panneau lit ce préfixe
+ *  pour savoir quelle fiche ouvrir. */
+export const RELAIS_PREFIX = "@";
+
 interface HitZone {
   id: string;
   x: number;
   y: number;
   r: number;
+}
+
+/** Somme des codes de caractères — sert uniquement à donner une place stable sur la
+ *  carte à une expédition dont la destination n'est plus dans les offres du jour
+ *  (les offres tournent à minuit, une escouade partie la veille est encore en mer). */
+function charSum(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) n += s.charCodeAt(i);
+  return n;
+}
+
+/** Point d'une courbe de Bézier quadratique — un trajet en mer n'est jamais droit. */
+function bez(
+  t: number,
+  p0: [number, number],
+  c: [number, number],
+  p1: [number, number],
+): [number, number] {
+  const u = 1 - t;
+  return [
+    u * u * p0[0] + 2 * u * t * c[0] + t * t * p1[0],
+    u * u * p0[1] + 2 * u * t * c[1] + t * t * p1[1],
+  ];
+}
+
+/** Petite étoile à quatre branches TRACÉE (jamais `fillText`) : le glyphe « ✦ »
+ *  se rend comme un point de 2 px dans certains moteurs — piège déjà rencontré
+ *  dans ce projet. Sert à afficher le rang d'une destination. */
+function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x + r * 0.22, y - r * 0.22, x + r, y);
+  ctx.quadraticCurveTo(x + r * 0.22, y + r * 0.22, x, y + r);
+  ctx.quadraticCurveTo(x - r * 0.22, y + r * 0.22, x - r, y);
+  ctx.quadraticCurveTo(x - r * 0.22, y - r * 0.22, x, y - r);
+  ctx.closePath();
+  ctx.fill();
 }
 
 export function TerritoireScene({
@@ -108,6 +258,17 @@ export function TerritoireScene({
     let primed = false;
     const rings: { x: number; y: number; born: number; color: string }[] = [];
 
+    /* Les bulles remontées par les équipages, et la prochaine échéance d'émission
+       de chaque gisement. Vidées au changement de secteur : une bulle appartient
+       à un gisement, elle n'a rien à faire au-dessus d'une autre carte. */
+    const motes: Mote[] = [];
+    const nextMoteAt = new Map<string, number>();
+    /* Les charges en route vers le port, et le compteur qui décide laquelle des
+       bulles arrivées en haut prend la route plutôt que de se dissoudre. */
+    const convoys: Convoy[] = [];
+    let moteSeq = 0;
+    let shownSector = sectorRef.current;
+
     let cssSize = 0;
     let dpr = 1;
     const resize = () => {
@@ -138,6 +299,12 @@ export function TerritoireScene({
       const sector: SectorDef =
         SECTORS.find((s) => s.id === sectorRef.current) ?? SECTORS[0];
       const open = sectorUnlocked(sector, palier);
+      if (sector.id !== shownSector) {
+        shownSector = sector.id;
+        motes.length = 0;
+        convoys.length = 0;
+        nextMoteAt.clear();
+      }
       const space = TERRITOIRE_MAP.coord_space;
       const nodeR = (TERRITOIRE_MAP.node_radius_pct / 100) * S;
 
@@ -187,6 +354,61 @@ export function TerritoireScene({
         }
       }
 
+      /* --- LA FAUNE DE FOND (étape C) ---
+             Plus on descend, moins il y a de monde et plus il est gros : la
+             photique voit passer un banc, l'abîme deux masses. En surface la
+             silhouette est SOMBRE (elle se découpe sur l'eau claire) ; dans le
+             noir elle devient un liseré bioluminescent, sans quoi on ne verrait
+             rien du tout. */
+      const deep = 1 - light; // 0 en surface, 1 dans la fosse
+      const drifters = Math.round(5 - 2 * deep);
+      const tSec = nowMs / 1000;
+      for (let i = 0; i < drifters; i++) {
+        const seed = sector.id;
+        const lane = 0.1 + hashed(seed, i * 7 + 1) * 0.82;
+        const dir = hashed(seed, i * 7 + 2) < 0.5 ? 1 : -1;
+        const speed = DRIFTER_CROSS_S * (0.7 + hashed(seed, i * 7 + 3) * 0.9) * (1 + deep);
+        const len = S * (0.07 + hashed(seed, i * 7 + 4) * 0.05) * (1 + deep * 2.2);
+        const prog = (((tSec / speed + hashed(seed, i * 7 + 5)) % 1) + 1) % 1;
+        const fx = dir > 0 ? prog : 1 - prog;
+        const x = (-0.15 + fx * 1.3) * S;
+        const swim = Math.sin(tSec * (0.5 + hashed(seed, i * 7 + 6) * 0.6) + i * 1.7);
+        const y = (lane + swim * 0.03) * S;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(swim * 0.1);
+        ctx.scale(dir > 0 ? 1 : -1, 1);
+        drifterPath(ctx, len, swim);
+        if (light > 0.35) {
+          // Eau claire : la bête se découpe en ombre, comme vue à contre-jour.
+          ctx.fillStyle = `rgba(3, 10, 18, ${(0.14 + 0.16 * light).toFixed(3)})`;
+          ctx.fill();
+        } else {
+          /* Nuit permanente : une ombre y serait invisible. La créature
+             abyssale se signale par son PROPRE liseré lumineux, qui palpite au
+             rythme de sa nage, et par une rangée de photophores qui s'allument
+             en vague de la tête vers la queue. */
+          const glow = 0.32 + 0.24 * (0.5 + 0.5 * swim);
+          ctx.shadowColor = hexA(sector.tint, 0.6);
+          ctx.shadowBlur = Math.max(5, len * 0.16);
+          ctx.strokeStyle = hexA(sector.tint, glow);
+          ctx.lineWidth = 1.9;
+          ctx.stroke();
+          ctx.fillStyle = hexA(sector.tint, 0.1);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          for (let k = 0; k < 4; k++) {
+            const along = 0.3 - k * 0.19;
+            const bio = 0.5 + 0.5 * Math.sin(tSec * 2.1 - k * 0.85 + i * 1.3);
+            ctx.fillStyle = `rgba(228, 252, 255, ${(0.14 + 0.52 * bio).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.arc(len * along, len * 0.3 * (0.12 + swim * 0.16 * (0.5 - along)), 1 + bio * 1.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+
       /* --- Neige marine --- */
       for (const p of snow) {
         p.y += p.speed * dt;
@@ -230,7 +452,8 @@ export function TerritoireScene({
         const x = px(f);
         const y = py(f);
         const taken = isCaptured(t, f.id);
-        const free = open && foyerAvailable(t, f);
+        // Étape D : plus rien ne « termine » un foyer, seul le secteur peut être fermé.
+        const free = open;
         zones.push({ id: f.id, x, y, r: nodeR * 1.15 });
 
         ctx.save();
@@ -283,7 +506,9 @@ export function TerritoireScene({
         ctx.globalAlpha = 1;
 
         // Pastille du palier, en bas à droite du disque
-        const label = String(assaultPalier(f, palier));
+        // Un foyer déjà pris se re-défie à un palier RELEVÉ (étape D) : la pastille
+        // doit annoncer ce palier-là, pas celui de la première prise.
+        const label = String(assaultPalier(f, palier, t));
         ctx.font = "bold 10px ui-monospace, monospace";
         const w = ctx.measureText(label).width + 8;
         const bx = x + nodeR * 0.72;
@@ -301,20 +526,158 @@ export function TerritoireScene({
         // Jauge de développement d'un gisement : de petits points sous le nœud.
         const dev = devLevel(t, f.id);
         if (taken && f.nature === "gisement") {
-          const max = maxDevLevel();
+          /* Le développement n'a plus de plafond (étape D) : la rangée de points
+             ne peut donc plus être une jauge « x sur y ». On dessine les paliers
+             calibrés — ceux qui augmentent encore le rendement horaire — puis, une
+             fois la rangée pleine, un chevron qui pointe vers la droite et un
+             compteur des niveaux PROFONDS. La rangée reste de largeur fixe : elle
+             ne peut jamais déborder du nœud, si loin qu'aille le joueur. */
+          const soft = devSoftCap();
+          const deepLv = Math.max(0, dev - soft);
           const gap = nodeR * 0.34;
-          const startX = x - (gap * (max - 1)) / 2;
-          for (let i = 0; i < max; i++) {
+          const startX = x - (gap * (soft - 1)) / 2;
+          const gy = y + nodeR * 1.42;
+          for (let i = 0; i < soft; i++) {
             ctx.fillStyle = i < dev ? nat.color : "rgba(150, 200, 210, 0.25)";
             ctx.beginPath();
-            ctx.arc(startX + gap * i, y + nodeR * 1.42, 2.1, 0, Math.PI * 2);
+            ctx.arc(startX + gap * i, gy, 2.1, 0, Math.PI * 2);
             ctx.fill();
+          }
+          if (deepLv > 0) {
+            // Au-delà : la rangée continue hors du cadre, en une pointe qui bat.
+            const ax = startX + gap * (soft - 1) + gap * 0.9;
+            ctx.strokeStyle = hexA(nat.color, 0.75 + 0.25 * pulse);
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(ax - 2, gy - 2.6);
+            ctx.lineTo(ax + 1.6, gy);
+            ctx.lineTo(ax - 2, gy + 2.6);
+            ctx.stroke();
+            ctx.font = "bold 8px ui-monospace, monospace";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = hexA(nat.color, 0.9);
+            ctx.fillText(`+${deepLv}`, ax + 3.4, gy + 0.5);
+            ctx.textAlign = "center";
+          }
+        }
+
+        /* --- L'ÉQUIPAGE AU TRAVAIL (étape B) ---
+               Une créature postée n'est pas une ligne dans un menu : elle tourne
+               autour de son gisement, plonge dedans et en remonte de la matière.
+               C'est le circuit pêche → carte → revenu, rendu visible. */
+        const crew = taken && f.nature === "gisement" ? crewOf(t, f.id) : [];
+        if (crew.length > 0 && open) {
+          // Halo de chantier : plus chaud que celui d'un nœud libre, il dit que
+          // CE gisement produit à cet instant précis.
+          const work = ctx.createRadialGradient(x, y, nodeR * 0.5, x, y, nodeR * 2.2);
+          work.addColorStop(0, hexA(nat.color, 0.15 + 0.09 * pulse));
+          work.addColorStop(1, hexA(nat.color, 0));
+          ctx.fillStyle = work;
+          ctx.beginPath();
+          ctx.arc(x, y, nodeR * 2.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          const size = nodeR * 0.74;
+          for (let i = 0; i < crew.length; i++) {
+            // Cycle décalé par créature : l'équipage ne plonge jamais en cadence.
+            const ph = ((nowMs + i * 737) % CREW_CYCLE_MS) / CREW_CYCLE_MS;
+            const wave = Math.sin(ph * Math.PI * 2);
+            const dive = wave * 0.5 + 0.5; // 0 = en surface, 1 = au fond du gisement
+            const a =
+              (nowMs / CREW_ORBIT_MS) * Math.PI * 2 + (i / crew.length) * Math.PI * 2;
+            // Orbite écrasée : la carte est vue de dessus, les créatures tournent
+            // dans un plan incliné plutôt que sur un cercle parfait.
+            const rad = nodeR * (1.8 - 0.74 * dive);
+            const cx = x + Math.cos(a) * rad;
+            const cy = y + Math.sin(a) * rad * 0.72;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(wave * 0.34);
+            ctx.fillStyle = "rgba(5, 11, 20, 0.6)";
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.54, 0, Math.PI * 2);
+            ctx.fill();
+            const img = getImage(cardArt(crew[i]));
+            if (ready(img)) {
+              ctx.save();
+              ctx.clip();
+              ctx.drawImage(img, -size / 2, -size / 2, size, size);
+              ctx.restore();
+            } else {
+              // Repli tant que le portrait n'est pas chargé : une silhouette teintée.
+              ctx.fillStyle = hexA(nat.color, 0.85);
+              ctx.beginPath();
+              ctx.arc(0, 0, size * 0.34, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.strokeStyle = hexA(nat.color, 0.5 + 0.4 * dive);
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.54, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // Émission des bulles : la cadence est divisée par la taille de l'équipage,
+          // donc un gisement à six postes bouillonne visiblement plus qu'un à un poste.
+          if (nowMs >= (nextMoteAt.get(f.id) ?? 0)) {
+            nextMoteAt.set(f.id, nowMs + MOTE_EVERY_MS / crew.length);
+            if (motes.length < MOTE_MAX) {
+              motes.push({
+                x: x + (Math.random() - 0.5) * nodeR * 0.9,
+                y: y - nodeR * 0.15,
+                born: nowMs,
+                drift: (Math.random() - 0.5) * nodeR * 0.6,
+                rise: nodeR * (2.2 + Math.random() * 1.7),
+                r: 1.5 + Math.random() * 1.8,
+                color: nat.color,
+              });
+            }
           }
         }
 
         ctx.restore();
       }
-      hitZonesRef.current = zones;
+
+      /* --- Les bulles remontées par les équipages ---
+             Dessinées après tous les nœuds : la matière remonte PAR-DESSUS la carte,
+             comme des bulles qui quittent le fond. */
+      for (let i = motes.length - 1; i >= 0; i--) {
+        const m = motes[i];
+        const age = (nowMs - m.born) / MOTE_LIFE_MS;
+        if (age >= 1) {
+          // Arrivée en haut de sa course : une bulle sur CONVOY_EVERY ne se
+          // dissout pas, elle prend la route du port. Le revenu du territoire
+          // cesse d'être un nombre : on le voit traverser la carte.
+          if (++moteSeq % CONVOY_EVERY === 0 && convoys.length < CONVOY_MAX) {
+            convoys.push({
+              x: m.x + m.drift,
+              y: m.y - m.rise,
+              born: nowMs,
+              bow: (hashed(m.color, moteSeq) - 0.5) * 0.34,
+              r: m.r * 1.25,
+              color: m.color,
+            });
+          }
+          motes.splice(i, 1);
+          continue;
+        }
+        const mx = m.x + m.drift * age + Math.sin(age * 7 + m.drift) * 1.8;
+        const my = m.y - m.rise * age;
+        ctx.save();
+        ctx.globalAlpha = age < 0.15 ? age / 0.15 : 1 - (age - 0.15) / 0.85;
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        ctx.arc(mx, my, m.r * (1 - age * 0.3), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.beginPath();
+        ctx.arc(mx - m.r * 0.3, my - m.r * 0.3, m.r * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
 
       /* --- Ondes de choc « foyer capturé » --- */
       for (let i = rings.length - 1; i >= 0; i--) {
@@ -339,6 +702,208 @@ export function TerritoireScene({
         ctx.fillStyle = "rgba(5, 11, 20, 0.55)";
         ctx.fillRect(0, 0, S, S);
       }
+
+      /* --- LES RELAIS DU JOUR ---------------------------------------------------
+             Les expéditions ont quitté le Noyau (cf. PLAN_DERIVE §3.7) : les quatre
+             destinations du jour sont désormais posées ICI, au-dessus des foyers.
+             Elles n'appartiennent à aucun secteur — un relais dérive avec le joueur —
+             donc on les dessine APRÈS le voile : elles restent lisibles et cliquables
+             même si le secteur affiché est encore fermé. */
+      const rel = TERRITOIRE_MAP.relais;
+      const relR = (rel.radius_pct / 100) * S;
+      const offers = dailyOffers(state, state.lastTick);
+      const slotXY = (i: number): [number, number] => {
+        const slot = rel.slots[i % rel.slots.length];
+        return [(slot.x / space) * S, (slot.y / space) * S];
+      };
+      const port: [number, number] = [(rel.port.x / space) * S, (rel.port.y / space) * S];
+      /** Relais actuellement occupés par une escouade en mer. */
+      const busy = new Set(state.expeditions.map((e) => e.destId));
+
+      /* Le port : d'où partent les escouades. Un simple arc tracé, pas d'asset. */
+      ctx.save();
+      ctx.strokeStyle = hexA(rel.color, 0.5);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(port[0], port[1], relR * 1.1, Math.PI, 0);
+      ctx.stroke();
+      ctx.fillStyle = hexA(rel.color, 0.12 + 0.06 * pulse);
+      ctx.beginPath();
+      ctx.arc(port[0], port[1], relR * 1.1, Math.PI, 0);
+      ctx.fill();
+      ctx.restore();
+
+      /* Les trajets en cours : une escouade avance vraiment le long de sa courbe,
+         au prorata du temps écoulé. C'est le seul endroit du jeu où l'on VOIT
+         passer les heures d'une expédition. */
+      for (const exp of state.expeditions) {
+        const idx = offers.findIndex((o) => o.destId === exp.destId);
+        const slotI = idx >= 0 ? idx : charSum(exp.destId) % rel.slots.length;
+        const target = slotXY(slotI);
+        const total = Math.max(1, exp.endsAt - exp.startedAt);
+        const prog = Math.min(1, Math.max(0, (state.lastTick - exp.startedAt) / total));
+        // Le point de contrôle est décalé latéralement : deux escouades parties vers
+        // deux relais voisins ne se superposent jamais.
+        const ctrl: [number, number] = [
+          (port[0] + target[0]) / 2 + S * 0.14 * (slotI % 2 === 0 ? -1 : 1),
+          (port[1] + target[1]) / 2,
+        ];
+
+        ctx.save();
+        // Trajet complet, en pointillé discret.
+        ctx.strokeStyle = hexA(rel.color, 0.16);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 7]);
+        ctx.beginPath();
+        ctx.moveTo(port[0], port[1]);
+        ctx.quadraticCurveTo(ctrl[0], ctrl[1], target[0], target[1]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Portion déjà parcourue, pleine : le sillage.
+        ctx.strokeStyle = hexA(rel.color, 0.5);
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(port[0], port[1]);
+        for (let s = 1; s <= 40; s++) {
+          const t = (s / 40) * prog;
+          const p = bez(t, port, ctrl, target);
+          ctx.lineTo(p[0], p[1]);
+        }
+        ctx.stroke();
+
+        // L'escouade : une nacelle et sa traîne de créatures, qui ondulent en nageant.
+        for (let k = 0; k < 3; k++) {
+          const t = Math.max(0, prog - k * 0.028);
+          const p = bez(t, port, ctrl, target);
+          const wob = Math.sin(nowMs / 340 + k * 1.7 + exp.id) * relR * 0.22;
+          const rr = relR * (k === 0 ? 0.42 : 0.2);
+          ctx.globalAlpha = k === 0 ? 0.95 : 0.6 - k * 0.12;
+          ctx.fillStyle = rel.color;
+          ctx.beginPath();
+          ctx.ellipse(p[0] + wob, p[1], rr * 1.25, rr, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      /* Les quatre relais eux-mêmes. */
+      for (let i = 0; i < offers.length && i < rel.slots.length; i++) {
+        const offer = offers[i];
+        const [x, y] = slotXY(i);
+        const taken = busy.has(offer.destId);
+        const id = RELAIS_PREFIX + offer.destId;
+        zones.push({ id, x, y, r: relR * 1.5 });
+
+        ctx.save();
+        // Halo : un relais libre appelle, un relais occupé attend son escouade.
+        const glow = ctx.createRadialGradient(x, y, relR * 0.2, x, y, relR * 2.1);
+        glow.addColorStop(0, hexA(rel.color, taken ? 0.1 : 0.2 + 0.12 * pulse));
+        glow.addColorStop(1, hexA(rel.color, 0));
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(x, y, relR * 2.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(6, 14, 24, 0.85)";
+        ctx.beginPath();
+        ctx.arc(x, y, relR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = hexA(rel.color, taken ? 0.4 : 0.55 + 0.35 * pulse);
+        ctx.lineWidth = taken ? 1.2 : 1.8;
+        if (taken) ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(x, y, relR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (selectedRef.current === id) {
+          ctx.strokeStyle = `rgba(255, 207, 77, ${(0.55 + 0.4 * pulse).toFixed(3)})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, relR * (1.35 + 0.08 * pulse), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.globalAlpha = taken ? 0.5 : 1;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `${Math.round(relR * 1.1)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.fillText(rel.icon, x, y + relR * 0.04);
+        ctx.globalAlpha = 1;
+
+        // Rang de la destination : des étoiles TRACÉES, sous le disque.
+        ctx.fillStyle = hexA(rel.color, 0.9);
+        const sr = relR * 0.2;
+        const sx = x - (sr * 2.6 * (offer.tier - 1)) / 2;
+        for (let s = 0; s < offer.tier; s++) star(ctx, sx + s * sr * 2.6, y + relR * 1.5, sr);
+
+        ctx.restore();
+      }
+
+      /* --- LE REVENU QUI TOMBE (étape C) ---
+             Dessiné en tout dernier, donc au-dessus des relais : la charge
+             arrachée par l'équipage file vers le port et s'y écrase en éclat.
+             Rien ici ne modifie l'état du jeu — c'est la lecture visuelle d'un
+             revenu déjà calculé par le moteur, pas une seconde source de vérité. */
+      for (let i = convoys.length - 1; i >= 0; i--) {
+        const c = convoys[i];
+        const age = (nowMs - c.born) / CONVOY_MS;
+        if (age >= 1) {
+          convoys.splice(i, 1);
+          continue;
+        }
+        const from: [number, number] = [c.x, c.y];
+        // Point de contrôle décalé perpendiculairement : chaque charge décrit sa
+        // propre courbe, deux convois du même gisement ne se superposent pas.
+        const mx0 = (from[0] + port[0]) / 2;
+        const my0 = (from[1] + port[1]) / 2;
+        const ctrl2: [number, number] = [
+          mx0 - (port[1] - from[1]) * c.bow,
+          my0 + (port[0] - from[0]) * c.bow,
+        ];
+        const p = bez(age, from, ctrl2, port);
+
+        ctx.save();
+        // Traîne : quelques positions en arrière sur la même courbe.
+        for (let k = 3; k >= 1; k--) {
+          const tt = Math.max(0, age - k * 0.035);
+          const q = bez(tt, from, ctrl2, port);
+          ctx.globalAlpha = 0.1 * (4 - k);
+          ctx.fillStyle = c.color;
+          ctx.beginPath();
+          ctx.arc(q[0], q[1], c.r * (1 - k * 0.18), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.shadowColor = c.color;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = c.color;
+        ctx.beginPath();
+        ctx.arc(p[0], p[1], c.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+        ctx.beginPath();
+        ctx.arc(p[0] - c.r * 0.3, p[1] - c.r * 0.3, c.r * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Impact : le port encaisse la livraison par un anneau qui s'ouvre.
+        if (age > 0.86) {
+          const k = (age - 0.86) / 0.14;
+          ctx.globalAlpha = 1 - k;
+          ctx.strokeStyle = c.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(port[0], port[1], relR * (0.6 + k * 1.5), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      hitZonesRef.current = zones;
     };
 
     raf = requestAnimationFrame(draw);
@@ -367,7 +932,7 @@ export function TerritoireScene({
         ref={canvasRef}
         onClick={handleClick}
         className="touch-manipulation cursor-pointer rounded-md"
-        aria-label="Carte de La Dérive — touchez un foyer pour ouvrir sa fiche"
+        aria-label="Carte de La Dérive — touchez un foyer ou un relais pour ouvrir sa fiche"
       />
     </div>
   );

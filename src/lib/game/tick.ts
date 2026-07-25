@@ -10,6 +10,7 @@
      sans ça, le joueur revenait devant un état muet et ne voyait jamais le coût
      réel d'un stockage saturé. */
 
+import { crewMultOf } from "./cards";
 import {
   buildingProductionPerHour,
   getBuildingConfig,
@@ -110,7 +111,14 @@ function credit(state: GameState, id: ResourceId, amount: number, out: TickSumma
    n'est pas `lastTick`. */
 
 function accrueTerritoire(state: GameState, now: number, out: TickSummary): void {
-  const gains = territoireAccrual(state.territoire, stateProductionPerHour(state), now);
+  /* L'équipage posté sur chaque gisement amplifie son rendement (étape B). Sans
+     équipage, `crewMultOf` renvoie 1 partout et le calcul est identique à l'avant. */
+  const gains = territoireAccrual(
+    state.territoire,
+    stateProductionPerHour(state),
+    now,
+    crewMultOf(state),
+  );
   for (const [res, amount] of Object.entries(gains)) {
     if ((amount ?? 0) > 0) credit(state, res as ResourceId, amount ?? 0, out);
   }

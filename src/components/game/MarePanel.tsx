@@ -13,8 +13,10 @@ import {
   cardPowerAtk,
   cardPowerDef,
   cardPowerExp,
+  cardPowerRec,
   cardsDefenseBonus,
   cardsExpeditionExpBonus,
+  creatureRecolteBonus,
   jetonMax,
   MARE,
   nextLevelAt,
@@ -23,6 +25,7 @@ import {
 import { effectiveReserveCap } from "@/lib/game/bastion/config";
 import { fmtInt } from "@/lib/game/format";
 import { useGame } from "@/lib/game/store";
+import { crewedSpecies, foyerDef, foyerOfCrewSpecies } from "@/lib/game/territoire";
 
 /* ---------- Paillettes (spawn visuel côté client, comme la v1) ---------- */
 
@@ -263,6 +266,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   const energie = useGame((s) => s.resources.energie);
   const collection = useGame((s) => s.collection);
   const assignments = useGame((s) => s.cardAssignments);
+  const territoire = useGame((s) => s.territoire);
   // Le plafond "défense" alimente la réserve plaçable du Bastion-Défense jouable —
   // dynamique : acheté en Boutique + relevé par le vestige "Carcasse-atelier" de
   // La Dérive (cf. effectiveReserveCap, la même source que store.toggleCardAssign).
@@ -335,6 +339,11 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
 
   const defBonus = cardsDefenseBonus({ collection, cardAssignments: assignments });
   const expBonus = cardsExpeditionExpBonus({ collection, cardAssignments: assignments });
+  // Le troisième poste possible d'une carte : la RÉCOLTE, sur un gisement de La
+  // Dérive. Il ne s'attribue pas d'ici (c'est le lieu qui porte son équipage, on
+  // poste depuis la fiche du gisement) — La Mare se contente de le montrer, pour
+  // qu'on sache toujours où travaille une créature absente de la défense.
+  const postees = crewedSpecies(territoire);
 
   // Pendant le mini-jeu : le panneau passe au-dessus de la barre de navigation
   // (z-40) et tout ce qui n'est pas le bassin devient inerte — un appui égaré
@@ -470,6 +479,11 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
               🛡️ Défense : bonus passif de la cellule ET réserve plaçable du Bastion-Défense jouable
               (plafond achetable dans sa Boutique).
             </p>
+            <p className="text-center text-[10px] text-cell-teal/50">
+              ⛏️ Récolte : {postees.size} créature{postees.size > 1 ? "s" : ""} au travail sur les
+              gisements de La Dérive. Une créature ne tient qu&apos;UN poste — on la poste depuis la
+              fiche du gisement, sur la carte.
+            </p>
 
             {/* La collection : toutes les espèces de MARE.species (62 au 24/07) */}
             <div className="grid grid-cols-3 gap-2">
@@ -491,6 +505,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 const next = nextLevelAt(entry.count);
                 const inDef = assignments.defense.includes(sp.id);
                 const inExp = assignments.expedition.includes(sp.id);
+                const posteA = foyerOfCrewSpecies(territoire, sp.id);
                 return (
                   <div key={sp.id} className="flex flex-col items-center gap-1">
                     <CardFrame rarity={rar.id as Rarity}>
@@ -521,7 +536,17 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                       <span className="text-cell-teal/70">🛡{cardPowerDef(sp.id, entry)}</span>
                       <span className="text-cell-teal/70">🧭{cardPowerExp(sp.id, entry)}</span>
                       <span className="text-cell-teal/70">⚔{cardPowerAtk(sp.id, entry)}</span>
+                      {/* La 4e puissance, dérivée des trois autres : ce que cette carte
+                          rapporte postée sur un gisement (cf. mare_config.recolte). */}
+                      <span className="text-cell-lime/80">⛏{cardPowerRec(sp.id, entry)}</span>
                     </div>
+                    {posteA && (
+                      <span className="text-center text-[9px] leading-tight text-cell-lime/90">
+                        ⛏️ {foyerDef(posteA)?.name ?? posteA}
+                        {" +"}
+                        {Math.round(creatureRecolteBonus(sp.id, entry) * 100)} %
+                      </span>
+                    )}
                     <div className="mt-0.5 flex w-full gap-1">
                       <button
                         onClick={() => toggleCardAssign(sp.id, "defense")}

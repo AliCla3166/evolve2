@@ -33,6 +33,7 @@ import { useCloudSync } from "@/lib/cloud/useCloudSync";
 import { WAVE_LEAD_WINDOW_MS } from "@/lib/game/bastion/config";
 import { freeSortiesToday, sortiesUsedToday } from "@/lib/game/bastion/sorties";
 import { fmtDuration } from "@/lib/game/format";
+import { dayKey } from "@/lib/game/habits";
 import { portalTarget } from "@/lib/game/scene";
 import { bonusValue } from "@/lib/game/territoire";
 import { installAudio, playCue } from "@/lib/audio";
@@ -193,6 +194,11 @@ function BottomNav({
     freeSortiesToday(bastion, now, bonusValue(territoire, "free_sortie")) -
       sortiesUsedToday(bastion, now),
   );
+  /* Les quatre relais d'expédition sont tirés à partir de dayKey : ils tournent à
+     minuit sans que rien ne le dise. Depuis que les expéditions ont quitté le Noyau,
+     ce signal appartient à DÉRIVE — mais il ne doit pas voler la place du compteur
+     de sorties gratuites, plus urgent. Il ne s'affiche donc qu'à défaut. */
+  const newRelais = useGame((s) => s.noyauSeenDay) !== dayKey(now);
 
   const toggle = (id: Exclude<PanelId, null>) => () => setPanel(panel === id ? null : id);
 
@@ -220,11 +226,13 @@ function BottomNav({
           icon="derive"
           label="DÉRIVE"
           active={panel === "derive"}
-          badge={freeLeft > 0 ? String(freeLeft) : null}
+          badge={freeLeft > 0 ? String(freeLeft) : newRelais ? "🧭" : null}
           title={
             freeLeft > 0
               ? `La Dérive — la carte des eaux (${freeLeft} sortie${freeLeft > 1 ? "s" : ""} gratuite${freeLeft > 1 ? "s" : ""} à jouer aujourd'hui)`
-              : "La Dérive — la carte des eaux : gisements, vestiges, antres"
+              : newRelais
+                ? "La Dérive — les quatre relais d'expédition du jour ont changé"
+                : "La Dérive — la carte des eaux : gisements, vestiges, antres"
           }
           onClick={toggle("derive")}
         />

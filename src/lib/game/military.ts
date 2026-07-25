@@ -33,6 +33,7 @@ import {
   foyerDef,
   guaranteedDestIds,
   natureDef,
+  reconquestLoot,
   TERRITOIRE_ANTRES,
 } from "./territoire";
 import type { LiveWaveResult } from "./bastion/types";
@@ -634,10 +635,42 @@ export function resolveSortie(
 
   if (won && foyer) {
     const entry = touchFoyer(state, foyer.id);
+    // Lu AVANT d'incrémenter : c'est ce qui distingue une prise d'une reconquête.
+    const wasCaptured = entry.capturedAt > 0;
+    const repeatable = natureDef(foyer.nature).repeatable;
     entry.runs += 1;
     const prod = stateProductionPerHour(state);
 
-    if (foyer.nature === "cache") {
+    if (wasCaptured && !repeatable) {
+      /* RECONQUÊTE (étape D) — le foyer était déjà à nous, on vient de le
+         reprendre à un palier plus haut. Le butin de première prise ne retombe
+         pas (une cache ne se vide pas deux fois) : c'est le butin de reconquête,
+         indexé sur le palier réellement joué et amplifié par les niveaux
+         profonds du gisement, qui paie — et lui n'a pas de dernier échelon. */
+      const spoils = reconquestLoot(
+        foyer,
+        result.waveN,
+        entry.dev,
+        entry.runs - 1,
+        prod,
+      );
+      for (const [res, amount] of Object.entries(spoils.resources)) {
+        const gain = Math.round((amount ?? 0) * lootMult);
+        if (gain <= 0) continue;
+        addResource(state, res, gain);
+        loot[res as ResourceId] = (loot[res as ResourceId] ?? 0) + gain;
+        lines.push(`+${fmt(gain)} ${resourceName(res as ResourceId)}`);
+      }
+      const prime = Math.round(spoils.combat * lootMult);
+      if (prime > 0) {
+        addResource(state, "combat", prime);
+        lines.push(`+${fmt(prime)} monnaie de combat (prime de reconquête)`);
+      }
+      fragments += spoils.fragments;
+      // Un antre coûte une Percée à chaque assaut : il paie sa prime à chaque fois.
+      if (foyer.nature === "antre") fragments += antreLoot().fragments;
+      lines.push(`Reconquête n° ${entry.runs - 1} — palier ${result.waveN}.`);
+    } else if (foyer.nature === "cache") {
       const spoils = cacheLoot(foyer, prod);
       for (const [res, amount] of Object.entries(spoils.resources)) {
         const gain = Math.round((amount ?? 0) * lootMult);
@@ -656,7 +689,7 @@ export function resolveSortie(
       fragments += spoils.fragments;
     }
 
-    if (!natureDef(foyer.nature).repeatable && entry.capturedAt === 0) {
+    if (!repeatable && entry.capturedAt === 0) {
       entry.capturedAt = now;
       captured = true;
       lines.push(`Foyer sécurisé — ${natureDef(foyer.nature).name}.`);

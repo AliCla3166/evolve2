@@ -208,6 +208,14 @@
     "defense": 3,
     "expedition": 3
   },
+  "recolte": {
+    "$comment": "Puissance de RECOLTE d'une carte : stat DERIVEE des trois puissances existantes, zero nouvelle donnee par espece. Les exploratrices sont les meilleures recolteuses (poids 0,6 sur power_exp) mais les 62 especes peuvent toutes travailler a un gisement : une carte commune gardee longtemps finit par valoir un poste. Le multiplicateur rareté x niveau s'applique comme pour les autres stats (cf. cards.ts -> cardMult).",
+    "stat_weights": {
+      "def": 0.2,
+      "exp": 0.6,
+      "atk": 0.2
+    }
+  },
   "species": [
     {
       "id": "meduse",

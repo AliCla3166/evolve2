@@ -15,7 +15,8 @@ import {
   levelCost,
   maxLevel,
 } from "@/lib/game/economy";
-import { dayKey } from "@/lib/game/habits";
+import { cardArt } from "@/lib/game/cards";
+import { canRecruit, totalUnits, unitCap, UNIT_IDS } from "@/lib/game/military";
 import {
   animPhase,
   ENVELOPE_SCALE,
@@ -28,6 +29,7 @@ import {
   SOCKETS,
 } from "@/lib/game/scene";
 import { useGame } from "@/lib/game/store";
+import { crewedSpecies } from "@/lib/game/territoire";
 import type { BuildingId } from "@/lib/game/types";
 
 /* ---------- Cache d'images (module-level, partagé entre montages) ---------- */
@@ -119,6 +121,33 @@ function makePlankton(): Plankton {
     r: 0.8 + Math.random() * 1.8,
     hue: hues[Math.floor(Math.random() * hues.length)],
   };
+}
+
+/* ---------- LA FAUNE DE LA BASE (étape C) ----------
+
+   Les créatures pêchées ne dorment plus dans un menu : celles qui ne travaillent
+   pas sur un gisement de La Dérive nagent DANS la cellule, derrière les organes.
+   Purement décoratif — aucune donnée de jeu ne sort d'ici — mais c'est ce qui fait
+   qu'une collection qui grandit se VOIT sans ouvrir un seul panneau.
+
+   Aucune particule aléatoire : la trajectoire d'une espèce est dérivée de son
+   identifiant, donc stable d'un montage à l'autre. Le poisson qu'on a vu passer
+   à gauche repassera à gauche. */
+
+/** Au-delà, la scène devient illisible sur un écran de téléphone. */
+const FAUNA_MAX = 9;
+/** Durée d'une traversée complète de l'écran, en secondes (avant variation). */
+const FAUNA_CROSS_S = 30;
+
+/** Hachage déterministe id + sel -> 0..1. Ni PRNG de jeu, ni Math.random : deux
+ *  montages successifs de la scène donnent exactement la même chorégraphie. */
+function hashed(s: string, salt: number): number {
+  let h = (2166136261 ^ salt) >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return (h % 100000) / 100000;
 }
 
 /* ---------- État interne du rendu (hors React) ---------- */
@@ -340,14 +369,52 @@ export function CellScene({
         ctx.fill();
       }
 
+      /* --- LA FAUNE : les créatures pêchées nagent dans la cellule (étape C) ---
+             Dessinées entre le plancton et les organes : elles passent DERRIÈRE
+             les bâtiments, donc elles n'entrent jamais en concurrence avec les
+             cibles tactiles. Celles postées sur un gisement sont absentes — elles
+             travaillent sur la carte, et on les y voit. */
+      const auTravail = crewedSpecies(state.territoire);
+      const nageuses = Object.keys(state.collection)
+        .filter((id) => !auTravail.has(id))
+        .sort()
+        .slice(0, FAUNA_MAX);
+      for (let i = 0; i < nageuses.length; i++) {
+        const id = nageuses[i];
+        const img = getImage(cardArt(id));
+        if (!ready(img)) continue;
+        // Couloir de nage, vitesse et phase : dérivés de l'identifiant de l'espèce.
+        const lane = 0.16 + hashed(id, 1) * 0.66;
+        const speed = FAUNA_CROSS_S * (0.75 + hashed(id, 2) * 0.7);
+        const dir = hashed(id, 3) < 0.5 ? 1 : -1;
+        const size = S * (0.062 + hashed(id, 4) * 0.03);
+        const prog = ((t / speed + hashed(id, 5)) % 1 + 1) % 1;
+        const fx = dir > 0 ? prog : 1 - prog;
+        const x = (-0.12 + fx * 1.24) * S;
+        // Ondulation verticale + tangage : une nageuse ne va jamais tout droit.
+        const swim = Math.sin(t * (0.6 + hashed(id, 6) * 0.5) + i) ;
+        const y = (lane + swim * 0.035) * S;
+        ctx.save();
+        ctx.globalAlpha = 0.42 + 0.12 * Math.sin(t * 0.9 + i);
+        ctx.translate(x, y);
+        ctx.rotate(swim * 0.16);
+        // Le portrait regarde vers la droite : on le retourne quand elle nage à gauche.
+        ctx.scale(dir > 0 ? 1 : -1, 1);
+        ctx.drawImage(img, -size / 2, -size / 2, size, size);
+        ctx.restore();
+      }
+
       /* --- Bâtiments sur leurs sockets --- */
       /* Pastilles d'alerte posées sur un SOCLE plutôt que sur un onglet.
-         Depuis l'étape 6c, le Noyau n'a plus d'onglet dans la barre : c'est ici,
-         sur son sprite au centre de la base, que se rallume le « ✦ » des
-         destinations d'expédition renouvelées chaque jour. Le signal doit vivre
-         là où se trouve la porte, sinon il ne sert à rien. */
+         Depuis l'étape 6c, le Noyau n'a plus d'onglet dans la barre : le signal
+         doit vivre là où se trouve la porte, sinon il ne sert à rien. Ce n'est
+         plus le renouvellement des destinations d'expédition (elles ont déménagé
+         sur La Dérive, dont l'onglet porte désormais ce signal) mais ce que le
+         Noyau seul sait faire : « tu peux recruter, là, tout de suite ». */
       const alerts: Partial<Record<BuildingId, boolean>> = {
-        noyau: state.noyauSeenDay !== dayKey(state.lastTick),
+        noyau:
+          totalUnits(state.units) < unitCap(state.buildings) &&
+          UNIT_IDS.some((u) => canRecruit(state, u)),
       };
       const zones: { id: BuildingId; x: number; y: number; r: number }[] = [];
       // Labels + badges dessinés en 2e passe, AU-DESSUS de tous les sprites

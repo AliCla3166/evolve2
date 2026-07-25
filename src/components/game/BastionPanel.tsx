@@ -50,7 +50,6 @@ import { bilanOptionDef } from "@/lib/game/habits";
 import {
   assaultPalier,
   bonusValue,
-  foyerAvailable,
   foyerDef,
   natureDef,
   sectorOfFoyer,
@@ -254,7 +253,7 @@ export function BastionPanel({
   // Palier assailli, calculé UNE FOIS ici et transmis tel quel au moteur : `resolveSortie`
   // le relit sur `result.waveN` et n'y réapplique aucun décalage.
   const sortiePalier =
-    (targetFoyer ? assaultPalier(targetFoyer, waveCount) : waveCount + 1) +
+    (targetFoyer ? assaultPalier(targetFoyer, waveCount, territoire) : waveCount + 1) +
     (perceeOpt?.palier_bonus ?? 0);
   const sortieMod = sortieModifier(effPeril, preparatifIds);
   const antreMult = targetFoyer?.nature === "antre" ? TERRITOIRE_ANTRES.loot_mult : 1;
@@ -272,10 +271,10 @@ export function BastionPanel({
     preparatifIds,
     bonusValue(territoire, "free_sortie"),
   );
+  /* Un foyer déjà pris reste une cible valable (étape D) : on le reprend à un palier
+     relevé. La seule condition qui subsiste est l'ouverture de son secteur. */
   const targetReachable =
-    !targetFoyer ||
-    (foyerAvailable(territoire, targetFoyer) &&
-      sectorUnlocked(sectorOfFoyer(targetFoyer.id)!, waveCount));
+    !targetFoyer || sectorUnlocked(sectorOfFoyer(targetFoyer.id)!, waveCount);
   const canLaunchSortie = avail.ok && perceeOk && targetReachable && !inBattle && !banner;
 
   function togglePreparatif(id: string) {

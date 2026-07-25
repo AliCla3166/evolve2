@@ -189,6 +189,12 @@ export interface FoyerState {
   dev: number;
   /** Nombre de passages, foyers répétables uniquement (l'abîme). */
   runs: number;
+  /** ÉQUIPAGE DE RÉCOLTE (étape B) : les espèces postées à ce gisement, qui y
+   *  travaillent à l'écran et augmentent son rendement. L'équipage appartient au
+   *  LIEU, pas à la collection : il voyage donc avec TerritoireState, déjà persisté,
+   *  et `cardAssignments` (défense / expédition) reste inchangé. Absent sur les
+   *  sauvegardes < v14 — toujours lire via `crewOf()`, qui retombe sur []. */
+  crew?: string[];
 }
 
 export interface TerritoireState {
