@@ -17,6 +17,7 @@ import {
   maxLevel,
   OFFLINE_REPORT,
   resourceCap,
+  SAVE_VERSION,
   totalProductionPerHour,
 } from "./economy";
 import { effectiveReserveCap, freshBastionState } from "./bastion/config";
@@ -109,7 +110,10 @@ import {
 } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 12;
+/* La constante est définie dans `economy.ts` (c'est `freshGameState` qui estampille une partie
+   neuve, et economy.ts ne peut pas importer ce module). On la réexporte ici, où la chaîne de
+   migrations la consomme, pour que rien ne change côté appelants. */
+export { SAVE_VERSION } from "./economy";
 export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
@@ -966,7 +970,7 @@ export const useGame = create<GameStore>()(
           Math.min(maxPeril(), Math.max(Math.round(peril), opt?.forced_peril ?? 0)),
         );
         s.bastion.sortiePreparatifs = [...preparatifIds];
-        s.bastion.sortiePercee = Boolean(opt);
+        s.bastion.sortiePerceeId = opt ? perceeOptionId! : null;
         s.bastion.liveBattleActive = true;
         s.bastion.liveBattleStartedAt = now;
         set(s);
@@ -1190,7 +1194,16 @@ export const useGame = create<GameStore>()(
           state.bastion.sortieTargetId = null;
           state.bastion.sortiePeril = 0;
           state.bastion.sortiePreparatifs = [];
-          state.bastion.sortiePercee = false;
+          state.bastion.sortiePerceeId = null;
+        }
+        // v12 -> v13 : le drapeau booléen `sortiePercee` devient l'ID de l'option de
+        // Percée dépensée. Un simple booléen ne permettait pas de distinguer une Vague
+        // de Percée (×3 de butin, fragments garantis) d'un Assaut d'Antre (qui ne fait
+        // qu'ouvrir la porte) — la résolution accordait la première à l'une comme à
+        // l'autre. Aucune donnée à convertir : aucune interface ne pouvait encore lancer
+        // de sortie, le champ n'a donc jamais valu autre chose que `false`.
+        if (version < 13 || state.bastion.sortiePerceeId === undefined) {
+          state.bastion.sortiePerceeId = null;
         }
         state.saveVersion = SAVE_VERSION;
         return state;

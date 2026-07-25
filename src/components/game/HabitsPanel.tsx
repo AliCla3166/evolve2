@@ -13,11 +13,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Panel } from "@/components/ui/Pixel";
+import { Panel, PixelButton } from "@/components/ui/Pixel";
 import { playCue } from "@/lib/audio";
+import { bilanStatus } from "@/lib/game/bilan";
 import { fmtInt } from "@/lib/game/format";
 import {
   addDaysToKey,
+  BILAN,
+  BILAN_OPTIONS,
+  bilanOptionDesc,
   CALORIE_DELTA_MAX,
   CALORIE_DELTA_MIN,
   CALORIE_STEP,
@@ -35,10 +39,12 @@ import {
   STREAK_TIERS,
   TOTAL_STREAK_ENERGY,
   weekdayIndex,
+  type BilanOptionDef,
   type HabitDef,
 } from "@/lib/game/habits";
 import { useGame } from "@/lib/game/store";
 import type { HabitDayEntry, HabitsState } from "@/lib/game/types";
+import { vibrate } from "@/lib/prefs";
 
 /** Énergie d'une journée parfaite (5/5) — dérivée du barème, jamais codée en dur. */
 const PERFECT_DAY_ENERGY = 95;
@@ -304,9 +310,209 @@ function TierLadder({ streak, awards }: { streak: number; awards: Record<string,
   );
 }
 
+/* ---------- Le Bilan du soir ---------- */
+
+/** Où se dépense une Percée. Déduit des CHAMPS de l'option, jamais de son identifiant :
+ *  une option qui durcit une vague se règle au Bastion, une option qui verse de la
+ *  production se règle ici même, et tout le reste n'ouvre qu'une cible — donc la carte. */
+function perceeVenue(opt: BilanOptionDef): "ici" | "bastion" | "derive" {
+  if (opt.production_hours) return "ici";
+  if (opt.palier_bonus || opt.loot_mult || opt.forced_peril || opt.fragments) return "bastion";
+  return "derive";
+}
+
+/** Ce que le blocage du Bilan raconte au joueur. Une phrase par cause, jamais un code. */
+function bilanReasonText(s: ReturnType<typeof bilanStatus>, hour: number): string {
+  switch (s.reason) {
+    case "deja_fait":
+      return `Bilan de la journée du ${s.day} déjà fait. Prochain rendez-vous demain soir.`;
+    case "trop_tot":
+      return `Le Bilan s'ouvre à ${BILAN.min_hour} h — encore ${BILAN.min_hour - hour} h. La journée n'est pas finie.`;
+    case "seuil":
+      return `${s.energy} / ${s.threshold} ⚡ sur la journée — il manque ${s.threshold - s.energy} ⚡ pour ouvrir le Bilan.`;
+    case "stock_plein":
+      return `Stock de Percées plein (${s.maxStock}). Dépenses-en une avant d'en gagner d'autres.`;
+    default:
+      return "";
+  }
+}
+
+/** LE RENDEZ-VOUS DE FIN DE JOURNÉE.
+ *
+ *  Toute la journée on grignote : on saisit une habitude, on lance une sortie, on développe
+ *  un gisement. Le soir, un seul geste transforme la journée réelle en évènement de jeu — il
+ *  délivre des Percées, la monnaie des coups d'éclat. Ce bloc est donc le seul du panneau à
+ *  être placé AVANT la série : quand il est ouvert, il doit être ce qu'on voit en premier.
+ *
+ *  Il lit l'état complet parce que `bilanStatus` juge sur trois choses à la fois (les
+ *  habitudes du jour, le stock de Percées, l'heure) ; il ne SÉLECTIONNE en revanche aucun
+ *  objet fabriqué à la volée — le statut est calculé après la sélection, jamais dedans. */
+function BilanBlock({ onGoto }: { onGoto?: (panel: "bastion" | "derive") => void }) {
+  const state = useGame((s) => s);
+  const now = state.lastTick;
+  const status = bilanStatus(state, now);
+  const hour = new Date(now).getHours();
+
+  /* Célébration : ce que le Bilan vient de verser, figé au moment du clic. */
+  const [ceremony, setCeremony] = useState<{ gained: number; energy: number; day: string } | null>(
+    null,
+  );
+  /* Accusé de réception d'une dépense immédiate (« Poussée de croissance »). */
+  const [flash, setFlash] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 3200);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  const gauge = Math.min(1, status.threshold > 0 ? status.energy / status.threshold : 1);
+
+  return (
+    <Panel variant="noyau" className="space-y-2 p-3">
+      <div className="flex items-center gap-2">
+        <span className="text-2xl">🌙</span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xs uppercase tracking-[0.25em] text-cell-magenta">Bilan du soir</h2>
+          <p className="text-[10px] text-cell-teal/60">
+            {status.catchup ? `rattrapage de la journée du ${status.day}` : `journée du ${status.day}`}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[9px] uppercase tracking-widest text-cell-teal/50">Percées</div>
+          <div className="text-sm text-cell-magenta">
+            {status.percees} / {status.maxStock}
+          </div>
+        </div>
+      </div>
+
+      {/* Jauge du seuil : la seule chose qui sépare la journée du rendez-vous. */}
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-abyss">
+        <div
+          className={`h-full rounded-full transition-all ${gauge >= 1 ? "bg-cell-magenta" : "bg-cell-lime/70"}`}
+          style={{ width: `${Math.round(gauge * 100)}%` }}
+        />
+      </div>
+
+      {status.ok ? (
+        <div className="space-y-1">
+          <p className="text-[11px] leading-4 text-cell-lime">
+            {status.energy} ⚡ tenus aujourd&apos;hui — le Bilan est ouvert.
+          </p>
+          <PixelButton
+            className="w-full text-xs text-cell-magenta"
+            onClick={() => {
+              const gained = state.validateBilanDuSoir();
+              if (gained <= 0) return;
+              setCeremony({ gained, energy: status.energy, day: status.day });
+              vibrate([18, 40, 18, 40, 120]);
+              playCue("victory");
+            }}
+          >
+            🌙 FAIRE LE BILAN — +{status.reward} PERCÉE{status.reward > 1 ? "S" : ""}
+          </PixelButton>
+        </div>
+      ) : (
+        <p className="text-[11px] leading-4 text-cell-teal/60">{bilanReasonText(status, hour)}</p>
+      )}
+
+      {/* Les emplois d'une Percée. Toujours affichés, même à zéro : c'est la carte du
+          menu, elle donne une raison de tenir la journée avant même de l'avoir tenue. */}
+      <div className="space-y-1.5 pt-1">
+        <p className="text-[9px] uppercase tracking-[0.2em] text-cell-teal/50">
+          Ce qu&apos;une Percée déclenche
+        </p>
+        {BILAN_OPTIONS.map((opt) => {
+          const affordable = status.percees >= opt.cost;
+          const venue = perceeVenue(opt);
+          return (
+            <div
+              key={opt.id}
+              className={`flex items-start gap-2 rounded-lg border p-2 transition ${
+                affordable
+                  ? "border-cell-magenta/40 bg-cell-magenta/5"
+                  : "border-cell-cyan/15 bg-abyss/40"
+              }`}
+            >
+              <span className="text-base leading-none">{opt.icon}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] leading-4 text-cell-cyan">
+                  {opt.name}{" "}
+                  <span className="text-cell-magenta">
+                    · {opt.cost} Percée{opt.cost > 1 ? "s" : ""}
+                  </span>
+                </p>
+                <p className="text-[10px] leading-4 text-cell-teal/60">{bilanOptionDesc(opt)}</p>
+              </div>
+              {venue === "ici" ? (
+                <button
+                  disabled={!affordable}
+                  onClick={() => {
+                    if (!state.spendPerceeNow(opt.id)) return;
+                    setFlash(`${opt.name} : ${opt.production_hours} h de production versées d'un coup.`);
+                    vibrate(30);
+                    playCue("collect");
+                  }}
+                  className="shrink-0 rounded border border-cell-magenta/50 px-2 py-1 text-[10px] text-cell-magenta transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  DÉPENSER
+                </button>
+              ) : (
+                <button
+                  disabled={!affordable || !onGoto}
+                  onClick={() => onGoto?.(venue)}
+                  className="shrink-0 rounded border border-cell-cyan/40 px-2 py-1 text-[10px] text-cell-cyan transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  {venue === "bastion" ? "AU BASTION" : "SUR LA CARTE"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {flash && <p className="text-[10px] leading-4 text-cell-lime">✔ {flash}</p>}
+      </div>
+
+      {/* La cérémonie. Plein écran et fermée à la main : c'est le seul moment de la
+          journée où le jeu accuse réception d'une journée RÉELLE, il ne doit pas
+          s'effacer tout seul pendant que le joueur regarde ailleurs. */}
+      {ceremony && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-abyss/80 p-4 backdrop-blur-[2px]">
+          <div className="animate-card-reveal flex w-full max-w-xs flex-col items-center gap-2 rounded-2xl border border-cell-magenta/60 bg-deep px-6 py-6 text-center shadow-[0_0_60px_rgba(255,84,214,0.45)]">
+            <span className="text-5xl">🌙</span>
+            <p className="text-sm uppercase tracking-[0.25em] text-cell-magenta">Bilan du soir</p>
+            <p className="text-[11px] leading-4 text-cell-teal/80">
+              Journée du {ceremony.day} · {ceremony.energy} ⚡
+            </p>
+            <p className="text-lg leading-tight text-cell-magenta">
+              +{ceremony.gained} Percée{ceremony.gained > 1 ? "s" : ""}
+            </p>
+            <p className="text-[11px] leading-4 text-cell-lime">
+              +{status.bonusSorties} sorties gratuites demain
+            </p>
+            <p className="text-[10px] leading-4 text-cell-teal/60">
+              Une Percée fait passer un cap d&apos;un coup : une vague hors norme, un antre, ou
+              une poussée de production.
+            </p>
+            <PixelButton className="mt-1 text-xs" onClick={() => setCeremony(null)}>
+              CONTINUER
+            </PixelButton>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 /* ---------- Panneau ---------- */
 
-export function HabitsPanel({ onClose }: { onClose: () => void }) {
+export function HabitsPanel({
+  onClose,
+  onGoto,
+}: {
+  onClose: () => void;
+  /** Raccourci vers l'écran où se dépense une Percée de combat (Bastion ou La Dérive). */
+  onGoto?: (panel: "bastion" | "derive") => void;
+}) {
   const habits = useGame((s) => s.habits);
   const repairStreak = useGame((s) => s.repairStreak);
   // "now" du rendu = dernier tick (1 s) : suit le passage de minuit sans Date.now() en rendu.
@@ -378,6 +584,9 @@ export function HabitsPanel({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
+
+        {/* ----- Le Bilan du soir : le geste qui clôt la journée ----- */}
+        <BilanBlock onGoto={onGoto} />
 
         {/* ----- La série : le vrai rendez-vous ----- */}
         <Panel variant="membrane" className="space-y-3 p-3">

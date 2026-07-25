@@ -15,6 +15,7 @@ import {
   levelCost,
   maxLevel,
 } from "@/lib/game/economy";
+import { dayKey } from "@/lib/game/habits";
 import {
   animPhase,
   ENVELOPE_SCALE,
@@ -340,6 +341,14 @@ export function CellScene({
       }
 
       /* --- Bâtiments sur leurs sockets --- */
+      /* Pastilles d'alerte posées sur un SOCLE plutôt que sur un onglet.
+         Depuis l'étape 6c, le Noyau n'a plus d'onglet dans la barre : c'est ici,
+         sur son sprite au centre de la base, que se rallume le « ✦ » des
+         destinations d'expédition renouvelées chaque jour. Le signal doit vivre
+         là où se trouve la porte, sinon il ne sert à rien. */
+      const alerts: Partial<Record<BuildingId, boolean>> = {
+        noyau: state.noyauSeenDay !== dayKey(state.lastTick),
+      };
       const zones: { id: BuildingId; x: number; y: number; r: number }[] = [];
       // Labels + badges dessinés en 2e passe, AU-DESSUS de tous les sprites
       // (sinon le bâtiment voisin recouvre le texte -> illisible).
@@ -350,6 +359,8 @@ export function CellScene({
         padR: number;
         level: number;
         designed: boolean;
+        /** Pastille « il y a du neuf ici » (cf. `alerts`). */
+        alert: boolean;
       }[] = [];
       const baseSize = S * 0.14;
 
@@ -509,7 +520,7 @@ export function CellScene({
           ctx.restore();
         }
 
-        overlays.push({ id, cx, cy, padR, level, designed });
+        overlays.push({ id, cx, cy, padR, level, designed, alert: alerts[id] === true });
         zones.push({ id, x: cx, y: cy, r: Math.max(padR + 6, 26) });
       };
 
@@ -561,6 +572,40 @@ export function CellScene({
           ctx.fillStyle = accent;
           ctx.font = "bold 11px ui-monospace, monospace";
           ctx.fillText(String(o.level), bx, by + 0.5);
+        }
+
+        // Pastille d'alerte — en HAUT À GAUCHE, en miroir du badge de niveau
+        // (qui occupe la droite), donc jamais l'un sur l'autre. Elle respire
+        // lentement : c'est un appel du regard, pas un clignotement d'alarme.
+        if (o.alert) {
+          const off = o.id === "noyau" ? o.padR * 0.5 : o.padR * 0.55;
+          const bx = o.cx - off;
+          const by = o.cy - off;
+          const pulse = 0.75 + 0.25 * Math.sin(nowMs / 320);
+          ctx.save();
+          ctx.shadowColor = "rgba(255, 84, 214, 0.9)";
+          ctx.shadowBlur = 10 * pulse;
+          ctx.fillStyle = "#ff54d6";
+          ctx.beginPath();
+          ctx.arc(bx, by, 9, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          /* L'étoile est TRACÉE, pas écrite. Un `fillText("✦")` dépend d'une
+             police de symboles que la pile `ui-monospace, monospace` n'a pas :
+             en pratique le glyphe se réduit à un point de 2 px, illisible. Un
+             chemin à quatre branches, lui, est net à n'importe quelle taille. */
+          ctx.fillStyle = "#050b14";
+          ctx.beginPath();
+          for (let i = 0; i < 8; i++) {
+            const a = (Math.PI / 4) * i - Math.PI / 2;
+            const rr = i % 2 === 0 ? 6.2 : 2.1; // pointe / creux
+            const px = bx + Math.cos(a) * rr;
+            const py = by + Math.sin(a) * rr;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
         }
       }
 

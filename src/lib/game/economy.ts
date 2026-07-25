@@ -491,9 +491,20 @@ export function resourceName(res: ResourceId): string {
   return ECONOMY.resources[res]?.name ?? res;
 }
 
+/** Version du format de sauvegarde. Elle vit ICI, et non dans `store.ts` où se trouve la
+ *  chaîne de migrations, pour une raison de dépendances : c'est `freshGameState` qui estampille
+ *  une partie neuve, et `economy.ts` ne peut pas importer `store.ts` (qui l'importe déjà).
+ *  `store.ts` la réexporte, donc rien ne change pour ses consommateurs.
+ *
+ *  Elle était figée à 4 en dur ici pendant que la chaîne de migrations montait jusqu'à 13 :
+ *  une partie neuve se déclarait donc en v4 dans son export de sauvegarde et dans la sync
+ *  cloud, alors que ses données étaient bien au format courant. Un seul point de vérité
+ *  supprime la dérive : à chaque nouvelle migration, on incrémente cette constante. */
+export const SAVE_VERSION = 13;
+
 export function freshGameState(now: number): GameState {
   return {
-    saveVersion: 4,
+    saveVersion: SAVE_VERSION,
     tutorialStep: 0, // nouveau joueur : micro-tutoriel actif après création du profil
     resources: startingResources(),
     buildings: startingBuildings(),

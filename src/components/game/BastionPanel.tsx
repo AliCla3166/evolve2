@@ -5,7 +5,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CardFrame, Panel, PixelButton, RARITY_LABEL, type Rarity } from "@/components/ui/Pixel";
 import {
   cardArt,
@@ -34,9 +34,29 @@ import {
   WAVE_LEAD_WINDOW_MS,
 } from "@/lib/game/bastion/config";
 import { previewWave } from "@/lib/game/bastion/engine";
+import {
+  maxPeril,
+  perilDef,
+  PERILS,
+  PREPARATIFS,
+  sortieAvailability,
+  sortieLootMult,
+  sortieModifier,
+} from "@/lib/game/bastion/sorties";
 import type { BastionSceneHandle } from "./BastionScene";
 import { BastionScene } from "./BastionScene";
-import type { BastionSlotTarget, LiveWaveResult } from "@/lib/game/bastion/types";
+import type { BastionSlotTarget, LiveWaveResult, SortieModifier } from "@/lib/game/bastion/types";
+import { bilanOptionDef } from "@/lib/game/habits";
+import {
+  assaultPalier,
+  bonusValue,
+  foyerAvailable,
+  foyerDef,
+  natureDef,
+  sectorOfFoyer,
+  sectorUnlocked,
+  TERRITOIRE_ANTRES,
+} from "@/lib/game/territoire";
 import { estimatedWavePower } from "@/lib/game/military";
 import { fmtDuration, fmtInt } from "@/lib/game/format";
 import { useOverlay } from "@/lib/overlay";
@@ -53,9 +73,18 @@ const SCOUT_LEVEL_LABEL: string[] = [
 ];
 
 /** Aperçu de la vague suivante — exact (genLiveWave est déterministe par numéro de vague),
- *  mais dévoilé par paliers selon le niveau de Vigie acheté en Boutique. */
-function WavePreview({ waveN, level }: { waveN: number; level: number }) {
-  const preview = useMemo(() => previewWave(waveN), [waveN]);
+ *  mais dévoilé par paliers selon le niveau de Vigie acheté en Boutique.
+ *
+ *  `mod` porte le durcissement d'une sortie (Péril + Préparatifs). On le passe pour que le
+ *  joueur voie le PRIX de son pari avant de le prendre, jamais après : monter le Péril doit
+ *  gonfler les PV et les boss sous ses yeux, à côté du butin qu'il achète.
+ *
+ *  Volontairement pas de `useMemo` : `mod` est reconstruit à chaque rendu, mémoriser sur son
+ *  identité ne servirait donc jamais, et mémoriser sur ses champs demanderait de désactiver
+ *  la règle des dépendances. `previewWave` n'agrège qu'une file de quelques dizaines
+ *  d'apparitions — c'est moins cher que la comparaison. */
+function WavePreview({ waveN, level, mod }: { waveN: number; level: number; mod?: SortieModifier }) {
+  const preview = previewWave(waveN, mod);
   if (level <= 0) {
     return (
       <p className="text-[10px] text-cell-teal/50">
@@ -91,6 +120,7 @@ function WavePreview({ waveN, level }: { waveN: number; level: number }) {
           {preview.boss && (
             <span className="rounded border border-cell-magenta/50 px-1.5 py-0.5 text-[10px] text-cell-magenta">
               👑 {preview.boss.name}
+              {preview.boss.count > 1 && ` ×${preview.boss.count}`}
               {level >= 3 && (
                 <span className="opacity-70">
                   {" "}
@@ -116,6 +146,11 @@ type ArmedItem =
 
 type MovingItem = { kind: "turret" | "barracks" | "mortar"; id: string };
 
+/** Écran de fin de bataille. Le titre et le détail sont repris tels quels du rapport que
+ *  la résolution vient de pousser dans le journal : une seule formulation du butin, écrite
+ *  une seule fois côté logique, plutôt qu'une version d'écran qui dériverait de l'autre. */
+type BattleBanner = { result: LiveWaveResult; title: string; lines: string[] };
+
 function CombatCost({ amount, have }: { amount: number; have: number }) {
   const ok = have >= amount;
   return (
@@ -126,13 +161,29 @@ function CombatCost({ amount, have }: { amount: number; have: number }) {
   );
 }
 
-export function BastionPanel({ onClose }: { onClose: () => void }) {
+export function BastionPanel({
+  onClose,
+  initialTargetId = null,
+}: {
+  onClose: () => void;
+  /** Foyer choisi sur la carte de La Dérive (`onAssault`) — présélectionne la cible de la
+   *  sortie. `null` = sortie contre le Bastion lui-même (défense libre). */
+  initialTargetId?: string | null;
+}) {
   const sceneRef = useRef<BastionSceneHandle>(null);
+  /** Nature de la bataille en cours : une sortie et une vague planifiée se résolvent par
+   *  deux fonctions différentes (`finishSortie` / `finishBastionBattle`), et rien dans
+   *  l'état persisté ne les distingue — une sortie contre le Bastion a elle aussi
+   *  `sortieTargetId === null`. On mémorise donc le chemin emprunté au lancement.
+   *  Une ref, et non un état : `onBattleEnd` est un rappel, pas un rendu. */
+  const flightRef = useRef<"vague" | "sortie" | null>(null);
 
   const bastion = useGame((s) => s.bastion);
   const resources = useGame((s) => s.resources);
   const collection = useGame((s) => s.collection);
   const cardAssignments = useGame((s) => s.cardAssignments);
+  const territoire = useGame((s) => s.territoire);
+  const percees = useGame((s) => s.bilan.percees);
   const nextAttackAt = useGame((s) => s.nextAttackAt);
   const waveCount = useGame((s) => s.waveCount);
   const now = useGame((s) => s.lastTick);
@@ -155,13 +206,22 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
   const chooseBastionTreeOption = useGame((s) => s.chooseBastionTreeOption);
   const beginBastionBattle = useGame((s) => s.beginBastionBattle);
   const finishBastionBattle = useGame((s) => s.finishBastionBattle);
+  const beginSortie = useGame((s) => s.beginSortie);
+  const finishSortie = useGame((s) => s.finishSortie);
 
   const [tab, setTab] = useState<"champ" | "boutique">("champ");
   const [armed, setArmed] = useState<ArmedItem | null>(null);
   const [moving, setMoving] = useState<MovingItem | null>(null);
   const [inspect, setInspect] = useState<BastionSlotTarget | null>(null);
   const [snapshot, setSnapshot] = useState<ReturnType<NonNullable<typeof sceneRef.current>["getBattleSnapshot"]> | null>(null);
-  const [banner, setBanner] = useState<LiveWaveResult | null>(null);
+  const [banner, setBanner] = useState<BattleBanner | null>(null);
+
+  /* Paramètres de la sortie en préparation (jamais persistés : tant qu'on n'a pas lancé,
+     rien n'est engagé — ni énergie, ni quota, ni Percée). */
+  const [targetId, setTargetId] = useState<string | null>(initialTargetId);
+  const [peril, setPeril] = useState(0);
+  const [preparatifIds, setPreparatifIds] = useState<string[]>([]);
+  const [wantPercee, setWantPercee] = useState(false);
 
   // Poll léger (pas de re-render 60 fps) : HUD de bataille + charge des supports actifs.
   useEffect(() => {
@@ -177,6 +237,50 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
   const reserveSpecies = availableDefenseSpecies(useGame.getState());
   const waveIn = nextAttackAt - now;
   const canPlayLive = nextAttackAt > 0 && waveIn <= WAVE_LEAD_WINDOW_MS && !inBattle && !banner;
+
+  /* ---------- Sortie en préparation ---------- */
+  const targetFoyer = targetId ? foyerDef(targetId) : null;
+  const targetNature = targetFoyer ? natureDef(targetFoyer.nature) : null;
+  // Un antre ne s'ouvre qu'avec une Percée : la cible impose alors l'option, il n'y a pas
+  // de choix à faire. Ailleurs, la Vague de Percée est un pari facultatif du joueur.
+  const forcedPerceeId = targetNature?.requires_percee ? "assaut_antre" : null;
+  const perceeOptionId = forcedPerceeId ?? (wantPercee ? "vague_percee" : null);
+  const perceeOpt = perceeOptionId ? bilanOptionDef(perceeOptionId) : undefined;
+  const perceeOk = !perceeOpt || percees >= perceeOpt.cost;
+  // Le Péril choisi ne peut pas descendre sous celui qu'impose la Percée dépensée —
+  // même formule que `store.beginSortie`, pour que l'aperçu ne mente jamais.
+  const effPeril = Math.max(0, Math.min(maxPeril(), Math.max(peril, perceeOpt?.forced_peril ?? 0)));
+  const perilInfo = perilDef(effPeril);
+  // Palier assailli, calculé UNE FOIS ici et transmis tel quel au moteur : `resolveSortie`
+  // le relit sur `result.waveN` et n'y réapplique aucun décalage.
+  const sortiePalier =
+    (targetFoyer ? assaultPalier(targetFoyer, waveCount) : waveCount + 1) +
+    (perceeOpt?.palier_bonus ?? 0);
+  const sortieMod = sortieModifier(effPeril, preparatifIds);
+  const antreMult = targetFoyer?.nature === "antre" ? TERRITOIRE_ANTRES.loot_mult : 1;
+  const lootMult =
+    sortieLootMult(
+      effPeril,
+      preparatifIds,
+      bonusValue(territoire, "combat_mult"),
+      perceeOpt?.loot_mult ?? 1,
+    ) * antreMult;
+  const avail = sortieAvailability(
+    bastion,
+    resources.energie,
+    now,
+    preparatifIds,
+    bonusValue(territoire, "free_sortie"),
+  );
+  const targetReachable =
+    !targetFoyer ||
+    (foyerAvailable(territoire, targetFoyer) &&
+      sectorUnlocked(sectorOfFoyer(targetFoyer.id)!, waveCount));
+  const canLaunchSortie = avail.ok && perceeOk && targetReachable && !inBattle && !banner;
+
+  function togglePreparatif(id: string) {
+    setPreparatifIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   const armedRange = (() => {
     if (armed?.type !== "building") return undefined;
@@ -251,13 +355,19 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
 
         {/* Bannière de fin de bataille */}
         {banner && (
-          <Panel variant="tooltip" className="space-y-1 p-2 text-center" style={{ background: banner.won ? "rgba(10,40,20,0.9)" : "rgba(40,10,15,0.9)" }}>
-            <p className={`text-sm ${banner.won ? "text-cell-lime" : "text-red-400"}`}>
-              {banner.won ? `🛡️ Vague ${banner.waveN} repoussée !` : `🦠 Vague ${banner.waveN} — le Bastion a cédé`}
+          <Panel
+            variant="tooltip"
+            className="space-y-1 p-2 text-center"
+            style={{ background: banner.result.won ? "rgba(10,40,20,0.9)" : "rgba(40,10,15,0.9)" }}
+          >
+            <p className={`text-sm ${banner.result.won ? "text-cell-lime" : "text-red-400"}`}>
+              {banner.title}
             </p>
-            <p className="text-[11px] text-cell-teal/70">
-              {banner.kills} élimination{banner.kills > 1 ? "s" : ""} · Bastion à {Math.round(banner.bastionHpFrac * 100)}% PV
-            </p>
+            {banner.lines.map((line, i) => (
+              <p key={i} className="text-[11px] text-cell-teal/70">
+                {line}
+              </p>
+            ))}
             <PixelButton className="text-xs" onClick={() => setBanner(null)}>
               CONTINUER
             </PixelButton>
@@ -302,9 +412,9 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
             )}
           </Panel>
         )}
-        {/* Lancement manuel — TOUJOURS visible hors bataille : la vague planifiée peut être
-            jouée en avance (cf. WAVE_LEAD_WINDOW_MS). Le bouton n'est grisé que si la
-            prochaine vague est encore trop loin dans le calendrier. */}
+        {/* Vague PLANIFIÉE — le chemin historique, inchangé : c'est la vague subie, celle qui
+            fait avancer le calendrier et que l'auto-résolution reprendra si on l'ignore.
+            Jouable en avance dans la fenêtre WAVE_LEAD_WINDOW_MS, jamais avant. */}
         {!banner && !inBattle && (
           <Panel variant="tooltip" className="space-y-2 p-2" style={{ background: "rgba(30,5,20,0.85)" }}>
             <div className="flex items-center justify-between gap-2">
@@ -319,12 +429,13 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
                   cancelModes();
                   // Pose le verrou anti-double-résolution AVANT de démarrer la simulation
                   // locale — cf. store.beginBastionBattle.
+                  flightRef.current = "vague";
                   beginBastionBattle();
                   playCue("wave_start");
                   sceneRef.current?.startBattle(waveCount + 1);
                 }}
               >
-                ⚔️ LANCER LA VAGUE
+                ⚔️ DÉFENDRE
               </PixelButton>
             </div>
             {!canPlayLive && (
@@ -334,7 +445,183 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
                 {fmtDuration(Math.max(0, waveIn - WAVE_LEAD_WINDOW_MS))}.
               </p>
             )}
-            <WavePreview waveN={waveCount + 1} level={bastion.scoutLevel} />
+          </Panel>
+        )}
+
+        {/* LANCEUR DE SORTIE — la bataille à la demande. Aucune attente : ce qui la freine,
+            c'est le quota du jour puis l'énergie, donc les habitudes réellement tenues.
+            Tout se décide ici, en un écran : la cible, le Péril, les Préparatifs, la Percée. */}
+        {!banner && !inBattle && (
+          <Panel variant="tooltip" className="space-y-2 p-2" style={{ background: "rgba(6,22,32,0.9)" }}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[11px] uppercase tracking-[0.25em] text-cell-cyan">Sortie</span>
+              <span className="text-[10px] text-cell-teal/60">
+                {avail.freeLeft > 0
+                  ? `${avail.freeLeft} gratuite${avail.freeLeft > 1 ? "s" : ""} aujourd'hui`
+                  : `${avail.used}/${avail.maxPerDay} aujourd'hui`}
+              </span>
+            </div>
+
+            {/* Cible */}
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 bg-black/30 px-2 py-1.5">
+              <div className="min-w-0">
+                <p className="truncate text-[11px]" style={{ color: targetNature?.color ?? "#7fe7d8" }}>
+                  {targetNature?.icon ?? "🛡️"} {targetFoyer ? targetFoyer.name : "Bastion — défense libre"}
+                </p>
+                <p className="text-[10px] text-cell-teal/60">
+                  palier {sortiePalier}
+                  {targetNature ? ` · ${targetNature.name}` : " · aucun butin de foyer"}
+                  {antreMult > 1 ? ` · butin d'antre ×${antreMult}` : ""}
+                </p>
+              </div>
+              {targetFoyer && (
+                <button
+                  onClick={() => setTargetId(null)}
+                  className="shrink-0 text-[10px] text-cell-teal/60 underline"
+                >
+                  viser le Bastion
+                </button>
+              )}
+            </div>
+            {!targetReachable && (
+              <p className="text-[10px] text-red-400">
+                Ce foyer n&apos;est plus assaillissable (déjà capturé, ou secteur refermé).
+              </p>
+            )}
+
+            {/* Péril */}
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-widest text-cell-teal/50">Péril</p>
+              <div className="flex flex-wrap gap-1">
+                {PERILS.map((p) => {
+                  const locked = p.id < (perceeOpt?.forced_peril ?? 0);
+                  const active = p.id === effPeril;
+                  return (
+                    <button
+                      key={p.id}
+                      disabled={locked}
+                      onClick={() => setPeril(p.id)}
+                      className={`rounded border px-2 py-1 text-[10px] transition active:translate-y-px ${
+                        active
+                          ? "border-cell-magenta bg-cell-magenta/20 text-cell-magenta"
+                          : locked
+                            ? "border-cell-teal/15 text-cell-teal/30"
+                            : "border-cell-teal/30 text-cell-teal/70"
+                      }`}
+                    >
+                      {p.name} ×{p.loot_mult}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-cell-teal/60">
+                Ennemis PV ×{perilInfo.hp_mult} · dégâts ×{perilInfo.dmg_mult}
+                {perilInfo.extra_bosses > 0 ? ` · +${perilInfo.extra_bosses} boss` : ""}
+              </p>
+            </div>
+
+            {/* Préparatifs */}
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-widest text-cell-teal/50">
+                Préparatifs (payés en énergie)
+              </p>
+              <div className="grid gap-1">
+                {PREPARATIFS.map((p) => {
+                  const on = preparatifIds.includes(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => togglePreparatif(p.id)}
+                      className={`flex items-center gap-2 rounded border px-2 py-1 text-left transition active:translate-y-px ${
+                        on
+                          ? "border-cell-lime bg-cell-lime/10 text-cell-lime"
+                          : "border-cell-teal/25 text-cell-teal/70"
+                      }`}
+                    >
+                      <span className="text-sm leading-none">{p.icon}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[11px]">{p.name}</span>
+                        <span className="block text-[10px] opacity-70">{p.desc}</span>
+                      </span>
+                      <span className="shrink-0 text-[10px]">⚡{p.cost_energie}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Percée */}
+            {forcedPerceeId ? (
+              <p className={`text-[10px] ${perceeOk ? "text-cell-magenta" : "text-red-400"}`}>
+                ☠ Un antre exige une Percée — tu en as {percees}.
+              </p>
+            ) : (
+              percees > 0 && (
+                <button
+                  onClick={() => setWantPercee((v) => !v)}
+                  className={`flex w-full items-center gap-2 rounded border px-2 py-1 text-left transition active:translate-y-px ${
+                    wantPercee
+                      ? "border-cell-magenta bg-cell-magenta/15 text-cell-magenta"
+                      : "border-cell-teal/25 text-cell-teal/70"
+                  }`}
+                >
+                  <span className="text-sm leading-none">⚡</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px]">Vague de Percée (1 Percée sur {percees})</span>
+                    <span className="block text-[10px] opacity-70">
+                      Palier +{bilanOptionDef("vague_percee")?.palier_bonus ?? 0}, Péril forcé, butin ×
+                      {bilanOptionDef("vague_percee")?.loot_mult ?? 1} et{" "}
+                      {bilanOptionDef("vague_percee")?.fragments ?? 0} fragments garantis.
+                    </span>
+                  </span>
+                </button>
+              )
+            )}
+
+            {/* Ce que ça coûte, ce que ça rapporte */}
+            <div className="flex items-center justify-between gap-2 border-t border-cell-cyan/15 pt-2">
+              <div className="text-[11px]">
+                <span className={resources.energie >= avail.cost ? "text-cell-lime" : "text-red-400"}>
+                  ⚡ {fmtInt(avail.cost)}
+                </span>
+                <span className="text-cell-teal/50"> / {fmtInt(Math.floor(resources.energie))}</span>
+                <span className="text-cell-cyan"> · butin ×{lootMult.toFixed(2)}</span>
+              </div>
+              <PixelButton
+                className="shrink-0 text-[10px]"
+                disabled={!canLaunchSortie}
+                onClick={() => {
+                  cancelModes();
+                  // Le palier est figé AVANT le lancement et transmis au moteur : c'est ce
+                  // même nombre que `resolveSortie` relira sur `result.waveN`.
+                  const palier = sortiePalier;
+                  const mod = sortieMod;
+                  if (!beginSortie(targetId, effPeril, preparatifIds, perceeOptionId ?? undefined)) return;
+                  flightRef.current = "sortie";
+                  setWantPercee(false);
+                  setPreparatifIds([]);
+                  playCue("wave_start");
+                  sceneRef.current?.startBattle(palier, mod);
+                }}
+              >
+                ⚔️ LANCER LA SORTIE
+              </PixelButton>
+            </div>
+            {!canLaunchSortie && (
+              <p className="text-[10px] text-cell-teal/60">
+                {avail.reason === "quota"
+                  ? `Quota du jour atteint (${avail.maxPerDay} sorties). Le compteur repart demain.`
+                  : avail.reason === "energie"
+                    ? `Il te manque ${fmtInt(avail.cost - Math.floor(resources.energie))} d'énergie — valide des habitudes.`
+                    : avail.reason === "bataille"
+                      ? "Une bataille est déjà engagée."
+                      : !perceeOk
+                        ? "Aucune Percée en stock : valide le Bilan du soir pour en gagner une."
+                        : "Cible indisponible."}
+              </p>
+            )}
+
+            <WavePreview waveN={sortiePalier} level={bastion.scoutLevel} mod={sortieMod} />
           </Panel>
         )}
 
@@ -364,8 +651,22 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
           movingTarget={moving}
           onTapSlot={handleTapSlot}
           onBattleEnd={(result, survivingStructures) => {
-            finishBastionBattle(result, survivingStructures);
-            setBanner(result);
+            // Deux résolutions incompatibles : une sortie ne touche NI au calendrier des
+            // vagues NI aux pénalités de défaite, la vague planifiée fait les deux.
+            const wasSortie = flightRef.current === "sortie";
+            flightRef.current = null;
+            if (wasSortie) finishSortie(result, survivingStructures);
+            else finishBastionBattle(result, survivingStructures);
+            // Le rapport que la résolution vient de pousser EST l'écran de fin : on le relit
+            // plutôt que de recomposer le butin ici (une seule source de formulation).
+            const report = useGame.getState().reports[0];
+            setBanner({
+              result,
+              title:
+                report?.title ??
+                (result.won ? `🛡️ Vague ${result.waveN} repoussée !` : `🦠 Le Bastion a cédé`),
+              lines: report?.lines ?? [],
+            });
             vibrate(result.won ? 40 : 25);
             playCue(result.won ? "victory" : "defeat");
           }}

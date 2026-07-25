@@ -121,8 +121,12 @@ export interface BastionState {
   sortiePeril: number;
   /** Ids des préparatifs achetés pour la sortie en cours. */
   sortiePreparatifs: string[];
-  /** La sortie en cours est-elle payée par une Percée (Vague de Percée / Assaut d'Antre) ? */
-  sortiePercee: boolean;
+  /** Option de Percée dépensée pour lancer la sortie en cours (`vague_percee`,
+   *  `assaut_antre`…), `null` si aucune. On garde l'ID et non un simple booléen : les
+   *  options n'ont pas du tout les mêmes effets (la Vague de Percée triple le butin et
+   *  garantit des fragments, l'Assaut d'Antre ne fait qu'ouvrir la porte), et la
+   *  résolution doit pouvoir les distinguer. */
+  sortiePerceeId: string | null;
 }
 
 /* ---------- Entités de combat éphémères (NON persistées, recréées à chaque bataille) ---------- */
@@ -198,12 +202,41 @@ export interface PendingRespawn {
   at: number;
 }
 
+/** Ce qu'une SORTIE change à la bataille elle-même : le Péril durcit la vague, les
+ *  Préparatifs adoucissent le combat. Objet inerte, construit par `sortieModifier()`
+ *  (bastion/sorties.ts) — aucune valeur d'équilibrage ne vit dans le moteur.
+ *
+ *  Il complète `sortieLootMult()`, qui gère l'autre moitié du marché (le butin) : le
+ *  Péril ne serait qu'un bonus gratuit si seul le butin en tenait compte. */
+export interface SortieModifier {
+  /** Multiplicateur de PV de tous les ennemis de la vague. */
+  hpMult: number;
+  /** Multiplicateur de dégâts de tous les ennemis de la vague. */
+  dmgMult: number;
+  /** Boss ajoutés à la vague, en plus de celui des paliers multiples de `boss_every`. */
+  extraBosses: number;
+  /** Vagues de réapparition offertes : chaque troupe déployée peut revenir autant de fois,
+   *  même sans le déblocage permanent « renforts en combat ». */
+  respawnWaves: number;
+  /** Frappe d'ouverture : part des PV max retirée à tous les ennemis présents au premier
+   *  contact (0 si la Salve enzymatique n'a pas été achetée). */
+  openingDamageRatio: number;
+}
+
 export interface BattleState {
   active: boolean;
   waveN: number;
   bastionHp: number;
   bastionHpMax: number;
   elapsed: number;
+  /** Multiplicateurs appliqués aux ennemis à leur apparition (palier + Péril de la sortie).
+   *  Figés à l'init : la vague ne doit pas changer de dureté en cours de route. */
+  hpMult: number;
+  dmgMult: number;
+  /** Réapparitions de troupe encore offertes par les Préparatifs (hors déblocage permanent). */
+  respawnCredits: number;
+  /** Frappe d'ouverture en attente (part des PV max) — remise à 0 dès qu'elle a claqué. */
+  openingStrike: number;
   spawnQueue: { typeId: EnemyId; t: number; isBoss?: boolean }[];
   enemies: BattleEnemy[];
   troops: BattleTroop[];

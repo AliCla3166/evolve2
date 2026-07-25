@@ -214,7 +214,7 @@ export function freshBastionState(): BastionState {
     sortieTargetId: null,
     sortiePeril: 0,
     sortiePreparatifs: [],
-    sortiePercee: false,
+    sortiePerceeId: null,
   };
 }
 

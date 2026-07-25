@@ -61,7 +61,7 @@
       {
         "id": "poussee_croissance",
         "name": "Poussée de croissance",
-        "desc": "La base produit d'un coup {hours} heures de toutes ses ressources.",
+        "desc": "La base produit d'un coup {production_hours} heures de toutes ses ressources.",
         "icon": "❖",
         "cost": 1,
         "production_hours": 6

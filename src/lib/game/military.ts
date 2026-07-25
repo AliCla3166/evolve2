@@ -17,7 +17,7 @@ import {
   stateProductionPerHour,
   stateResourceCap,
 } from "./economy";
-import { dayKey, ENERGY_CAP } from "./habits";
+import { bilanOptionDef, dayKey, ENERGY_CAP } from "./habits";
 import { liveWaveCombatReward } from "./bastion/config";
 import {
   clearSortie,
@@ -28,7 +28,6 @@ import {
 import {
   abimeLoot,
   antreLoot,
-  assaultPalier,
   bonusValue,
   cacheLoot,
   foyerDef,
@@ -36,7 +35,6 @@ import {
   natureDef,
   TERRITOIRE_ANTRES,
 } from "./territoire";
-import { perceeWaveOption } from "./bilan";
 import type { LiveWaveResult } from "./bastion/types";
 import type {
   Expedition,
@@ -602,7 +600,10 @@ export function resolveSortie(
   const targetId = b.sortieTargetId;
   const foyer = targetId ? foyerDef(targetId) : null;
   const won = result.won;
-  const perceeOpt = b.sortiePercee ? perceeWaveOption() : undefined;
+  // L'option de Percée est relue par son ID, jamais déduite d'un booléen : une Vague de
+  // Percée (×3 de butin, fragments garantis) et un Assaut d'Antre (qui n'ouvre qu'une
+  // porte) coûtent tous deux une Percée, mais ne paient pas du tout pareil.
+  const perceeOpt = b.sortiePerceeId ? bilanOptionDef(b.sortiePerceeId) : undefined;
 
   // Multiplicateur global : Péril × préparatifs × vestiges « combat_mult » × Percée,
   // et la prime propre aux antres (le boss paie plus cher que sa difficulté).
@@ -648,7 +649,10 @@ export function resolveSortie(
     } else if (foyer.nature === "antre") {
       fragments += antreLoot().fragments;
     } else if (foyer.nature === "abime") {
-      const spoils = abimeLoot(assaultPalier(foyer, result.waveN));
+      // `result.waveN` EST déjà le palier assailli : c'est le lanceur qui a appliqué
+      // `assaultPalier()` avant de démarrer la bataille. Le repasser ici ajouterait une
+      // seconde fois `palier_offset` et gonflerait le butin d'un abîme sans raison.
+      const spoils = abimeLoot(result.waveN);
       fragments += spoils.fragments;
     }
 

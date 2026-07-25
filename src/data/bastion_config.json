@@ -393,11 +393,11 @@
     "defeat_combat_ratio": 0.35,
     "fragment_chance": 0.18,
     "peril": {
-      "$comment": "LE PERIL — difficulte volontaire, gratuite, choisie avant chaque sortie (inspire de la Corne du Diable de Grow Castle). Le butin croit PLUS VITE que le danger (3,2x de butin pour 3x de PV au peril 4) : monter le peril est toujours le bon pari pour qui a la defense pour, et jamais obligatoire pour les autres. extra_bosses ajoute des boss a la vague generee.",
+      "$comment": "LE PERIL — difficulte volontaire, gratuite, choisie avant chaque sortie (inspire de la Corne du Diable de Grow Castle). INVARIANT : a CHAQUE cran, loot_mult > hp_mult, donc monter le peril est toujours le bon pari pour qui a la defense pour, et jamais obligatoire pour les autres. La verification o_e2e_pure.mjs (section 3) l'exige cran par cran ; le premier essai a d'ailleurs surpris le peril 1 en train d'y contrevenir (butin x1,35 pour des PV x1,4 — le PREMIER echelon de l'echelle etait un mauvais marche, exactement le contre-signal a ne pas envoyer) et le peril 2 a l'equilibre exact. Les deux ont ete releves (x1,45 et x1,90). extra_bosses ajoute des boss a la vague generee.",
       "levels": [
         { "id": 0, "name": "Calme", "hp_mult": 1.0, "dmg_mult": 1.0, "loot_mult": 1.0, "extra_bosses": 0 },
-        { "id": 1, "name": "Trouble", "hp_mult": 1.4, "dmg_mult": 1.25, "loot_mult": 1.35, "extra_bosses": 0 },
-        { "id": 2, "name": "Hostile", "hp_mult": 1.8, "dmg_mult": 1.5, "loot_mult": 1.8, "extra_bosses": 1 },
+        { "id": 1, "name": "Trouble", "hp_mult": 1.4, "dmg_mult": 1.25, "loot_mult": 1.45, "extra_bosses": 0 },
+        { "id": 2, "name": "Hostile", "hp_mult": 1.8, "dmg_mult": 1.5, "loot_mult": 1.9, "extra_bosses": 1 },
         { "id": 3, "name": "Virulent", "hp_mult": 2.3, "dmg_mult": 1.8, "loot_mult": 2.4, "extra_bosses": 1 },
         { "id": 4, "name": "Cataclysmique", "hp_mult": 3.0, "dmg_mult": 2.2, "loot_mult": 3.2, "extra_bosses": 2 }
       ]

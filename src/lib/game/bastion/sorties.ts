@@ -18,7 +18,7 @@
 
 import { BASTION, type PerilDef, type PreparatifDef } from "./config";
 import { dayKey } from "../habits";
-import type { BastionState } from "./types";
+import type { BastionState, SortieModifier } from "./types";
 
 export const SORTIES = BASTION.sorties;
 
@@ -170,6 +170,32 @@ export function fragmentChance(): number {
   return SORTIES.fragment_chance;
 }
 
+/* ---------- Ce que la sortie change au COMBAT ---------- */
+
+/** Traduit un Péril + des Préparatifs en un objet inerte consommé par le moteur
+ *  (`initBattle`). C'est le seul pont entre le tuning de `bastion_config.json` et
+ *  `engine.ts`, qui ne lit lui-même aucune valeur de sortie — le moteur reçoit des
+ *  nombres, jamais des identifiants d'options.
+ *
+ *  Sans ça, le Péril ne serait qu'un multiplicateur de butin gratuit : le marché
+ *  (plus de butin contre plus de danger) n'existe que si les deux moitiés sont
+ *  appliquées, `sortieLootMult` pour le butin et celle-ci pour le danger. */
+export function sortieModifier(peril: number, preparatifIds: string[] = []): SortieModifier {
+  const p = perilDef(peril);
+  return {
+    hpMult: p.hp_mult,
+    dmgMult: p.dmg_mult,
+    extraBosses: p.extra_bosses,
+    respawnWaves: extraRespawns(preparatifIds),
+    openingDamageRatio: openingDamageRatio(preparatifIds),
+  };
+}
+
+/** Modificateur neutre — une bataille sans sortie (défense planifiée classique). */
+export function noSortieModifier(): SortieModifier {
+  return { hpMult: 1, dmgMult: 1, extraBosses: 0, respawnWaves: 0, openingDamageRatio: 0 };
+}
+
 /* ---------- Réinitialisation d'une sortie ---------- */
 
 /** Efface les paramètres de la sortie en cours (appelé après résolution ou abandon). */
@@ -177,5 +203,5 @@ export function clearSortie(b: BastionState): void {
   b.sortieTargetId = null;
   b.sortiePeril = 0;
   b.sortiePreparatifs = [];
-  b.sortiePercee = false;
+  b.sortiePerceeId = null;
 }

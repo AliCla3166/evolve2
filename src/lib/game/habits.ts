@@ -172,6 +172,19 @@ export function bilanOptionDef(id: string): BilanOptionDef | undefined {
   return BILAN_OPTIONS.find((o) => o.id === id);
 }
 
+/** Description d'une option, accolades remplies par ses PROPRES champs.
+ *  Le texte vit en config et les nombres aussi : régler `loot_mult` à 4 réécrit la phrase
+ *  tout seul, sans qu'aucun composant n'ait à recomposer la formulation de son côté.
+ *  Une accolade sans champ correspondant est laissée telle quelle — bruyante à l'écran,
+ *  donc repérée à la première ouverture du panneau plutôt que silencieusement effacée. */
+export function bilanOptionDesc(opt: BilanOptionDef): string {
+  const fields = opt as unknown as Record<string, unknown>;
+  return opt.desc.replace(/\{(\w+)\}/g, (whole, key: string) => {
+    const v = fields[key];
+    return v === undefined ? whole : String(v);
+  });
+}
+
 /** Énergie totale que vaut une série parfaite de 90 jours (affiché dans l'UI). */
 export const TOTAL_STREAK_ENERGY = STREAK_TIERS.reduce((sum, t) => sum + t.energy, 0);
 

@@ -34,6 +34,7 @@ import type {
   BattleState,
   FieldStructure,
   LiveWaveResult,
+  SortieModifier,
   SupportSlotState,
 } from "@/lib/game/bastion/types";
 import { useGame } from "@/lib/game/store";
@@ -67,8 +68,10 @@ export interface BastionBattleSnapshot {
 
 export interface BastionSceneHandle {
   /** Lance une vague EN DIRECT (régénère les structures à réparation, spawn immédiat
-   *  des troupes de garnison). No-op si une bataille est déjà active. */
-  startBattle: (waveN: number) => void;
+   *  des troupes de garnison). No-op si une bataille est déjà active.
+   *  `mod` (facultatif) porte le Péril et les Préparatifs d'une SORTIE ; sans lui la
+   *  bataille est une défense planifiée ordinaire. */
+  startBattle: (waveN: number, mod?: SortieModifier) => void;
   /** Déclenche le pouvoir actif d'un slot de support prêt (strikeAll/shieldBurst). */
   triggerSupportActive: (index: number) => void;
   /** Lecture ponctuelle de l'état de bataille (pour le HUD de BastionPanel, pollé à
@@ -163,7 +166,7 @@ export const BastionScene = forwardRef<BastionSceneHandle, BastionSceneProps>(fu
   const hitPosRef = useRef<{ x: number; y: number; r: number }[]>([]);
 
   useImperativeHandle(ref, () => ({
-    startBattle: (waveN) => {
+    startBattle: (waveN, mod) => {
       if (battleRef.current?.active) return;
       const state = useGame.getState();
       const structures = regenFieldStructures(state.bastion.fieldStructures);
@@ -172,7 +175,7 @@ export const BastionScene = forwardRef<BastionSceneHandle, BastionSceneProps>(fu
       const ctx = buildStaticDefs(state, structuresRef.current);
       // PV du Bastion : socle de bastion_config.json × "Fondations renforcées" × vestige
       // "Socle basaltique" de La Dérive. Tout est calculé par bastionHpMax (module pur).
-      battleRef.current = initBattle(waveN, bastionHpMax(state), ctx);
+      battleRef.current = initBattle(waveN, bastionHpMax(state), ctx, mod);
       endTimerRef.current = null;
     },
     triggerSupportActive: (index) => {

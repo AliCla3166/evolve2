@@ -1,7 +1,8 @@
 /* Page de jeu /play — mobile-first, fond océan.
    HUD ressources · file de construction · base vivante (scène Canvas,
    tap sur un bâtiment → panneau d'amélioration) · habitudes du jour ·
-   nav basse (Noyau, Rapports) · événements & alerte pathogène (Phase 5). */
+   nav basse (Habitudes, Dérive, Mare, Bastion, Rapports, Réglages) ·
+   événements & alerte pathogène (Phase 5). */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
@@ -30,9 +31,10 @@ import type { NavIconId } from "@/components/ui/Pixel";
 import { cloudConfigured } from "@/lib/cloud/firebase";
 import { useCloudSync } from "@/lib/cloud/useCloudSync";
 import { WAVE_LEAD_WINDOW_MS } from "@/lib/game/bastion/config";
+import { freeSortiesToday, sortiesUsedToday } from "@/lib/game/bastion/sorties";
 import { fmtDuration } from "@/lib/game/format";
-import { dayKey } from "@/lib/game/habits";
 import { portalTarget } from "@/lib/game/scene";
+import { bonusValue } from "@/lib/game/territoire";
 import { installAudio, playCue } from "@/lib/audio";
 import { useOverlay, scrollToTop } from "@/lib/overlay";
 import { hydrateActiveSlot, useGame } from "@/lib/game/store";
@@ -82,6 +84,16 @@ const PANEL_IDS: ReadonlyArray<Exclude<PanelId, null>> = [
   "settings",
 ];
 
+/* Écran ouvert par le bouton d'action de la fiche d'un bâtiment. Le Noyau y est
+   entré à l'étape 6c : il a quitté la barre de navigation au profit de LA DÉRIVE,
+   son socle au centre de la scène est devenu sa seule porte. Le libellé de chaque
+   bouton vit dans `BuildingSheet` (cf. `SHEET_ACTION`) — ici, uniquement la
+   destination. */
+const SHEET_PANEL: Partial<Record<BuildingId, Exclude<PanelId, null>>> = {
+  defense: "bastion",
+  noyau: "noyau",
+};
+
 /* ============================ Navigation basse ============================
    Piste 10 du diagnostic, trois corrections d'un coup :
 
@@ -98,7 +110,17 @@ const PANEL_IDS: ReadonlyArray<Exclude<PanelId, null>> = [
 
    3. LA ZONE SÛRE. `fixed bottom-0` posait la nav sous le home indicator iOS.
       `pb-safe` la remonte ; `--nav-h` + `pb-nav` réservent la place côté
-      contenu, à la place des `pb-24` devinés un peu partout. */
+      contenu, à la place des `pb-24` devinés un peu partout.
+
+   ÉTAPE 6C (La Dérive) — LE NOYAU CÈDE SA PLACE. Sept onglets, c'est le maximum
+   tenable sur un écran de 320 px : ajouter LA DÉRIVE imposait d'en retirer un.
+   Le Noyau est le candidat évident, et pour une raison de fond, pas de place :
+   il est le SEUL onglet qui doublonnait un socle de la scène — son bâtiment
+   trône au centre de la base, à portée de pouce. Les six autres (Habitudes,
+   Mare, Bastion, Rapports, Réglages, Base) n'ont pas cette porte, ou l'ont mais
+   mènent à un écran qu'on ouvre plusieurs fois par jour. Le Noyau, lui, se
+   consulte une fois par session : sa fiche de bâtiment suffit largement.
+   `"noyau"` reste dans `PANEL_IDS` — un rappel système peut toujours l'ouvrir. */
 
 /** Un onglet. Le libellé est en `clamp()` : 8 px sur un écran de 320 px (où
  *  7 onglets ne laissent que ~45 px chacun), 10 px sur un grand téléphone —
@@ -155,13 +177,22 @@ function BottomNav({
   const reports = useGame((s) => s.reports);
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const nextAttackAt = useGame((s) => s.nextAttackAt);
-  const noyauSeenDay = useGame((s) => s.noyauSeenDay);
+  const bastion = useGame((s) => s.bastion);
+  const territoire = useGame((s) => s.territoire);
   const now = useGame((s) => s.lastTick);
 
   const unseen = reports.filter((r) => r.ts > reportsSeenAt).length;
   const waveIn = nextAttackAt - now;
   const wavePlayable = nextAttackAt > 0 && waveIn > 0 && waveIn <= WAVE_LEAD_WINDOW_MS;
-  const newDestinations = noyauSeenDay !== dayKey(now);
+  /* Sorties gratuites qu'il reste à dépenser aujourd'hui. C'est le seul chiffre
+     de la barre qui dit « il y a quelque chose à faire MAINTENANT, et c'est
+     gratuit » : il se remet à plein tous les jours, il s'éteint dès qu'on a tout
+     joué, et il vit sur DÉRIVE parce que c'est là qu'on choisit la cible. */
+  const freeLeft = Math.max(
+    0,
+    freeSortiesToday(bastion, now, bonusValue(territoire, "free_sortie")) -
+      sortiesUsedToday(bastion, now),
+  );
 
   const toggle = (id: Exclude<PanelId, null>) => () => setPanel(panel === id ? null : id);
 
@@ -186,16 +217,16 @@ function BottomNav({
           onClick={toggle("habits")}
         />
         <NavBtn
-          icon="units"
-          label="NOYAU"
-          active={panel === "noyau"}
-          badge={newDestinations ? "✦" : null}
+          icon="derive"
+          label="DÉRIVE"
+          active={panel === "derive"}
+          badge={freeLeft > 0 ? String(freeLeft) : null}
           title={
-            newDestinations
-              ? "Le Noyau — 4 nouvelles destinations d'expédition sont disponibles aujourd'hui"
-              : "Le Noyau — recrutement et expéditions"
+            freeLeft > 0
+              ? `La Dérive — la carte des eaux (${freeLeft} sortie${freeLeft > 1 ? "s" : ""} gratuite${freeLeft > 1 ? "s" : ""} à jouer aujourd'hui)`
+              : "La Dérive — la carte des eaux : gisements, vestiges, antres"
           }
-          onClick={toggle("noyau")}
+          onClick={toggle("derive")}
         />
         <NavBtn
           icon="mare"
@@ -246,9 +277,21 @@ export default function PlayPage() {
      membrane (piste 8) est déclenché, plutôt que sur une dizaine de handlers.
      Le repère ne part que si l'état change réellement — retoucher l'onglet
      déjà ouvert ne doit rien produire. */
+  /* Cible de sortie choisie sur la carte de La Dérive. Elle ne vit QUE le temps d'aller de
+     la carte au lanceur du Bastion : tout passage par `setPanel` l'efface, sinon rouvrir le
+     Bastion des semaines plus tard proposerait encore d'assaillir un foyer oublié. */
+  const [sortieTarget, setSortieTarget] = useState<string | null>(null);
   const setPanel = (next: PanelId) => {
     if (next !== panel) playCue(next === null ? "panel_close" : "panel_open");
+    setSortieTarget(null);
     setPanelState(next);
+  };
+  /* La carte choisit la CIBLE, le Bastion choisit le Péril et les Préparatifs : une seule
+     décision par écran. L'ordre compte — `setPanel` remet la cible à zéro, on la repose
+     donc juste après (même lot de mises à jour, donc un seul rendu). */
+  const handleAssault = (foyerId: string) => {
+    setPanel("bastion");
+    setSortieTarget(foyerId);
   };
   /* Un tap sur un socle « portail » (Défense/Pêche/Raid) ouvre directement
      l'écran concerné au lieu d'une fiche de bâtiment vide (piste 9b) : ces
@@ -307,6 +350,10 @@ export default function PlayPage() {
     return subscribeNotificationOpen((target) => {
       const id = PANEL_IDS.find((p) => p === target) ?? null;
       setSelected(null);
+      // Ce chemin court-circuite `setPanel` (règle set-state-in-effect) : on efface donc
+      // la cible de sortie à la main, sinon un rappel ouvrant le Bastion rouvrirait le
+      // lanceur sur un foyer choisi dans une session précédente.
+      setSortieTarget(null);
       setPanelState(id);
       if (id) playCue("panel_open");
     });
@@ -406,10 +453,10 @@ export default function PlayPage() {
           id={selected}
           onClose={() => setSelected(null)}
           onPlay={
-            selected === "defense"
+            SHEET_PANEL[selected]
               ? () => {
                   setSelected(null);
-                  setPanel("bastion");
+                  setPanel(SHEET_PANEL[selected]!);
                 }
               : undefined
           }
@@ -417,11 +464,17 @@ export default function PlayPage() {
       )}
 
       {/* Overlays */}
-      {panel === "habits" && <HabitsPanel onClose={() => setPanel(null)} />}
+      {panel === "habits" && (
+        <HabitsPanel onClose={() => setPanel(null)} onGoto={(p) => setPanel(p)} />
+      )}
       {panel === "noyau" && <NoyauHub onClose={() => setPanel(null)} />}
       {panel === "mare" && <MarePanel onClose={() => setPanel(null)} />}
-      {panel === "derive" && <TerritoirePanel onClose={() => setPanel(null)} />}
-      {panel === "bastion" && <BastionPanel onClose={() => setPanel(null)} />}
+      {panel === "derive" && (
+        <TerritoirePanel onClose={() => setPanel(null)} onAssault={handleAssault} />
+      )}
+      {panel === "bastion" && (
+        <BastionPanel onClose={() => setPanel(null)} initialTargetId={sortieTarget} />
+      )}
       {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
       {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
       <EventModal />
@@ -436,7 +489,7 @@ export default function PlayPage() {
         }}
       />
 
-      {/* Nav basse — 7 onglets, dont le Bastion (piste 10) */}
+      {/* Nav basse — 7 onglets : le Bastion (piste 10) et La Dérive (étape 6c) */}
       {hasHydrated && profile && <BottomNav panel={panel} setPanel={setPanel} />}
     </main>
   );

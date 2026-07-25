@@ -229,15 +229,18 @@ export type NavIconId =
   | "mutation"
   | "reports"
   | "settings"
-  | "bastion";
+  | "bastion"
+  | "derive";
 
-/* Le kit d'icônes de nav a été produit avant que le Bastion n'existe : il n'y a
-   pas de `age01_cell_ui_icon_bastion_v001.png`. Plutôt que de laisser l'onglet
-   le plus jouable du jeu hors navigation en attendant un asset (piste 10), on
-   réutilise le sprite du bâtiment Défense — c'est exactement ce que le joueur
-   voit dans la scène, donc le lien est immédiat. */
+/* Le kit d'icônes de nav a été produit avant que le Bastion et La Dérive
+   n'existent : il n'y a ni `..._icon_bastion_v001.png` ni `..._icon_derive_v001.png`.
+   Plutôt que de laisser les deux onglets les plus jouables du jeu hors navigation
+   en attendant des assets (piste 10), on réutilise le sprite du socle qui leur sert
+   de porte dans la scène — Défense pour le Bastion, Raid pour La Dérive. C'est
+   exactement ce que le joueur voit sur sa base, donc le lien est immédiat. */
 const NAV_SRC: Partial<Record<NavIconId, string>> = {
   bastion: "/assets/buildings/defense/niveau1.png",
+  derive: "/assets/buildings/raid/niveau1.png",
 };
 
 /** Icône de navigation du HUD. */

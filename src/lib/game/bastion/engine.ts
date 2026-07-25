@@ -33,6 +33,7 @@ import type {
   EnemyId,
   FieldStructure,
   MortarSlot,
+  SortieModifier,
   StaticDefs,
   SupportSlotState,
 } from "./types";
@@ -72,11 +73,16 @@ function waveRng(waveN: number): () => number {
   };
 }
 
-export function genLiveWave(waveN: number): LiveWavePlan {
+/** Compose la vague `waveN`. `mod` (optionnel) est le durcissement apporté par le Péril
+ *  d'une sortie : il multiplie les stats et ajoute des boss, mais ne change NI la liste
+ *  des espèces NI leur nombre — la composition reste celle du palier, semée par `waveRng`.
+ *  L'aperçu de la Vigie reste donc exact quel que soit le Péril choisi. */
+export function genLiveWave(waveN: number, mod?: SortieModifier): LiveWavePlan {
   const w = BASTION.wave;
   const p = BASTION.pathogens;
   const rng = waveRng(waveN);
-  const isBoss = waveN % p.boss_every === 0;
+  const bossFromPalier = waveN % p.boss_every === 0;
+  const extraBosses = Math.max(0, Math.round(mod?.extraBosses ?? 0));
   const pool = p.roster.filter((e) => e.unlock <= waveN);
   const numTypes = Math.max(w.num_types_base, Math.min(w.num_types_max, w.num_types_base + Math.floor(waveN / w.num_types_per_waves)));
   const chosen: PathogenDef[] = [];
@@ -87,18 +93,22 @@ export function genLiveWave(waveN: number): LiveWavePlan {
   }
   if (chosen.length === 0 && pool.length) chosen.push(pool[0]);
   const count = Math.round(w.count_base + waveN * w.count_per_wave);
-  const hpMult = 1 + waveN * w.hp_mult_per_wave;
-  const dmgMult = 1 + waveN * w.dmg_mult_per_wave;
+  const hpMult = (1 + waveN * w.hp_mult_per_wave) * (mod?.hpMult ?? 1);
+  const dmgMult = (1 + waveN * w.dmg_mult_per_wave) * (mod?.dmgMult ?? 1);
   const spawnGap = Math.max(w.spawn_gap_min, w.spawn_gap_base - waveN * w.spawn_gap_per_wave);
   const spawnQueue: LiveWavePlan["spawnQueue"] = [];
   for (let i = 0; i < count; i++) {
     spawnQueue.push({ typeId: chosen[i % chosen.length].id, t: i * spawnGap });
   }
-  if (isBoss) {
-    spawnQueue.push({ typeId: p.boss.id, t: count * spawnGap + 1.2, isBoss: true });
+  // Boss : celui du palier arrive en dernier, ceux du Péril s'échelonnent derrière lui
+  // (1,2 s d'écart) plutôt que d'entrer tous ensemble — un mur de boss simultanés serait
+  // illisible, alors qu'une file donne une chance de les traiter un par un.
+  const totalBosses = (bossFromPalier ? 1 : 0) + extraBosses;
+  for (let i = 0; i < totalBosses; i++) {
+    spawnQueue.push({ typeId: p.boss.id, t: count * spawnGap + 1.2 * (i + 1), isBoss: true });
   }
   spawnQueue.sort((a, b) => a.t - b.t);
-  return { spawnQueue, hpMult, dmgMult, isBoss };
+  return { spawnQueue, hpMult, dmgMult, isBoss: totalBosses > 0 };
 }
 
 /* ---------- Aperçu de vague (Vigie) ---------- */
@@ -111,13 +121,16 @@ export interface WavePreview {
   dmgMult: number;
   /** Effectif par espèce, du plus nombreux au moins nombreux (boss exclu). */
   types: { id: EnemyId; name: string; count: number; hp: number; dmg: number; ranged: boolean }[];
-  boss: { id: EnemyId; name: string; hp: number; dmg: number } | null;
+  /** Boss de la vague, avec son effectif (le Péril peut en ajouter). */
+  boss: { id: EnemyId; name: string; hp: number; dmg: number; count: number } | null;
 }
 
 /** Contenu EXACT de la vague `waveN` — dérivé de genLiveWave lui-même (jamais réécrit
- *  en parallèle) pour que l'aperçu ne puisse pas diverger du combat réellement joué. */
-export function previewWave(waveN: number): WavePreview {
-  const plan = genLiveWave(waveN);
+ *  en parallèle) pour que l'aperçu ne puisse pas diverger du combat réellement joué.
+ *  `mod` permet d'afficher la vague TELLE QU'ELLE SERA une fois le Péril appliqué : le
+ *  joueur voit le prix de son pari avant de le prendre, jamais après. */
+export function previewWave(waveN: number, mod?: SortieModifier): WavePreview {
+  const plan = genLiveWave(waveN, mod);
   const counts = new Map<EnemyId, number>();
   for (const s of plan.spawnQueue) {
     if (s.isBoss) continue;
@@ -137,6 +150,7 @@ export function previewWave(waveN: number): WavePreview {
     })
     .sort((a, b) => b.count - a.count);
   const bossDef = BASTION.pathogens.boss;
+  const bossCount = plan.spawnQueue.filter((s) => s.isBoss).length;
   return {
     waveN,
     isBoss: plan.isBoss,
@@ -144,12 +158,13 @@ export function previewWave(waveN: number): WavePreview {
     hpMult: plan.hpMult,
     dmgMult: plan.dmgMult,
     types,
-    boss: plan.isBoss
+    boss: bossCount
       ? {
           id: bossDef.id,
           name: bossDef.name,
           hp: Math.round(bossDef.hp * plan.hpMult),
           dmg: Math.round(bossDef.dmg * plan.dmgMult),
+          count: bossCount,
         }
       : null,
   };
@@ -221,14 +236,23 @@ function spawnMortarTroop(battle: BattleState, slot: MortarSlot, speciesId: stri
   };
 }
 
-export function initBattle(waveN: number, bastionHpMax: number, ctx: StaticDefs): BattleState {
-  const plan = genLiveWave(waveN);
+/** Prépare une bataille. `mod` porte tout ce qu'une SORTIE change au combat (Péril +
+ *  Préparatifs) ; l'omettre donne une défense classique, exactement comme avant. */
+export function initBattle(waveN: number, bastionHpMax: number, ctx: StaticDefs, mod?: SortieModifier): BattleState {
+  const plan = genLiveWave(waveN, mod);
   const battle: BattleState = {
     active: true,
     waveN,
     bastionHp: bastionHpMax,
     bastionHpMax,
     elapsed: 0,
+    // Figés ici : stepBattle les relit tels quels à chaque apparition. Les recalculer en
+    // cours de combat (ancien genLiveWave(battle.waveN) dans la boucle) perdait justement
+    // le Péril, qui ne vit que dans `mod`.
+    hpMult: plan.hpMult,
+    dmgMult: plan.dmgMult,
+    respawnCredits: 0,
+    openingStrike: Math.max(0, mod?.openingDamageRatio ?? 0),
     spawnQueue: plan.spawnQueue,
     enemies: [],
     troops: [],
@@ -253,8 +277,10 @@ export function initBattle(waveN: number, bastionHpMax: number, ctx: StaticDefs)
     if (!entry) return;
     battle.troops.push(spawnMortarTroop(battle, slot, slot.occupant, entry, ctx));
   });
-  // Attache hpMult/dmgMult de la vague sur l'objet retourné pour spawnEnemy (closure via WeakMap
-  // serait excessif ici — on les recalcule à la volée dans stepBattle via genLiveWave(waveN)).
+  // « Renfort de garnison » : une vague de réapparitions = une seconde vie pour CHAQUE
+  // troupe déployée. Le crédit se compte donc en troupes, pas en vagues — c'est ce qui
+  // rend le préparatif également utile à une garnison de 2 comme de 12.
+  battle.respawnCredits = Math.max(0, Math.round(mod?.respawnWaves ?? 0)) * battle.troops.length;
   return battle;
 }
 
@@ -371,8 +397,7 @@ export function stepBattle(battle: BattleState, dt: number, ctx: StaticDefs): vo
   while (battle.spawnQueue.length && battle.spawnQueue[0].t <= battle.elapsed) {
     const spawn = battle.spawnQueue.shift()!;
     const type = pathogenDef(spawn.typeId, !!spawn.isBoss);
-    const plan = genLiveWave(battle.waveN);
-    const hp = Math.round(type.hp * plan.hpMult);
+    const hp = Math.round(type.hp * battle.hpMult);
     battle.enemies.push({
       uid: battle.nextUid++,
       typeId: type.id,
@@ -381,7 +406,7 @@ export function stepBattle(battle: BattleState, dt: number, ctx: StaticDefs): vo
       y: BATTLE_Y_TOP + Math.random() * (BATTLE_Y_BOTTOM - BATTLE_Y_TOP),
       hp,
       hpMax: hp,
-      dmg: Math.round(type.dmg * plan.dmgMult),
+      dmg: Math.round(type.dmg * battle.dmgMult),
       speed: type.speed,
       ranged: !!type.ranged,
       atkRange: type.atkRange ?? 0,
@@ -405,6 +430,18 @@ export function stepBattle(battle: BattleState, dt: number, ctx: StaticDefs): vo
     const isCore = target.kind === "core";
     const engageRange = isCore ? CORE_RADIUS : en.ranged ? en.atkRange : MELEE_RANGE;
     const d = dist(en.x, en.y, target.x, target.y);
+    // « Salve enzymatique » : elle part au PREMIER contact, pas au lancement de la vague.
+    // Déclenchée à t=0 elle ne toucherait que les deux premiers pathogènes apparus ; ici
+    // elle cueille tout ce qui est arrivé jusqu'au moment où la ligne cède, ce qui en fait
+    // une vraie ouverture de combat et non un bonus dilué.
+    if (battle.openingStrike > 0 && d <= engageRange) {
+      const ratio = battle.openingStrike;
+      battle.openingStrike = 0;
+      battle.enemies.forEach((victim) => {
+        if (!victim.dying) damageEnemy(battle, victim, victim.hpMax * ratio);
+      });
+      if (en.dying) return;
+    }
     const slow = en.slowUntil > battle.elapsed ? 1 - en.slowPct : 1;
     if (d > engageRange) {
       const speed = en.speed * slow;
@@ -431,7 +468,19 @@ export function stepBattle(battle: BattleState, dt: number, ctx: StaticDefs): vo
             if (t.hp <= 0) {
               t.dying = true;
               t.deathTimer = 0;
+              // Deux sources de renfort : le déblocage PERMANENT (illimité sur la vague)
+              // et les crédits ACHETÉS du préparatif « Renfort de garnison », qui prennent
+              // le relais quand le déblocage n'est pas acquis. On ne consomme un crédit que
+              // s'il sert vraiment — sinon le préparatif se viderait au profit du déblocage.
               if (ctx.inWaveRespawnUnlocked) {
+                battle.pendingRespawns.push({
+                  sourceSlotId: t.sourceSlotId,
+                  kind: t.kind,
+                  speciesId: t.speciesId,
+                  at: battle.elapsed + RESPAWN_DELAY_S,
+                });
+              } else if (battle.respawnCredits > 0) {
+                battle.respawnCredits -= 1;
                 battle.pendingRespawns.push({
                   sourceSlotId: t.sourceSlotId,
                   kind: t.kind,
@@ -558,8 +607,10 @@ export function stepBattle(battle: BattleState, dt: number, ctx: StaticDefs): vo
   battle.enemies = battle.enemies.filter((e) => !(e.dying && e.deathTimer > 0.3));
   battle.troops = battle.troops.filter((t) => !(t.dying && t.deathTimer > 0.3));
 
-  // 8) renforts en combat (si débloqué)
-  if (ctx.inWaveRespawnUnlocked && battle.pendingRespawns.length) {
+  // 8) renforts en combat — la file n'est alimentée (étape 2) que si le déblocage
+  //    permanent est acquis OU qu'un crédit de préparatif a été consommé : ici on se
+  //    contente de la vider, sans re-tester le déblocage (ce qui annulerait les crédits).
+  if (battle.pendingRespawns.length) {
     const ready = battle.pendingRespawns.filter((r) => r.at <= battle.elapsed);
     if (ready.length) {
       battle.pendingRespawns = battle.pendingRespawns.filter((r) => r.at > battle.elapsed);

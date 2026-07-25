@@ -78,6 +78,20 @@ function ProdLine({ prod, empty }: { prod: Record<string, number>; empty: string
   );
 }
 
+/* Bâtiments dont la fiche ouvre un écran à part entière. Le LIBELLÉ vit ici, au
+   plus près du bouton ; la page ne fournit que l'action.
+
+   - "defense" : filet de sécurité. Son socle est un PORTAIL (cf. scene.ts), donc
+     un tap l'ouvre déjà sans passer par cette fiche.
+   - "noyau" : sa PORTE PRINCIPALE. Depuis que LA DÉRIVE a pris sa place dans la
+     barre de navigation (cf. docs/PLAN_DERIVE.md §3.7), le Noyau ne s'atteint
+     plus que par son socle — le bouton doit donc être le premier élément lisible
+     de la fiche, pas une option perdue en bas. */
+const SHEET_ACTION: Partial<Record<BuildingId, string>> = {
+  defense: "⚔️ JOUER",
+  noyau: "🧬 OUVRIR LE NOYAU — recrutement & expéditions",
+};
+
 export function BuildingSheet({
   id,
   onClose,
@@ -85,9 +99,7 @@ export function BuildingSheet({
 }: {
   id: BuildingId;
   onClose: () => void;
-  /** Ouvre l'écran jouable associé. Filet de sécurité uniquement : depuis que
-   *  "defense", "peche" et "raid" sont des PORTAILS (cf. scene.ts), un tap sur
-   *  leur socle ouvre directement l'écran sans passer par cette fiche. */
+  /** Ouvre l'écran associé à ce bâtiment (cf. `SHEET_ACTION`). */
   onPlay?: () => void;
 }) {
   const resources = useGame((s) => s.resources);
@@ -180,11 +192,11 @@ export function BuildingSheet({
             {buildingPurpose(id)}
           </p>
 
-          {/* Bastion-Défense : mini-jeu jouable indépendant (pas de niveau/production ici) */}
-          {!designed && id === "defense" && onPlay && (
+          {/* Porte vers l'écran du bâtiment (Bastion jouable, hub du Noyau) */}
+          {onPlay && SHEET_ACTION[id] && (
             <div className="mt-2">
               <PixelButton className="w-full text-xs" onClick={onPlay}>
-                ⚔️ JOUER
+                {SHEET_ACTION[id]}
               </PixelButton>
             </div>
           )}
