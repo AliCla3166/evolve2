@@ -232,17 +232,17 @@ STORAGE_TABLE = {
 # ============================================================
 
 RESOURCES_META = {
-    "energie":  {"name": "Points d'energie",   "kind": "externe_habitude", "spendable_on_buildings": False, "note": "Genere par le suivi d'habitudes reel (Day Strike). Sert aux boosts temporaires, pas au cout de construction."},
-    "vitalite": {"name": "Points de Vitalite",  "kind": "meta_prestige",   "spendable_on_buildings": True,  "note": "Produit passivement par le Noyau. Utilise uniquement comme cout partiel du Centre de mutation (capstone)."},
-    "adn":      {"name": "ADN",                 "kind": "productible",     "spendable_on_buildings": True, "producer": "adn"},
-    "proteine": {"name": "Proteines",           "kind": "productible",     "spendable_on_buildings": True, "producer": "proteine"},
-    "biomasse": {"name": "Biomasse",            "kind": "productible",     "spendable_on_buildings": True, "producer": "biomasse"},
-    "enzyme":   {"name": "Enzymes",             "kind": "productible",     "spendable_on_buildings": True, "producer": "enzyme"},
-    "lipide":   {"name": "Lipides",             "kind": "productible",     "spendable_on_buildings": True, "producer": "lipide"},
-    "signaux":  {"name": "Signaux chimiques",   "kind": "productible",     "spendable_on_buildings": True, "producer": "signaux"},
-    "combat":   {"name": "Monnaie de combat",   "kind": "hors_perimetre",  "spendable_on_buildings": False, "note": "Liee a Bastion Defense/Raid, non definie ici."},
-    "rubis":    {"name": "Rubis",               "kind": "hors_perimetre",  "spendable_on_buildings": False, "note": "Monnaie premium, hors perimetre economique de ce document."},
-    "age":      {"name": "Points d'age",        "kind": "hors_perimetre",  "spendable_on_buildings": False, "note": "Monnaie de transition d'Age, hors perimetre de ce document."},
+    "energie":  {"name": "Points d'énergie",   "kind": "externe_habitude", "spendable_on_buildings": False, "note": "Genere par le suivi d'habitudes reel (Day Strike). Sert aux boosts temporaires, pas au cout de construction."},
+    "vitalite": {"name": "Points de Vitalité", "kind": "meta_prestige",   "spendable_on_buildings": True,  "note": "Produit passivement par le Noyau. Utilise uniquement comme cout partiel du Centre de mutation (capstone)."},
+    "adn":      {"name": "ADN",                "kind": "productible",     "spendable_on_buildings": True, "producer": "adn"},
+    "proteine": {"name": "Protéines",          "kind": "productible",     "spendable_on_buildings": True, "producer": "proteine"},
+    "biomasse": {"name": "Biomasse",           "kind": "productible",     "spendable_on_buildings": True, "producer": "biomasse"},
+    "enzyme":   {"name": "Enzymes",            "kind": "productible",     "spendable_on_buildings": True, "producer": "enzyme"},
+    "lipide":   {"name": "Lipides",            "kind": "productible",     "spendable_on_buildings": True, "producer": "lipide"},
+    "signaux":  {"name": "Signaux chimiques",  "kind": "productible",     "spendable_on_buildings": True, "producer": "signaux"},
+    "combat":   {"name": "Monnaie de combat",  "kind": "hors_perimetre",  "spendable_on_buildings": False, "note": "Liee a Bastion Defense/Raid, non definie ici."},
+    "rubis":    {"name": "Rubis",              "kind": "hors_perimetre",  "spendable_on_buildings": False, "note": "Monnaie premium, hors perimetre economique de ce document."},
+    "age":      {"name": "Points d'Âge",       "kind": "hors_perimetre",  "spendable_on_buildings": False, "note": "Monnaie de transition d'Age, hors perimetre de ce document."},
 }
 
 if __name__ == "__main__":

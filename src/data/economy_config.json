@@ -737,13 +737,13 @@
   },
   "resources": {
     "energie": {
-      "name": "Points d'energie",
+      "name": "Points d'énergie",
       "kind": "externe_habitude",
       "spendable_on_buildings": false,
       "note": "Genere par le suivi d'habitudes reel (Day Strike). Sert aux boosts temporaires, pas au cout de construction."
     },
     "vitalite": {
-      "name": "Points de Vitalite",
+      "name": "Points de Vitalité",
       "kind": "meta_prestige",
       "spendable_on_buildings": true,
       "note": "Produit passivement par le Noyau. Utilise uniquement comme cout partiel du Centre de mutation (capstone)."
@@ -755,7 +755,7 @@
       "producer": "adn"
     },
     "proteine": {
-      "name": "Proteines",
+      "name": "Protéines",
       "kind": "productible",
       "spendable_on_buildings": true,
       "producer": "proteine"
@@ -797,7 +797,7 @@
       "note": "Monnaie premium, hors perimetre economique de ce document."
     },
     "age": {
-      "name": "Points d'age",
+      "name": "Points d'Âge",
       "kind": "hors_perimetre",
       "spendable_on_buildings": false,
       "note": "Monnaie de transition d'Age, hors perimetre de ce document."
