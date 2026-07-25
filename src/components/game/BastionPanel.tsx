@@ -39,6 +39,7 @@ import { BastionScene } from "./BastionScene";
 import type { BastionSlotTarget, LiveWaveResult } from "@/lib/game/bastion/types";
 import { estimatedWavePower } from "@/lib/game/military";
 import { fmtDuration, fmtInt } from "@/lib/game/format";
+import { useOverlay } from "@/lib/overlay";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
 import { playCue } from "@/lib/audio";
@@ -232,7 +233,7 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-md space-y-3 px-2 pb-24 pt-3 sm:max-w-2xl">
+      <div className="mx-auto max-w-md space-y-3 pb-nav pt-safe px-2 sm:max-w-2xl">
         {/* En-tête */}
         <div className="flex items-center gap-3">
           <img src="/assets/buildings/defense/niveau1.png" alt="" width={40} height={40} className="pixelated" draggable={false} />
@@ -487,12 +488,19 @@ export function BastionPanel({ onClose }: { onClose: () => void }) {
                 {bastion.support.map((s, i) => {
                   const def = s ? buildingDef(s.occupant) : null;
                   return (
-                    <div key={i} className="flex h-16 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border border-cell-teal/25 text-center">
+                    /* La cellule passe de h-16 a min-h-[104px] pour loger un « retirer »
+                       de 44 px de haut (piste 10 : le lien faisait ~11 px, la cible
+                       tactile la plus petite de tout le jeu). */
+                    <div key={i} className="flex min-h-[104px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border border-cell-teal/25 p-1 text-center">
                       {def ? (
                         <>
                           <span className="text-lg">{buildingIcon(def.id)}</span>
                           <span className="max-w-[70px] truncate text-[9px] text-cell-cyan">{def.name}</span>
-                          <button onClick={() => removeBastionSupportToReserve(i)} className="text-[8px] text-cell-teal/50 underline">
+                          <button
+                            onClick={() => removeBastionSupportToReserve(i)}
+                            aria-label={`Retirer ${def.name} du support`}
+                            className="tap-h w-full text-[10px] text-cell-teal/60 underline"
+                          >
                             retirer
                           </button>
                         </>
@@ -675,6 +683,10 @@ function SlotInspector({
   const bastion = useGame((s) => s.bastion);
   const collection = useGame((s) => s.collection);
 
+  /* Empile par-dessus le panneau Bastion : le retour systeme ferme d'abord
+     l'inspecteur, puis le panneau (jeton d'historique par overlay). */
+  useOverlay(true, onClose);
+
   let body: React.ReactNode = null;
   if (target.kind === "barracks" || target.kind === "mortar") {
     const slot = (target.kind === "barracks" ? bastion.barracksSlots : bastion.mortarSlots).find((s) => s.id === target.slotId);
@@ -787,7 +799,7 @@ function SlotInspector({
           BastionPanel, qui forme son propre contexte d'empilement — le z-50 local ne le fait
           donc PAS passer au-dessus de la nav basse fixe (z-40) du contexte parent. On garantit
           plutôt l'absence de chevauchement géométrique avec la nav, comme le reste du panneau
-          (cf. pb-24 sur le conteneur scrollable de BastionPanel) et comme BuildingSheet.tsx. */}
+          (cf. pb-nav sur le conteneur scrollable de BastionPanel) et comme BuildingSheet.tsx. */}
       <div className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md px-2 pb-16 sm:max-w-lg">
         <Panel variant="noyau" className="space-y-2 p-3" style={{ background: "rgba(5, 11, 20, 0.97)" }}>
           {body}

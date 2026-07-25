@@ -344,7 +344,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
         capturing ? "z-50" : "z-30"
       }`}
     >
-      <div className="mx-auto max-w-md space-y-3 px-2 pb-24 pt-3 sm:max-w-lg">
+      <div className="mx-auto max-w-md space-y-3 pb-nav pt-safe px-2 sm:max-w-lg">
         {/* En-tête */}
         <div className={`flex items-center gap-3 ${inertWhileFishing}`}>
           <div className="flex-1">
@@ -500,32 +500,42 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                         }}
                       />
                     </CardFrame>
-                    <span className="text-center text-[10px] leading-tight text-cell-cyan">{sp.name}</span>
-                    <span className="text-[9px]" style={{ color: rar.color }}>
+                    {/* Lisibilite de la grille (piste 7) + cibles tactiles (piste 10) :
+                        le nom passe a 11 px, les PV rejoignent la ligne de stats — on tombe
+                        de 5 lignes de texte tassees a 4 — et les deux boutons d'assignation
+                        passent de ~22 px a 44 px de haut sur toute la largeur de la carte. */}
+                    <span className="text-center text-[11px] font-bold leading-tight text-cell-cyan">{sp.name}</span>
+                    <span className="text-center text-[9px] leading-tight" style={{ color: rar.color }}>
                       {rar.name} · Nv {level}
                       {next !== null && <span className="text-cell-teal/50"> ({entry.count}/{next})</span>}
                     </span>
                     <span className="text-[9px] text-cell-teal/60">{ROLE_LABEL[sp.role]}</span>
-                    <span className="whitespace-nowrap text-[9px] text-cell-magenta/80">❤{cardHp(sp.id, entry)} PV</span>
-                    <span className="whitespace-nowrap text-[9px] text-cell-teal/70">
-                      🛡{cardPowerDef(sp.id, entry)} · 🧭{cardPowerExp(sp.id, entry)} · ⚔{cardPowerAtk(sp.id, entry)}
-                    </span>
-                    <div className="flex gap-1">
+                    <div className="flex flex-wrap items-center justify-center gap-x-1.5 text-[10px] leading-tight">
+                      <span className="text-cell-magenta/80">❤{cardHp(sp.id, entry)}</span>
+                      <span className="text-cell-teal/70">🛡{cardPowerDef(sp.id, entry)}</span>
+                      <span className="text-cell-teal/70">🧭{cardPowerExp(sp.id, entry)}</span>
+                      <span className="text-cell-teal/70">⚔{cardPowerAtk(sp.id, entry)}</span>
+                    </div>
+                    <div className="mt-0.5 flex w-full gap-1">
                       <button
                         onClick={() => toggleCardAssign(sp.id, "defense")}
-                        className={`rounded border px-2 py-0.5 text-[10px] ${
+                        className={`tap-h flex-1 rounded border text-[15px] ${
                           inDef ? "border-cell-lime bg-cell-lime/20 text-cell-lime" : "border-cell-teal/30 text-cell-teal/60"
                         }`}
                         title="Assigner à la défense de la cellule"
+                        aria-pressed={inDef}
+                        aria-label={`Assigner ${sp.name} à la défense de la cellule`}
                       >
                         🛡️
                       </button>
                       <button
                         onClick={() => toggleCardAssign(sp.id, "expedition")}
-                        className={`rounded border px-2 py-0.5 text-[10px] ${
+                        className={`tap-h flex-1 rounded border text-[15px] ${
                           inExp ? "border-cell-cyan bg-cell-cyan/20 text-cell-cyan" : "border-cell-teal/30 text-cell-teal/60"
                         }`}
                         title="Assigner aux expéditions"
+                        aria-pressed={inExp}
+                        aria-label={`Assigner ${sp.name} aux expéditions`}
                       >
                         🧭
                       </button>

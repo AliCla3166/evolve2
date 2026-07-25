@@ -68,6 +68,29 @@ export const SOCKETS: Record<BuildingId, Socket> = {
   peche: { x: 0.69, y: 0.8, size: 1.0, accent: "#b06bff", label: "Pêche" },
 };
 
+/* ---------- Portails ----------
+   Trois sockets ne sont pas des proto-organes (`designed: false` dans
+   economy_config.json) : ce sont des PORTES vers d'autres écrans. Le Bastion
+   est même le plus gros morceau jouable du projet, et il était pourtant
+   dessiné grisé sous un cadenas, avec pour unique entrée une fiche quasi vide.
+   Pêche et Raid, eux, renvoyaient le joueur vers une fiche qui lui expliquait
+   d'aller ouvrir un onglet — un aller-retour pour rien.
+
+   Piste 10 + piste 9b : un tap sur un portail ouvre directement l'écran
+   concerné, et le cadenas disparaît (il annonçait « verrouillé » un contenu
+   parfaitement ouvert). */
+export type PortalTarget = "bastion" | "mare" | "noyau";
+
+export const PORTALS: Partial<Record<BuildingId, PortalTarget>> = {
+  defense: "bastion",
+  peche: "mare",
+  raid: "noyau",
+};
+
+export function portalTarget(id: BuildingId): PortalTarget | null {
+  return PORTALS[id] ?? null;
+}
+
 /* ---------- Échelles par stade ----------
    L'enveloppe grandit par paliers ; les sockets s'écartent du centre avec elle
    (les bâtiments GLISSENT vers leur nouvelle position pendant la mue — le

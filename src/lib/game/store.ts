@@ -89,7 +89,7 @@ import {
 } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
@@ -160,6 +160,8 @@ interface GameActions {
   chooseEventOption: (optionIndex: number) => void;
   /** Marque les rapports comme lus (badge). */
   markReportsSeen: () => void;
+  /** Marque les destinations du jour comme vues (badge de l'onglet NOYAU). */
+  markNoyauSeen: () => void;
   /* ----- La Mare & les cartes (Phase 6) ----- */
   /** Achète 1 jeton de pêche contre de l'énergie. */
   buyJeton: () => boolean;
@@ -272,6 +274,7 @@ function gameSlice(s: GameStore): GameState {
     reports: s.reports,
     nextReportId: s.nextReportId,
     reportsSeenAt: s.reportsSeenAt,
+    noyauSeenDay: s.noyauSeenDay,
     nextAttackAt: s.nextAttackAt,
     waveCount: s.waveCount,
     nextEventAt: s.nextEventAt,
@@ -634,6 +637,10 @@ export const useGame = create<GameStore>()(
 
       markReportsSeen: () => {
         set({ reportsSeenAt: Date.now() });
+      },
+
+      markNoyauSeen: () => {
+        set({ noyauSeenDay: dayKey(Date.now()) });
       },
 
       buyJeton: () => {
@@ -999,6 +1006,14 @@ export const useGame = create<GameStore>()(
           state.habits.streakDay = null;
           state.habits.graceDays = [];
           state.habits.graceUsedMonth = null;
+        }
+        // v10 -> v11 : badge « nouvelles destinations » sur l'onglet NOYAU.
+        // On part de `null` (= jamais ouvert aujourd'hui) plutôt que du jour
+        // courant : à sa prochaine ouverture, un joueur existant voit le badge
+        // une fois et découvre ainsi que ses 4 destinations tournent chaque jour
+        // — c'est précisément l'information qui manquait.
+        if (version < 11 || state.noyauSeenDay === undefined) {
+          state.noyauSeenDay = null;
         }
         state.saveVersion = SAVE_VERSION;
         return state;

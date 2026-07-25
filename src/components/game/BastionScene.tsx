@@ -574,7 +574,25 @@ export const BastionScene = forwardRef<BastionSceneHandle, BastionSceneProps>(fu
 
       ctx.restore();
       hitZonesRef.current = zones;
-      hitPosRef.current = zonePos.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY, r: p.r * Math.max(scaleX, scaleY) }));
+      /* Cibles tactiles du champ de bataille (piste 10 du diagnostic). Le terrain est
+         dessine en 700x400 puis mis a l'echelle : sur un telephone de 380 px le facteur
+         tombe a ~0,54 et un slot de rayon 18 ne fait plus que ~20 px de diametre, soit
+         moitie moins que le seuil recommande de 44 px. On plancher donc le rayon de
+         collision a 20 px CSS (~40 px de diametre) : handleClick arbitre deja les
+         chevauchements au plus proche, donc elargir ne rend aucun tap ambigu, ca rattrape
+         seulement les taps a cote. Exception quand le joueur tient un mur ou un piege : la
+         pose libre commence a x=182 en espace de dessin, a deux pixels des slots
+         d'avant-garde (x=180), et un rayon gonfle avalerait toute pose sur le bord gauche
+         du champ — dans ce mode on garde donc le rayon geometrique exact. Les slots restant
+         a ~25 px les uns des autres, le pinch-to-zoom rendu au joueur (maximumScale: 5, cf.
+         layout.tsx) reste la vraie reponse d'accessibilite sur ce terrain precis. */
+      const tapScale = Math.max(scaleX, scaleY);
+      const placingFree = armed === "wall" || armed === "trap";
+      hitPosRef.current = zonePos.map((p) => ({
+        x: p.x * scaleX,
+        y: p.y * scaleY,
+        r: placingFree ? p.r * tapScale : Math.max(p.r * tapScale, 20),
+      }));
     };
 
     raf = requestAnimationFrame(draw);

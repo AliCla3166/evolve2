@@ -21,6 +21,7 @@ import {
   envelopeSprite,
   envelopeStage,
   HEARTBEAT_MS,
+  portalTarget,
   SOCKET_SPREAD,
   socketPos,
   SOCKETS,
@@ -357,6 +358,9 @@ export function CellScene({
         const pos = socketPos(id, anim.spread);
         const level = buildings[id] ?? 0;
         const designed = isDesigned(id);
+        /* Portail (Bastion / Pêche / Raid) : pas un organe à construire, une
+           porte vers un autre écran. Il se dessine donc VIVANT, sans cadenas. */
+        const portal = portalTarget(id) !== null;
         const task = buildQueue.find((b) => b.buildingId === id) ?? null;
         const inBuild = task !== null;
         const phase = animPhase(id);
@@ -398,8 +402,16 @@ export function CellScene({
           ctx.beginPath();
           ctx.arc(cx, cy, padR, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = hexA(socket.accent, designed && level > 0 ? 0.6 : 0.22);
-          ctx.lineWidth = 1.5;
+          /* Un portail garde un liseré franc — il mène quelque part, il ne
+             doit pas être lu comme un emplacement vide. Il respire même un
+             peu, pour signaler qu'on peut le toucher. */
+          const ringA = portal
+            ? 0.5 + 0.22 * Math.sin((nowMs / HEARTBEAT_MS) * Math.PI * 2 + phase * 6)
+            : designed && level > 0
+              ? 0.6
+              : 0.22;
+          ctx.strokeStyle = hexA(socket.accent, ringA);
+          ctx.lineWidth = portal ? 2 : 1.5;
           ctx.stroke();
         }
 
@@ -439,7 +451,12 @@ export function CellScene({
         ctx.translate(cx, cy);
         ctx.rotate(rot);
 
-        if (!designed || level === 0) {
+        if (portal) {
+          // Porte ouverte : couleurs pleines, à peine en retrait des organes.
+          ctx.globalAlpha = 0.92;
+          if (ready(img)) ctx.drawImage(img, -d / 2, -d / 2, d, d);
+          ctx.globalAlpha = 1;
+        } else if (!designed || level === 0) {
           // Verrouillé ("À venir") ou ghost non construit : désaturé + translucide
           const gray = getGrayscale(src);
           ctx.globalAlpha = designed ? 0.42 : 0.3;
@@ -450,8 +467,8 @@ export function CellScene({
           ctx.drawImage(img, -d / 2, -d / 2, d, d);
         }
 
-        // Overlay verrou (peche / defense / raid)
-        if (!designed) {
+        // Overlay verrou — plus aucun portail n'en porte (piste 10).
+        if (!designed && !portal) {
           const lock = getImage("/assets/ui/age01_cell_ui_overlay_locked_v001.png");
           if (ready(lock)) {
             ctx.globalAlpha = 0.85;

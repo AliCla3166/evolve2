@@ -39,6 +39,7 @@ import {
   revealConfig,
   speciesConfig,
 } from "@/lib/game/cards";
+import { useOverlay } from "@/lib/overlay";
 import { useGame } from "@/lib/game/store";
 import type { LastCatch } from "@/lib/game/types";
 import { vibrate } from "@/lib/prefs";
@@ -95,6 +96,8 @@ export function CardReveal() {
   const lastCatch = useGame((s) => s.lastCatch);
   const collection = useGame((s) => s.collection);
   const clearLastCatch = useGame((s) => s.clearLastCatch);
+
+  useOverlay(lastCatch !== null, clearLastCatch);
 
   /* L'avancement est mémorisé AVEC la prise qui l'a produit (comparaison de
      référence) : à l'arrivée d'une nouvelle prise, l'étape initiale se déduit

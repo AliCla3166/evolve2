@@ -15,6 +15,7 @@
 import { Panel, PixelButton } from "@/components/ui/Pixel";
 import { getBuildingConfig, OFFLINE_REPORT, resourceName } from "@/lib/game/economy";
 import { fmtDuration, fmtInt } from "@/lib/game/format";
+import { useOverlay } from "@/lib/overlay";
 import { useGame } from "@/lib/game/store";
 import { totalGained, totalWasted } from "@/lib/game/tick";
 import type { ResourceId } from "@/lib/game/types";
@@ -22,6 +23,9 @@ import type { ResourceId } from "@/lib/game/types";
 export function WelcomeBackModal() {
   const summary = useGame((s) => s.offlineSummary);
   const dismiss = useGame((s) => s.dismissOfflineSummary);
+
+  /* Avant tout retour anticipe : un Hook ne peut pas etre conditionnel. */
+  useOverlay(summary !== null, dismiss);
 
   if (!summary) return null;
 

@@ -25,10 +25,15 @@ import { SettingsPanel } from "@/components/game/SettingsPanel";
 import { TutorialCoach } from "@/components/game/TutorialCoach";
 import { WelcomeBackModal } from "@/components/game/WelcomeBackModal";
 import { NavIcon, Panel } from "@/components/ui/Pixel";
+import type { NavIconId } from "@/components/ui/Pixel";
 import { cloudConfigured } from "@/lib/cloud/firebase";
 import { useCloudSync } from "@/lib/cloud/useCloudSync";
+import { WAVE_LEAD_WINDOW_MS } from "@/lib/game/bastion/config";
 import { fmtDuration } from "@/lib/game/format";
+import { dayKey } from "@/lib/game/habits";
+import { portalTarget } from "@/lib/game/scene";
 import { installAudio, playCue } from "@/lib/audio";
+import { useOverlay, scrollToTop } from "@/lib/overlay";
 import { hydrateActiveSlot, useGame } from "@/lib/game/store";
 import type { BuildingId } from "@/lib/game/types";
 
@@ -61,12 +66,164 @@ function WaveWarning({ onOpenBastion }: { onOpenBastion: () => void }) {
 /** Panneaux plein écran montés par-dessus la base. */
 type PanelId = "habits" | "noyau" | "mare" | "bastion" | "reports" | "settings" | null;
 
+/* ============================ Navigation basse ============================
+   Piste 10 du diagnostic, trois corrections d'un coup :
+
+   1. LE BASTION N'EXISTAIT PAS DANS LA NAV. Le plus gros morceau jouable du
+      projet ne s'atteignait que par un tap sur un bâtiment de la scène, ou par
+      la bannière d'alerte — laquelle ne s'affiche que dans les 12 dernières
+      heures. Or la fenêtre de jeu réelle est de WAVE_LEAD_WINDOW_MS (96 h) :
+      le joueur pouvait défendre pendant quatre jours sans jamais le savoir.
+      D'où l'onglet, ET le badge qui s'allume dès que la vague est jouable.
+
+   2. LES CIBLES TACTILES. Les six boutons faisaient la hauteur de leur contenu
+      avec un libellé en 8 px. Ils sont maintenant à 44 px de haut (seuil
+      recommandé) et le libellé grandit avec l'écran.
+
+   3. LA ZONE SÛRE. `fixed bottom-0` posait la nav sous le home indicator iOS.
+      `pb-safe` la remonte ; `--nav-h` + `pb-nav` réservent la place côté
+      contenu, à la place des `pb-24` devinés un peu partout. */
+
+/** Un onglet. Le libellé est en `clamp()` : 8 px sur un écran de 320 px (où
+ *  7 onglets ne laissent que ~45 px chacun), 10 px sur un grand téléphone —
+ *  plutôt qu'un 8 px illisible imposé à tout le monde. */
+function NavBtn({
+  icon,
+  label,
+  active,
+  badge,
+  onClick,
+  title,
+}: {
+  icon: NavIconId;
+  label: string;
+  active: boolean;
+  badge?: string | null;
+  onClick: () => void;
+  title?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title ?? label}
+      aria-current={active ? "page" : undefined}
+      className="tap-h relative flex w-full flex-col items-center justify-center gap-0.5 px-0.5"
+    >
+      <NavIcon id={icon} size={24} active={active} />
+      {badge && (
+        <span className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-cell-magenta px-1 text-[9px] font-bold text-abyss">
+          {badge}
+        </span>
+      )}
+      <span
+        className={`leading-none ${active ? "text-cell-cyan" : "text-cell-teal/70"}`}
+        style={{ fontSize: "clamp(8px, 2.35vw, 10px)", letterSpacing: "0.04em" }}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
+/** La nav est isolée dans son propre composant parce qu'elle s'abonne à
+ *  `lastTick` (badge de vague) : sans ça, toute la page se re-rendrait chaque
+ *  seconde. */
+function BottomNav({
+  panel,
+  setPanel,
+}: {
+  panel: PanelId;
+  setPanel: (p: PanelId) => void;
+}) {
+  const reports = useGame((s) => s.reports);
+  const reportsSeenAt = useGame((s) => s.reportsSeenAt);
+  const nextAttackAt = useGame((s) => s.nextAttackAt);
+  const noyauSeenDay = useGame((s) => s.noyauSeenDay);
+  const now = useGame((s) => s.lastTick);
+
+  const unseen = reports.filter((r) => r.ts > reportsSeenAt).length;
+  const waveIn = nextAttackAt - now;
+  const wavePlayable = nextAttackAt > 0 && waveIn > 0 && waveIn <= WAVE_LEAD_WINDOW_MS;
+  const newDestinations = noyauSeenDay !== dayKey(now);
+
+  const toggle = (id: Exclude<PanelId, null>) => () => setPanel(panel === id ? null : id);
+
+  return (
+    <nav className="px-safe pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-cell-cyan/20 bg-abyss/90 backdrop-blur-sm">
+      <div className="mx-auto grid max-w-md grid-cols-7 items-center py-1.5 sm:max-w-2xl">
+        <NavBtn
+          icon="base"
+          label="BASE"
+          active={panel === null}
+          title="Revenir à la base"
+          onClick={() => {
+            setPanel(null);
+            scrollToTop();
+          }}
+        />
+        <NavBtn
+          icon="habits"
+          label="HABITUDES"
+          active={panel === "habits"}
+          title="Habitudes du jour — la source de ton énergie"
+          onClick={toggle("habits")}
+        />
+        <NavBtn
+          icon="units"
+          label="NOYAU"
+          active={panel === "noyau"}
+          badge={newDestinations ? "✦" : null}
+          title={
+            newDestinations
+              ? "Le Noyau — 4 nouvelles destinations d'expédition sont disponibles aujourd'hui"
+              : "Le Noyau — recrutement et expéditions"
+          }
+          onClick={toggle("noyau")}
+        />
+        <NavBtn
+          icon="mare"
+          label="MARE"
+          active={panel === "mare"}
+          title="La Mare — pêche et collection de créatures"
+          onClick={toggle("mare")}
+        />
+        <NavBtn
+          icon="bastion"
+          label="BASTION"
+          active={panel === "bastion"}
+          badge={wavePlayable ? "⚔" : null}
+          title={
+            wavePlayable
+              ? `Bastion — vague jouable en direct (attaque dans ${fmtDuration(Math.max(0, waveIn))})`
+              : "Bastion — défense jouable, boutique et garnison"
+          }
+          onClick={toggle("bastion")}
+        />
+        <NavBtn
+          icon="reports"
+          label="RAPPORTS"
+          active={panel === "reports"}
+          badge={unseen > 0 ? (unseen > 9 ? "9+" : String(unseen)) : null}
+          title="Comptes rendus d'expéditions et de vagues"
+          onClick={toggle("reports")}
+        />
+        <NavBtn
+          icon="settings"
+          label="RÉGLAGES"
+          active={panel === "settings"}
+          title="Réglages, sauvegarde et son"
+          onClick={toggle("settings")}
+        />
+      </div>
+    </nav>
+  );
+}
+
 export default function PlayPage() {
   const hasHydrated = useGame((s) => s.hasHydrated);
   const profile = useGame((s) => s.profile);
   const activeSlot = useGame((s) => s.activeSlot);
-  const reports = useGame((s) => s.reports);
-  const reportsSeenAt = useGame((s) => s.reportsSeenAt);
   const [selected, setSelected] = useState<BuildingId | null>(null);
   const [panel, setPanelState] = useState<PanelId>(null);
   /* Tout passe par ce setter : c'est le seul point où le repère sonore de
@@ -77,10 +234,26 @@ export default function PlayPage() {
     if (next !== panel) playCue(next === null ? "panel_close" : "panel_open");
     setPanelState(next);
   };
+  /* Un tap sur un socle « portail » (Défense/Pêche/Raid) ouvre directement
+     l'écran concerné au lieu d'une fiche de bâtiment vide (piste 9b) : ces
+     trois-là ne sont pas des proto-organes améliorables, ce sont des portes. */
+  const handleSelect = (id: BuildingId | null) => {
+    const target = id ? portalTarget(id) : null;
+    if (target) {
+      setSelected(null);
+      setPanel(target);
+      return;
+    }
+    setSelected(id);
+  };
+
+  /* Retour système Android + verrou de défilement de l'arrière-plan, pour les
+     deux overlays pilotés par cette page (cf. src/lib/overlay.ts). */
+  useOverlay(panel !== null, () => setPanel(null));
+  useOverlay(selected !== null, () => setSelected(null));
+
   // Sync cloud active pendant le jeu (push périodique + arrière-plan).
   const { user: cloudUser, status: cloudStatus } = useCloudSync();
-
-  const unseen = reports.filter((r) => r.ts > reportsSeenAt).length;
 
   // Recharge la sauvegarde localStorage (une seule fois, côté client).
   useEffect(() => {
@@ -120,7 +293,7 @@ export default function PlayPage() {
       ) : !profile ? (
         <ProfileCreate />
       ) : (
-        <div className="mx-auto max-w-md space-y-3 px-2 pb-24 pt-2 sm:max-w-2xl">
+        <div className="pb-nav pt-safe mx-auto max-w-md space-y-3 px-2 sm:max-w-2xl">
           {/* En-tête : profil + retour titre */}
           <div className="flex items-center gap-2 px-1">
             <img
@@ -167,7 +340,7 @@ export default function PlayPage() {
           </div>
 
           {/* HUD ressources (sticky) */}
-          <div className="sticky top-0 z-10 -mx-2 bg-abyss/85 px-2 py-1 backdrop-blur-sm">
+          <div className="top-safe sticky z-10 -mx-2 bg-abyss/85 px-2 py-1 backdrop-blur-sm">
             <Hud onOpenHabits={() => setPanel("habits")} />
           </div>
 
@@ -185,7 +358,7 @@ export default function PlayPage() {
           <QueueBanner />
 
           {/* La base vivante — tap sur un bâtiment pour ouvrir son panneau */}
-          <CellScene selected={selected} onSelect={setSelected} />
+          <CellScene selected={selected} onSelect={handleSelect} />
         </div>
       )}
 
@@ -224,63 +397,8 @@ export default function PlayPage() {
         }}
       />
 
-      {/* Nav basse : Noyau (unités/expéditions) & Rapports */}
-      {hasHydrated && profile && (
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-cell-cyan/20 bg-abyss/90 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-md items-center justify-around py-1.5 sm:max-w-2xl">
-            <button
-              onClick={() => {
-                setPanel(null);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className="flex flex-col items-center gap-0.5 px-1.5"
-            >
-              <NavIcon id="base" size={24} active={panel === null} />
-              <span className="text-[8px] tracking-widest text-cell-teal/70">BASE</span>
-            </button>
-            <button
-              onClick={() => setPanel(panel === "habits" ? null : "habits")}
-              className="flex flex-col items-center gap-0.5 px-1.5"
-            >
-              <NavIcon id="habits" size={24} active={panel === "habits"} />
-              <span className="text-[8px] tracking-widest text-cell-teal/70">HABITUDES</span>
-            </button>
-            <button
-              onClick={() => setPanel(panel === "noyau" ? null : "noyau")}
-              className="flex flex-col items-center gap-0.5 px-1.5"
-            >
-              <NavIcon id="units" size={24} active={panel === "noyau"} />
-              <span className="text-[8px] tracking-widest text-cell-teal/70">NOYAU</span>
-            </button>
-            <button
-              onClick={() => setPanel(panel === "mare" ? null : "mare")}
-              className="flex flex-col items-center gap-0.5 px-1.5"
-            >
-              <NavIcon id="mare" size={24} active={panel === "mare"} />
-              <span className="text-[8px] tracking-widest text-cell-teal/70">MARE</span>
-            </button>
-            <button
-              onClick={() => setPanel(panel === "reports" ? null : "reports")}
-              className="relative flex flex-col items-center gap-0.5 px-1.5"
-            >
-              <NavIcon id="reports" size={24} active={panel === "reports"} />
-              {unseen > 0 && (
-                <span className="absolute -top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cell-magenta px-1 text-[9px] font-bold text-abyss">
-                  {unseen > 9 ? "9+" : unseen}
-                </span>
-              )}
-              <span className="text-[8px] tracking-widest text-cell-teal/70">RAPPORTS</span>
-            </button>
-            <button
-              onClick={() => setPanel(panel === "settings" ? null : "settings")}
-              className="flex flex-col items-center gap-0.5 px-1.5"
-            >
-              <NavIcon id="settings" size={24} active={panel === "settings"} />
-              <span className="text-[8px] tracking-widest text-cell-teal/70">RÉGLAGES</span>
-            </button>
-          </div>
-        </nav>
-      )}
+      {/* Nav basse — 7 onglets, dont le Bastion (piste 10) */}
+      {hasHydrated && profile && <BottomNav panel={panel} setPanel={setPanel} />}
     </main>
   );
 }

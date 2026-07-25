@@ -72,6 +72,7 @@ export function ResourceBar({
   label,
   width,
   title,
+  warnAt,
 }: {
   value: number;
   max: number;
@@ -82,9 +83,16 @@ export function ResourceBar({
   width?: number;
   /** Tooltip natif (infobulle de ressource). */
   title?: string;
+  /** Fraction de remplissage (0-1) à partir de laquelle la barre passe à
+   *  l'ambre. Piste 10 : le joueur ne pouvait pas savoir qu'il saturait — le
+   *  plafond n'existait que dans `title=`, qui ne s'ouvre qu'au survol souris,
+   *  c'est-à-dire jamais sur téléphone. La couleur le dit sans un mot. */
+  warnAt?: number;
 }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   const h = large ? 22 : 16;
+  const warn = warnAt !== undefined && max > 0 && value / max >= warnAt;
+  const fill = warn ? "var(--amber)" : color;
   return (
     <div
       className="relative overflow-hidden rounded-full"
@@ -92,9 +100,13 @@ export function ResourceBar({
         width: width ?? (large ? 256 : 192),
         height: h,
         background: "rgba(5, 11, 20, 0.85)",
-        border: "1px solid rgba(109, 246, 255, 0.18)",
+        border: warn ? "1px solid rgba(255, 176, 32, 0.65)" : "1px solid rgba(109, 246, 255, 0.18)",
       }}
       title={title}
+      /* Le `title=` n'est lu ni par le tactile ni par un lecteur d'écran posé
+         sur un `div` muet : on double l'information en accessible. */
+      role="img"
+      aria-label={title ?? label}
     >
       <div
         className="absolute inset-y-0 left-0 overflow-hidden rounded-full transition-[width] duration-300 ease-out"
@@ -105,8 +117,8 @@ export function ResourceBar({
           // appelants passent un var(--xxx) CSS, et "var(--lime)99" n'est PAS une
           // couleur valide — ça invalidait TOUTE la déclaration `background` et
           // la barre restait vide quelle que soit la valeur réelle).
-          background: color,
-          boxShadow: `0 0 6px ${color}`,
+          background: fill,
+          boxShadow: `0 0 6px ${fill}`,
         }}
       >
         {/* Glaçage : profondeur fixe, indépendante de `color` (donc toujours valide). */}
@@ -169,19 +181,38 @@ export function CardFrame({
   );
 }
 
+export type NavIconId =
+  | "base"
+  | "habits"
+  | "mare"
+  | "units"
+  | "mutation"
+  | "reports"
+  | "settings"
+  | "bastion";
+
+/* Le kit d'icônes de nav a été produit avant que le Bastion n'existe : il n'y a
+   pas de `age01_cell_ui_icon_bastion_v001.png`. Plutôt que de laisser l'onglet
+   le plus jouable du jeu hors navigation en attendant un asset (piste 10), on
+   réutilise le sprite du bâtiment Défense — c'est exactement ce que le joueur
+   voit dans la scène, donc le lien est immédiat. */
+const NAV_SRC: Partial<Record<NavIconId, string>> = {
+  bastion: "/assets/buildings/defense/niveau1.png",
+};
+
 /** Icône de navigation du HUD. */
 export function NavIcon({
   id,
   size = 32,
   active = false,
 }: {
-  id: "base" | "habits" | "mare" | "units" | "mutation" | "reports" | "settings";
+  id: NavIconId;
   size?: number;
   active?: boolean;
 }) {
   return (
     <img
-      src={`${UI}/age01_cell_ui_icon_${id}_v001.png`}
+      src={NAV_SRC[id] ?? `${UI}/age01_cell_ui_icon_${id}_v001.png`}
       alt={id}
       width={size}
       height={size}

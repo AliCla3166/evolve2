@@ -360,7 +360,7 @@ export function HabitsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-md space-y-3 px-2 pb-24 pt-3 sm:max-w-2xl">
+      <div className="mx-auto max-w-md space-y-3 pb-nav pt-safe px-2 sm:max-w-2xl">
         {/* En-tête */}
         <div className="flex items-center gap-3">
           <span className="text-3xl">🧬</span>

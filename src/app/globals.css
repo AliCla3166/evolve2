@@ -9,6 +9,23 @@
   --lime: #a6ff3d;
   --magenta: #ff54d6;
   --text: #cfe8f2;
+  /* Ambre d'alerte : stock proche du plafond, monnaie de combat, serie a saisir.
+     Une seule valeur pour les trois, sinon l'oeil apprend trois signaux au lieu d'un. */
+  --amber: #ffb020;
+
+  /* ===== Zones sures (piste 10) =====
+     `viewportFit: "cover"` fait passer la page sous l'encoche et sous la barre
+     de geste. Ces quatre variables sont le seul endroit ou `env()` est lu :
+     tout le reste de la feuille compose a partir d'elles, avec un repli a 0
+     pour les navigateurs qui ne connaissent pas la propriete. */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  /* Hauteur reelle de la nav basse (icone 24 + libelle + rembourrage). Les
+     `pb-24` disperses dans les panneaux etaient des compensations devinees ;
+     ici la valeur est unique et les panneaux s'y accrochent via `.pb-nav`. */
+  --nav-h: 58px;
 }
 
 @theme inline {
@@ -24,12 +41,71 @@
 body {
   background: radial-gradient(ellipse at 50% 30%, var(--deep) 0%, var(--abyss) 70%);
   color: var(--text);
-  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+  /* Servie par next/font depuis notre domaine : identique sur tous les
+     telephones. Le repli systeme reste la le temps du `display: swap`. */
+  font-family: var(--font-mono), ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
   overflow-x: hidden;
+}
+
+/* Police d'affichage bitmap : titres et bandeaux courts uniquement. */
+.font-pixel {
+  font-family: var(--font-pixel), var(--font-mono), monospace;
 }
 
 .pixelated {
   image-rendering: pixelated;
+}
+
+/* ===== Ergonomie tactile (piste 10) =====
+   44 px est le seuil recommande par Apple (HIG) comme par Material. Avant
+   cette passe, seules les paillettes de la Mare et les batiments de la scene
+   le respectaient. `.tap` s'applique aux boutons reels ; `.tap-h` sert quand
+   seule la hauteur peut grandir (element dans une rangee dense). */
+.tap {
+  min-height: 44px;
+  min-width: 44px;
+}
+.tap-h {
+  min-height: 44px;
+}
+
+/* iOS zoome automatiquement sur un champ dont le texte fait moins de 16 px,
+   puis ne dezoome jamais. C'etait la vraie raison du `maximumScale: 1` ; on
+   traite la cause, ce qui rend le pinch-to-zoom a nouveau possible. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+/* ===== Zones sures ===== */
+/* Panneau plein ecran : sa premiere ligne doit passer sous l'encoche. */
+.pt-safe {
+  padding-top: calc(var(--safe-t) + 0.75rem);
+}
+/* Zone defilante sous laquelle flotte la nav fixe + la barre de geste. */
+.pb-nav {
+  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 1.25rem);
+}
+/* La nav elle-meme : son contenu remonte au-dessus du home indicator. */
+.pb-safe {
+  padding-bottom: var(--safe-b);
+}
+/* Element colle en haut (HUD) : il se pose sous l'encoche, pas dessous. */
+.top-safe {
+  top: var(--safe-t);
+}
+/* Paysage sur telephone a encoche : l'encoche passe sur le cote. */
+.px-safe {
+  padding-left: var(--safe-l);
+  padding-right: var(--safe-r);
+}
+
+/* Verrouillage du defilement d'arriere-plan sous un overlay : sans lui, un
+   geste qui depasse le bas d'un panneau fait defiler la page en dessous et le
+   joueur perd sa position en refermant. */
+body.overlay-open {
+  overflow: hidden;
 }
 
 @keyframes cell-pulse {
@@ -108,12 +184,39 @@ body {
 
 /* Accessibilité : « réduire les animations » est un vrai réglage système, pas
    une préférence esthétique — on garde l'information (couleur, gerbe absente,
-   carte visible) et on supprime le mouvement. */
+   carte visible) et on supprime le mouvement.
+
+   Étendu à tout le jeu (piste 10) : la révélation de carte n'était que la
+   partie visible. Le Noyau qui palpite en permanence, le plancton qui dérive,
+   le badge de série qui clignote et les dépliements de panneaux sont exactement
+   ce qui déclenche une gêne vestibulaire ou une crise de migraine — et rien de
+   tout cela ne porte d'information : la couleur et le texte disent déjà tout.
+   Le mouvement du combat au Bastion, lui, EST l'information : il est rendu au
+   Canvas et n'est volontairement pas coupé ici. */
 @media (prefers-reduced-motion: reduce) {
   .reveal-halo { animation: none; opacity: 0.9; }
   .reveal-shake { animation: none; }
   .reveal-spark { display: none; }
   .animate-card-reveal { animation: none; }
+  .cell-pulse,
+  .plankton,
+  .animate-sheet-up,
+  .animate-pulse,
+  .animate-bounce,
+  .animate-ping,
+  .animate-spin {
+    animation: none !important;
+  }
+  /* La barre de ressource glissait sur 300 ms ; elle saute désormais à sa
+     valeur, ce qui reste parfaitement lisible. */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+  html {
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ===== Refonte lisibilité (Phase 7) : vignettes sobres + boutons simples.

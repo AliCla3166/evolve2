@@ -23,6 +23,7 @@ import {
 } from "@/lib/game/economy";
 import { fmtInt, fmtRate } from "@/lib/game/format";
 import { envelopeStage, SOCKETS, STAGE_MIN_BUILT, builtCount } from "@/lib/game/scene";
+import { useOverlay } from "@/lib/overlay";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
 import { playCue } from "@/lib/audio";
@@ -38,6 +39,8 @@ export function BuildCompleteModal({ onNext }: { onNext?: (id: BuildingId) => vo
   const resources = useGame((s) => s.resources);
   const queue = useGame((s) => s.buildQueue);
   const done = celebrations[0] ?? null;
+
+  useOverlay(done !== null, dismiss);
 
   // Une seule vibration par chantier célébré (le motif "réussite" : long-court-long).
   useEffect(() => {

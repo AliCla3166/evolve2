@@ -214,6 +214,12 @@ export interface GameState {
   nextReportId: number;
   /** Dernière consultation des rapports (badge non-lus). */
   reportsSeenAt: number;
+  /** Dernier jour (clé `dayKey`) où le joueur a ouvert le Noyau. Les 4 offres
+   *  d'expédition sont retirées à chaque changement de jour (`dailyOffers` est
+   *  seedée sur `dayKey`) mais rien ne l'annonçait — d'où un badge « nouvelles
+   *  destinations » sur l'onglet NOYAU tant que la journée n'a pas été ouverte
+   *  (piste 9b du diagnostic). `null` = jamais ouvert. */
+  noyauSeenDay: string | null;
   /** Prochaine vague de pathogènes (ms) — 0 = à planifier au premier tick. */
   nextAttackAt: number;
   waveCount: number;

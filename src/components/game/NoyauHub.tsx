@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Panel, PixelButton } from "@/components/ui/Pixel";
 import { resourceName } from "@/lib/game/economy";
 import { fmtDuration, fmtInt } from "@/lib/game/format";
@@ -76,6 +76,14 @@ export function NoyauHub({ onClose }: { onClose: () => void }) {
   const now = useGame((s) => s.lastTick);
   const recruit = useGame((s) => s.recruit);
   const sendExpedition = useGame((s) => s.sendExpedition);
+  const markNoyauSeen = useGame((s) => s.markNoyauSeen);
+
+  /* Le badge « nouvelles destinations » de l'onglet NOYAU s'eteint des que le
+     joueur a vu les offres du jour (piste 9b) : les 4 destinations sont tirees
+     a partir de dayKey, donc elles changent a minuit sans que rien ne le dise. */
+  useEffect(() => {
+    markNoyauSeen();
+  }, [markNoyauSeen]);
 
   const state = useGame.getState();
   const avail = availableUnits(state);
@@ -95,7 +103,7 @@ export function NoyauHub({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-md space-y-3 px-2 pb-24 pt-3 sm:max-w-2xl">
+      <div className="mx-auto max-w-md space-y-3 pb-nav pt-safe px-2 sm:max-w-2xl">
         {/* En-tête */}
         <div className="flex items-center gap-3">
           <img src="/assets/buildings/noyau/niveau3.png" alt="" width={40} height={40} className="pixelated" draggable={false} />

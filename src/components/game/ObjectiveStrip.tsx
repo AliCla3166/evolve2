@@ -195,7 +195,7 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-md space-y-2 px-2 pb-24 pt-3 sm:max-w-2xl">
+      <div className="mx-auto max-w-md space-y-2 pb-nav pt-safe px-2 sm:max-w-2xl">
         <div className="flex items-center gap-3">
           <h1 className="flex-1 text-base uppercase tracking-[0.3em] text-cell-cyan">Jalons</h1>
           <button

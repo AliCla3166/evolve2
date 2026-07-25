@@ -4,6 +4,19 @@ export function fmtInt(n: number): string {
   return Math.floor(n).toLocaleString("fr-FR");
 }
 
+/** Nombre compact pour les jauges du HUD : "842", "12,3k", "1,4M".
+ *  Le HUD affiche desormais "valeur / plafond" DANS une barre de 130 px
+ *  (piste 10 : sur telephone, le plafond n'existait que dans l'attribut
+ *  `title=`, donc nulle part) — "1 250 000 / 2 000 000" n'y tiendrait pas. */
+export function fmtCompact(n: number): string {
+  const v = Math.floor(Math.max(0, n));
+  if (v < 1000) return String(v);
+  if (v < 1_000_000) {
+    return `${(v / 1000).toLocaleString("fr-FR", { maximumFractionDigits: v < 10_000 ? 1 : 0 })}k`;
+  }
+  return `${(v / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}M`;
+}
+
 /** "1 234" ou "12,5" pour les petits taux. */
 export function fmtRate(perHour: number): string {
   if (perHour >= 100) return fmtInt(perHour);

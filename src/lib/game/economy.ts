@@ -471,6 +471,7 @@ export function freshGameState(now: number): GameState {
     reports: [],
     nextReportId: 1,
     reportsSeenAt: now,
+    noyauSeenDay: null,
     nextAttackAt: 0, // planifiée au premier tick
     waveCount: 0,
     nextEventAt: 0, // planifié au premier tick

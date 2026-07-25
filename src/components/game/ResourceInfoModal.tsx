@@ -6,6 +6,7 @@
 import { Panel, PixelButton } from "@/components/ui/Pixel";
 import { resourceName } from "@/lib/game/economy";
 import { resourcePurpose } from "@/lib/game/buildingInfo";
+import { useOverlay } from "@/lib/overlay";
 import type { ResourceId } from "@/lib/game/types";
 
 export function ResourceInfoModal({
@@ -15,6 +16,8 @@ export function ResourceInfoModal({
   id: ResourceId;
   onClose: () => void;
 }) {
+  // Ce composant n'est monté que lorsque la fiche est ouverte : `true` suffit.
+  useOverlay(true, onClose);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-6"

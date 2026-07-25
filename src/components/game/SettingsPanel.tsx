@@ -113,7 +113,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-md space-y-3 px-2 pb-24 pt-3 sm:max-w-lg">
+      <div className="mx-auto max-w-md space-y-3 pb-nav pt-safe px-2 sm:max-w-lg">
         <div className="flex items-center gap-3">
           <h1 className="flex-1 text-base uppercase tracking-[0.3em] text-cell-cyan">
             Réglages
