@@ -20,7 +20,7 @@ import {
   maxLevel,
   recommendNextBuild,
   resourceName,
-  storageCap,
+  stateStorageCap,
 } from "@/lib/game/economy";
 import { fmtInt, fmtRate } from "@/lib/game/format";
 import { envelopeStage, SOCKETS, STAGE_MIN_BUILT, builtCount } from "@/lib/game/scene";
@@ -37,6 +37,7 @@ export function BuildCompleteModal({ onNext }: { onNext?: (id: BuildingId) => vo
   const celebrations = useGame((s) => s.buildCelebrations);
   const dismiss = useGame((s) => s.dismissBuildCelebration);
   const buildings = useGame((s) => s.buildings);
+  const territoire = useGame((s) => s.territoire);
   const resources = useGame((s) => s.resources);
   const queue = useGame((s) => s.buildQueue);
   const done = celebrations[0] ?? null;
@@ -131,7 +132,7 @@ export function BuildCompleteModal({ onNext }: { onNext?: (id: BuildingId) => vo
 
           {capChanged && (
             <div className="mt-2 text-[11px] text-cell-cyan">
-              Stockage porté à {fmtInt(storageCap(buildings))}
+              Stockage porté à {fmtInt(stateStorageCap({ buildings, territoire }))}
             </div>
           )}
 

@@ -27,5 +27,45 @@
     },
     "history_days": 90,
     "history_comment": "Nombre de cases de la grille facon calendrier de contributions dans le panneau Habitudes : c'est la duree de l'Age 1, donc la grille pleine EST la partie terminee."
+  },
+  "bilan": {
+    "$comment": "LE BILAN DU SOIR (25/07/2026). L'energie des habitudes etait deja creditee en continu a la saisie — ca ne change pas (aucune regression sur la serie, le simulateur ou le rachat d'heures). Ce qui manquait, c'etait un RENDEZ-VOUS : un geste de fin de journee qui transforme une bonne journee reelle en un evenement de jeu. Valider le Bilan une fois par jour, apres min_hour, ouvre une PERCEE : la monnaie du spectaculaire.",
+    "$comment_percee": "LA PERCEE est deliberement PETITE en nombre (une par journee a >= threshold_energy, stock plafonne a max_stock) et GROSSE en effet. Elle n'achete que des choses qui ne touchent pas au chemin critique des 90 jours (cf. economy_config.json -> pacing_validation : >96 % du temps est du temps de CHANTIER). C'est pour cette raison qu'aucune option ne raccourcit un chantier : donner ne serait-ce que 4 h de chantier par jour retirerait 360 h sur les ~2216 h du chemin critique, soit ~15 % de l'Age 1, et sortirait l'archetype 'assidu' (82,7 j) de la bande acceptee 81-99 j. La 'Poussee de croissance' donne donc des HEURES DE PRODUCTION : l'attente de ressources ne pese que 2,6 % du temps total, l'offrir est genereux au ressenti et neutre au pacing.",
+    "min_hour": 17,
+    "catchup_until_hour": 5,
+    "$comment_horaires": "min_hour : heure locale a partir de laquelle le Bilan du jour peut etre valide (c'est un bilan, pas un demarrage de journee). catchup_until_hour : jusqu'a cette heure le lendemain matin, on peut encore valider le Bilan de la veille — un coucher a 1 h du matin ne doit pas couter le rendez-vous.",
+    "threshold_energy": 40,
+    "max_stock": 5,
+    "bonus_sorties_next_day": 2,
+    "$comment_sorties": "Les sorties gratuites se reinitialisent TOUS LES JOURS quoi qu'il arrive (jamais de mur). Valider le Bilan ajoute bonus_sorties_next_day sorties gratuites supplementaires pour le lendemain : une carotte, jamais un baton.",
+    "percee_per_streak_tier": 1,
+    "options": [
+      {
+        "id": "vague_percee",
+        "name": "Vague de Percée",
+        "desc": "Une sortie hors norme : palier +{palier_bonus}, Péril forcé, butin ×{loot_mult} et fragments garantis.",
+        "icon": "⚡",
+        "cost": 1,
+        "palier_bonus": 5,
+        "forced_peril": 3,
+        "loot_mult": 3.0,
+        "fragments": 3
+      },
+      {
+        "id": "assaut_antre",
+        "name": "Assaut d'Antre",
+        "desc": "Ouvre l'assaut d'un antre de La Dérive : un boss, et le vestige qu'il garde.",
+        "icon": "☠",
+        "cost": 1
+      },
+      {
+        "id": "poussee_croissance",
+        "name": "Poussée de croissance",
+        "desc": "La base produit d'un coup {hours} heures de toutes ses ressources.",
+        "icon": "❖",
+        "cost": 1,
+        "production_hours": 6
+      }
+    ]
   }
 }

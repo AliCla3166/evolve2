@@ -16,6 +16,7 @@ import {
   activeBarracksSlots,
   activeMortarSlots,
   activeTurretSlots,
+  bastionHpMax,
   buildingDef,
   buildingIcon,
   buildingRarityColor,
@@ -169,11 +170,9 @@ export const BastionScene = forwardRef<BastionSceneHandle, BastionSceneProps>(fu
       structuresRef.current = structures.map((s) => ({ ...s }));
       supportRef.current = state.bastion.support.map((s) => (s ? { ...s } : null));
       const ctx = buildStaticDefs(state, structuresRef.current);
-      // PV du Bastion : constante de base (le vrai bâtiment "Bastion-Défense" de
-      // l'économie principale reste hors périmètre, cf. plan) + effet "Fondations
-      // renforcées" (même bonus passif que sur la garnison/tourelles/mortiers).
-      const hpMax = Math.round(180 * (1 + state.bastion.slotBonusLevel * 0.08));
-      battleRef.current = initBattle(waveN, hpMax, ctx);
+      // PV du Bastion : socle de bastion_config.json × "Fondations renforcées" × vestige
+      // "Socle basaltique" de La Dérive. Tout est calculé par bastionHpMax (module pur).
+      battleRef.current = initBattle(waveN, bastionHpMax(state), ctx);
       endTimerRef.current = null;
     },
     triggerSupportActive: (index) => {

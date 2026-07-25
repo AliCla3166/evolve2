@@ -16,8 +16,10 @@ import {
   levelCost,
   maxLevel,
   OFFLINE_REPORT,
+  resourceCap,
+  totalProductionPerHour,
 } from "./economy";
-import { freshBastionState } from "./bastion/config";
+import { effectiveReserveCap, freshBastionState } from "./bastion/config";
 import {
   buyFoundations,
   buyInWaveRespawn,
@@ -55,9 +57,11 @@ import {
   repairableDay,
   settleStreakTiers,
   STREAK_TIERS,
+  bilanOptionDef,
 } from "./habits";
 import {
   addCatch,
+  jetonMax,
   MARE,
   rollRarity,
   rollRevealTease,
@@ -68,13 +72,29 @@ import {
   availableUnits,
   canRecruit,
   dailyOffers,
+  expeditionDurationH,
   MILITARY,
   rand,
   recruitCost,
   resolveChoiceEvent,
   resolveLiveWave,
+  resolveSortie,
 } from "./military";
 import { applyMilestoneReward, MILESTONES, milestoneView } from "./milestones";
+import {
+  bonusValue,
+  devCost,
+  devLevel,
+  foyerAvailable,
+  foyerDef,
+  freshTerritoireState,
+  isCaptured,
+  natureDef,
+  sectorOfFoyer,
+  sectorUnlocked,
+} from "./territoire";
+import { consumeSortie, maxPeril, sortieAvailability } from "./bastion/sorties";
+import { bilanStatus, canSpendPercee, spendPercee, validateBilan } from "./bilan";
 import { applyTick, applyTickDetailed, totalGained } from "./tick";
 import type { FinishedBuild, TickSummary } from "./tick";
 import { getActiveSlot, setActiveSlot, slotHasSave, slotStorageKey, type SaveSlot } from "./slot";
@@ -89,7 +109,7 @@ import {
 } from "./types";
 
 export const SAVE_KEY = "evolve2_save_v1";
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
@@ -230,6 +250,29 @@ interface GameActions {
    *  moins) remplace bastion.fieldStructures si fourni — les dégâts de bataille sont
    *  éphémères côté moteur (engine.ts) mais doivent être répercutés sur l'état persisté. */
   finishBastionBattle: (result: LiveWaveResult, survivingStructures?: FieldStructure[]) => void;
+
+  /* ----- Les Sorties, La Dérive et le Bilan du soir (25/07) ----- */
+  /** Lance une SORTIE : bataille à la demande contre le Bastion (`targetId: null`) ou contre
+   *  un foyer de La Dérive. Débite l'énergie (sortie + préparatifs), consomme le quota du
+   *  jour et pose le verrou de bataille. `false` si le quota, l'énergie ou une bataille déjà
+   *  en cours l'interdisent. NE TOUCHE PAS au calendrier des vagues subies. */
+  beginSortie: (
+    targetId: string | null,
+    peril: number,
+    preparatifIds: string[],
+    perceeOptionId?: string,
+  ) => boolean;
+  /** Résout la sortie en cours. Perdre ne coûte rien : ni ressource, ni garde, ni quota rendu. */
+  finishSortie: (result: LiveWaveResult, survivingStructures?: FieldStructure[]) => void;
+  /** Développe un gisement capturé d'un niveau (coût en ressource du gisement + combat). */
+  developFoyer: (foyerId: string) => boolean;
+  /** Mémorise le secteur consulté en dernier sur la carte (confort de navigation). */
+  setTerritoireSector: (sectorId: string) => void;
+  /** Valide le Bilan du soir : crédite les Percées et les sorties gratuites du lendemain. */
+  validateBilanDuSoir: () => number;
+  /** Dépense une Percée sur une option à effet immédiat (« Poussée de croissance »).
+   *  Les options qui pilotent une bataille passent par `beginSortie`. */
+  spendPerceeNow: (optionId: string) => boolean;
 }
 
 export type GameStore = GameState & GameActions;
@@ -286,6 +329,8 @@ function gameSlice(s: GameStore): GameState {
     cardAssignments: s.cardAssignments,
     lastCatch: s.lastCatch,
     bastion: s.bastion,
+    territoire: s.territoire,
+    bilan: s.bilan,
     claimedMilestones: s.claimedMilestones,
   };
 }
@@ -325,7 +370,7 @@ export const useGame = create<GameStore>()(
         }
         set({
           resources,
-          jetons: Math.max(0, Math.min(MARE.jetons.max_stock, s.jetons + (patch.jetons ?? 0))),
+          jetons: Math.max(0, Math.min(jetonMax(s), s.jetons + (patch.jetons ?? 0))),
           fragments: Math.max(0, s.fragments + (patch.fragments ?? 0)),
         });
       },
@@ -340,7 +385,7 @@ export const useGame = create<GameStore>()(
         addCatch(s, "predateur", 2, now, "peche");
         const defense = [...new Set([...s.cardAssignments.defense, "crustace", "predateur"])].slice(
           0,
-          s.bastion.reserveCap,
+          effectiveReserveCap(s),
         );
         s.cardAssignments = { ...s.cardAssignments, defense };
         set(s);
@@ -620,7 +665,7 @@ export const useGame = create<GameStore>()(
               boostChance: offer.boostChance,
               squad: { garde: squad.garde ?? 0, sonde: squad.sonde ?? 0, phage: squad.phage ?? 0 },
               startedAt: now,
-              endsAt: now + offer.durationH * 3_600_000,
+              endsAt: now + expeditionDurationH(s, offer.durationH) * 3_600_000,
             },
           ],
           nextExpeditionId: s.nextExpeditionId + 1,
@@ -647,7 +692,7 @@ export const useGame = create<GameStore>()(
         const now = Date.now();
         const s = applyTick(gameSlice(get()), now);
         const cost = MARE.jetons.cost_energie;
-        if (s.jetons >= MARE.jetons.max_stock || s.resources.energie < cost) return false;
+        if (s.jetons >= jetonMax(s) || s.resources.energie < cost) return false;
         set({
           ...s,
           resources: { ...s.resources, energie: s.resources.energie - cost },
@@ -715,7 +760,8 @@ export const useGame = create<GameStore>()(
         if (!inSlot) {
           // "défense" alimente la réserve plaçable du Bastion-Défense jouable — son plafond est
           // désormais bastion.reserveCap (dynamique, achetable), pas la constante statique du JSON.
-          const cap = slot === "defense" ? state.bastion.reserveCap : MARE.assign_slots.expedition;
+          const cap =
+            slot === "defense" ? effectiveReserveCap(state) : MARE.assign_slots.expedition;
           if (next[slot].length >= cap) return false; // slot plein
           next[slot] = [...next[slot], speciesId];
         }
@@ -881,6 +927,114 @@ export const useGame = create<GameStore>()(
         resolveLiveWave(s, result, now);
         set(s);
       },
+
+      /* ----- Les Sorties, La Dérive et le Bilan du soir (25/07) ----- */
+
+      beginSortie: (targetId, peril, preparatifIds, perceeOptionId) => {
+        const now = Date.now();
+        // Contrairement à beginBastionBattle, on tique AVANT : une sortie ne joue pas la
+        // vague planifiée, donc rien à protéger d'une auto-résolution — et on veut au
+        // contraire l'énergie la plus à jour possible pour vérifier le coût.
+        const s = draftWithBastion(applyTick(gameSlice(get()), now));
+
+        const foyer = targetId ? foyerDef(targetId) : null;
+        if (targetId && !foyer) return false;
+        if (foyer && !foyerAvailable(s.territoire, foyer)) return false;
+        if (foyer && !sectorUnlocked(sectorOfFoyer(foyer.id)!, s.waveCount)) return false;
+        // Un antre ne s'ouvre qu'avec une Percée : c'est la récompense du Bilan du soir.
+        if (foyer && natureDef(foyer.nature).requires_percee && !perceeOptionId) return false;
+        if (perceeOptionId && !canSpendPercee(s, perceeOptionId)) return false;
+
+        const vestigeFree = bonusValue(s.territoire, "free_sortie");
+        const avail = sortieAvailability(
+          s.bastion,
+          s.resources.energie,
+          now,
+          preparatifIds,
+          vestigeFree,
+        );
+        if (!avail.ok) return false;
+
+        const opt = perceeOptionId ? spendPercee(s, perceeOptionId) : null;
+        if (perceeOptionId && !opt) return false;
+
+        s.resources.energie = Math.max(0, s.resources.energie - avail.cost);
+        consumeSortie(s.bastion, now);
+        s.bastion.sortieTargetId = targetId;
+        s.bastion.sortiePeril = Math.max(
+          0,
+          Math.min(maxPeril(), Math.max(Math.round(peril), opt?.forced_peril ?? 0)),
+        );
+        s.bastion.sortiePreparatifs = [...preparatifIds];
+        s.bastion.sortiePercee = Boolean(opt);
+        s.bastion.liveBattleActive = true;
+        s.bastion.liveBattleStartedAt = now;
+        set(s);
+        return true;
+      },
+
+      finishSortie: (result, survivingStructures) => {
+        const now = Date.now();
+        const s = draftWithBastion(applyTick(gameSlice(get()), now));
+        if (survivingStructures) s.bastion.fieldStructures = survivingStructures;
+        resolveSortie(s, result, now);
+        set(s);
+      },
+
+      developFoyer: (foyerId) => {
+        const now = Date.now();
+        const s = draftWithBastion(applyTick(gameSlice(get()), now));
+        const foyer = foyerDef(foyerId);
+        if (!foyer || !isCaptured(s.territoire, foyerId)) return false;
+        const dev = devLevel(s.territoire, foyerId);
+        const cost = devCost(foyer, dev, totalProductionPerHour(s.buildings));
+        if (!cost) return false;
+        if (s.resources[cost.resource] < cost.amount) return false;
+        if (s.resources.combat < cost.combat) return false;
+        s.resources[cost.resource] -= cost.amount;
+        s.resources.combat -= cost.combat;
+        const entry = s.territoire.foyers[foyerId];
+        s.territoire.foyers[foyerId] = { ...entry, dev: dev + 1 };
+        set(s);
+        return true;
+      },
+
+      setTerritoireSector: (sectorId) => {
+        const s = gameSlice(get());
+        if (s.territoire.lastSectorId === sectorId) return;
+        set({ territoire: { ...s.territoire, lastSectorId: sectorId } });
+      },
+
+      validateBilanDuSoir: () => {
+        const now = Date.now();
+        const s = draftWithBastion(applyTick(gameSlice(get()), now));
+        if (!bilanStatus(s, now).ok) return 0;
+        const gained = validateBilan(s, now);
+        set(s);
+        return gained;
+      },
+
+      spendPerceeNow: (optionId) => {
+        const now = Date.now();
+        const s = draftWithBastion(applyTick(gameSlice(get()), now));
+        const opt = bilanOptionDef(optionId);
+        // Seules les options à effet immédiat passent ici ; les autres pilotent une sortie.
+        if (!opt?.production_hours) return false;
+        if (!canSpendPercee(s, optionId)) return false;
+        if (!spendPercee(s, optionId)) return false;
+        const prod = totalProductionPerHour(s.buildings);
+        for (const [res, perHour] of Object.entries(prod)) {
+          const id = res as ResourceId;
+          const gain = (perHour ?? 0) * opt.production_hours;
+          if (gain <= 0) continue;
+          s.resources[id] = Math.min(
+            resourceCap(id, s.buildings),
+            s.resources[id] + gain,
+          );
+        }
+        set(s);
+        return true;
+      },
     }),
     {
       name: SAVE_KEY,
@@ -1014,6 +1168,29 @@ export const useGame = create<GameStore>()(
         // — c'est précisément l'information qui manquait.
         if (version < 11 || state.noyauSeenDay === undefined) {
           state.noyauSeenDay = null;
+        }
+        // v11 -> v12 : La Dérive (carte de foyers) + Les Sorties + le Bilan du soir.
+        // Tout part de zéro, et c'est le bon choix : aucun foyer capturé (la carte
+        // se découvre), aucun compteur de sortie entamé (le quota gratuit du jour
+        // est donc plein dès la première ouverture), aucune Percée en stock. Un
+        // joueur existant ne perd rien et ne saute aucune étape de découverte.
+        if (version < 12 || state.territoire === undefined) {
+          state.territoire = freshTerritoireState(state.lastTick || state.createdAt || 0);
+        }
+        if (version < 12 || state.bilan === undefined) {
+          state.bilan = { lastDay: null, percees: 0, perceesTotal: 0, perceesSpent: 0 };
+        }
+        // Les compteurs de sortie vivent dans BastionState : une vieille sauvegarde
+        // n'en a pas. `sortieDay: null` suffit — `sortiesUsedToday` renvoie alors 0.
+        if (version < 12 || state.bastion.sortieDay === undefined) {
+          state.bastion.sortieDay = null;
+          state.bastion.sortieCount = 0;
+          state.bastion.bonusSortieDay = null;
+          state.bastion.bonusSorties = 0;
+          state.bastion.sortieTargetId = null;
+          state.bastion.sortiePeril = 0;
+          state.bastion.sortiePreparatifs = [];
+          state.bastion.sortiePercee = false;
         }
         state.saveVersion = SAVE_VERSION;
         return state;

@@ -12,7 +12,7 @@
    progression manquait. */
 
 import rawConfig from "@/data/milestones_config.json";
-import { BUILDING_ORDER, isDesigned, resourceCap } from "./economy";
+import { BUILDING_ORDER, isDesigned, stateResourceCap } from "./economy";
 import { SPECIES_IDS } from "./cards";
 import { ENERGY_CAP } from "./habits";
 import type { BuildingId, GameState, ResourceId } from "./types";
@@ -202,7 +202,7 @@ export function applyMilestoneReward(state: GameState, reward: Record<string, nu
     } else if (key === "fragments") {
       state.fragments += amount;
     } else if (isResourceReward(key) && state.resources[key] !== undefined) {
-      const cap = key === "energie" ? ENERGY_CAP : resourceCap(key, state.buildings);
+      const cap = key === "energie" ? ENERGY_CAP : stateResourceCap(state, key);
       state.resources[key] = Math.min(cap, state.resources[key] + amount);
     }
   }

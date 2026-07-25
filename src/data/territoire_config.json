@@ -1,0 +1,176 @@
+{
+  "$comment": "LA DERIVE (25/07/2026) — la carte du monde d'EVOLVE, portee par le batiment dormant 'raid' (designed:false dans economy_config.json, donc AUCUN recalibrage economique n'est induit par ce fichier). Inspiration assumee : Grow Castle, ou la carte EST l'economie. Chaque foyer se prend en LANCANT UNE SORTIE (le mini-jeu Bastion joue a la difficulte du foyer) : la carte est donc la raison de se battre, et la sortie est le verbe universel du jeu. Aucune valeur de ce fichier n'est ecrite en dur dans le TypeScript.",
+  "$comment_palier": "PALIER = state.waveCount, le scalaire de difficulte universel (equivalent du numero de vague de Grow Castle). Un foyer affiche son palier : c'est le numero de vague joue quand on l'assaille. Un foyer de palier superieur a son propre palier reste jouable — c'est un choix de risque, pas un verrou.",
+  "$comment_pacing": "GARDE-FOU DE CALIBRAGE. Le socle 90 jours d'economy_config.json est domine a >96 % par le TEMPS DE CHANTIER (cf. pacing_validation), pas par les ressources (2,6 % d'attente). Le revenu de territoire ne touche donc JAMAIS au temps de chantier : il n'ajoute que des ressources, et il est borne deux fois — par gisement (base_ratio * mult^dev) et globalement (total_income_cap_ratio, applique dans territoire.ts). Meme carte entierement developpee, le territoire ne peut pas depasser 40 % de la production de base d'une ressource donnee.",
+
+  "map": {
+    "$comment": "Un secteur par ecran (mobile) : coordonnees en pourcentage 0..100 dans le repere du secteur affiche. Le fond est dessine au Canvas, pas d'asset a produire.",
+    "coord_space": 100,
+    "node_radius_pct": 6.5
+  },
+
+  "natures": {
+    "$comment": "Les six natures de foyer. `assault` = ce foyer se prend en gagnant une sortie a son palier.",
+    "gisement": {
+      "name": "Gisement",
+      "desc": "Rapporte une ressource en continu, meme hors ligne. Se developpe en 5 niveaux.",
+      "assault": true,
+      "repeatable": false
+    },
+    "expedition": {
+      "name": "Site d'expédition",
+      "desc": "Une fois pris, cette destination devient disponible en permanence au Noyau.",
+      "assault": true,
+      "repeatable": false
+    },
+    "vestige": {
+      "name": "Vestige",
+      "desc": "Bonus global permanent, acquis une seule fois.",
+      "assault": true,
+      "repeatable": false
+    },
+    "cache": {
+      "name": "Cache",
+      "desc": "Butin unique : ressources, fragments et monnaie de combat.",
+      "assault": true,
+      "repeatable": false
+    },
+    "antre": {
+      "name": "Antre",
+      "desc": "Un boss. Coûte une Percée pour être assailli — le rendez-vous du soir.",
+      "assault": true,
+      "repeatable": false,
+      "requires_percee": true
+    },
+    "abime": {
+      "name": "Abîme",
+      "desc": "Sans fin. Se rejoue indéfiniment, toujours calé sur votre palier du moment.",
+      "assault": true,
+      "repeatable": true
+    }
+  },
+
+  "income": {
+    "$comment": "Revenu d'un gisement = base_ratio * mult_per_level^dev * production horaire ACTUELLE de cette ressource dans la base. Auto-indexe : un gisement pris au jour 5 vaut encore quelque chose au jour 80 sans table de paliers. 0,04 * 1,35^5 = 0,179 : un gisement pleinement developpe vaut 17,9 % de la production de sa ressource.",
+    "base_ratio": 0.04,
+    "mult_per_level": 1.35,
+    "max_level": 5,
+    "total_income_cap_ratio": 0.4,
+    "$comment_cap": "total_income_cap_ratio : plafond DUR, applique ressource par ressource dans territoire.ts. Neuf gisements existent sur la carte (2 biomasse, 2 enzyme, 2 adn, 1 proteine, 1 lipide, 1 signaux) : deux gisements plein pot sur une meme ressource donneraient 35,9 %, le plafond a 40 % laisse donc la marge sans jamais laisser la carte doubler la base.",
+    "offline_cap_h": 24,
+    "$comment_offline": "offline_cap_h : le rattrapage hors ligne du territoire est borne a 24 h, comme un jeu de gestion mobile honnete — au-dela, revenir apres deux semaines ne doit pas offrir deux semaines de revenu."
+  },
+
+  "development": {
+    "$comment": "Developper un gisement coute des HEURES de sa propre ressource (auto-indexe sur la production du moment) ET de la monnaie de combat : la carte se developpe donc avec ce qu'on gagne en se battant. Aucun temps de chantier consomme — le developpement du territoire ne touche pas au chemin critique des 90 jours.",
+    "cost_hours_base": 8,
+    "cost_hours_growth": 1.7,
+    "cost_combat_base": 25,
+    "cost_combat_growth": 1.6
+  },
+
+  "vestiges": {
+    "$comment": "Bonus globaux permanents. Les cles sont lues par economy.ts / bastion / territoire.ts via territoireBonus(). Valeurs volontairement modestes cote production (le pacing est protege) et plus genereuses cote combat (systeme non calibre par le simulateur, borne par le plaisir).",
+    "production_mult": { "name": "Sève primordiale", "desc": "Production de la base +{v}", "kind": "ratio" },
+    "storage_mult": { "name": "Vessie fossile", "desc": "Capacité de stockage +{v}", "kind": "ratio" },
+    "bastion_dmg_mult": { "name": "Aiguille de silice", "desc": "Dégâts du Bastion +{v}", "kind": "ratio" },
+    "bastion_hp_mult": { "name": "Socle basaltique", "desc": "PV du Bastion +{v}", "kind": "ratio" },
+    "combat_mult": { "name": "Totem de chitine", "desc": "Monnaie de combat gagnée +{v}", "kind": "ratio" },
+    "expedition_speed": { "name": "Courant porteur", "desc": "Durée des expéditions −{v}", "kind": "ratio" },
+    "free_sortie": { "name": "Balise dormante", "desc": "+{v} sortie gratuite par jour", "kind": "flat" },
+    "reserve_cap": { "name": "Carcasse-atelier", "desc": "+{v} places de réserve au Bastion", "kind": "flat" },
+    "jeton_max": { "name": "Nasse tressée", "desc": "+{v} jetons de pêche en stock maximum", "kind": "flat" }
+  },
+
+  "cache_loot": {
+    "$comment": "Butin unique d'une cache : `hours` heures de production de chacune des ressources listees, plus fragments et monnaie de combat. Auto-indexe comme le revenu des gisements.",
+    "hours_base": 6,
+    "hours_per_palier": 0.35,
+    "combat_base": 40,
+    "combat_per_palier": 6
+  },
+
+  "antres": {
+    "$comment": "Les antres consomment une Percee (cf. habits_config.json -> bilan). Multiplicateurs appliques au boss de bastion_config.json -> pathogens.boss. La recompense est un vestige OU un gros butin, defini foyer par foyer.",
+    "hp_mult": 2.2,
+    "dmg_mult": 1.45,
+    "loot_mult": 3.0,
+    "fragments": 4
+  },
+
+  "abime": {
+    "$comment": "Foyer sans fin : le palier joue suit celui du joueur (+ offset), le butin suit le palier. C'est la soupape pour les joueurs en avance sur la carte.",
+    "palier_offset": 3,
+    "combat_base": 60,
+    "combat_per_palier": 4,
+    "fragments_every_paliers": 5
+  },
+
+  "sectors": [
+    {
+      "id": "photique",
+      "name": "Zone photique",
+      "desc": "Les eaux claires, juste au-delà de la membrane. Là où tout commence.",
+      "unlock_palier": 0,
+      "tint": "#2f6f6a",
+      "foyers": [
+        { "id": "s1_debris", "name": "Nappe de débris", "nature": "cache", "palier": 1, "x": 18, "y": 72, "resources": ["biomasse", "proteine"] },
+        { "id": "s1_herbier", "name": "Herbier flottant", "nature": "gisement", "palier": 2, "x": 34, "y": 56, "resource": "biomasse" },
+        { "id": "s1_coquille", "name": "Coquille vide", "nature": "cache", "palier": 3, "x": 14, "y": 40, "resources": ["enzyme", "lipide"] },
+        { "id": "s1_krill", "name": "Banc de krill", "nature": "gisement", "palier": 4, "x": 48, "y": 76, "resource": "proteine" },
+        { "id": "s1_courant", "name": "Courant tiède", "nature": "expedition", "palier": 5, "x": 58, "y": 46, "dest_id": "courant" },
+        { "id": "s1_stele", "name": "Stèle de calcite", "nature": "vestige", "palier": 6, "x": 30, "y": 24, "bonus": "production_mult", "value": 0.05 },
+        { "id": "s1_graisse", "name": "Poche de graisse", "nature": "gisement", "palier": 7, "x": 70, "y": 66, "resource": "lipide" },
+        { "id": "s1_antre_crabe", "name": "Antre du crabe-yéti", "nature": "antre", "palier": 8, "x": 82, "y": 30, "boss_name": "Crabe-yéti matriarche", "bonus": "combat_mult", "value": 0.1 }
+      ]
+    },
+    {
+      "id": "recifs",
+      "name": "Récifs de silice",
+      "desc": "Une forêt minérale qui coupe. On y trouve ce que la lumière n'atteint plus.",
+      "unlock_palier": 8,
+      "tint": "#3b5f83",
+      "foyers": [
+        { "id": "s2_cache", "name": "Anfractuosité scellée", "nature": "cache", "palier": 9, "x": 16, "y": 66, "resources": ["adn", "signaux"] },
+        { "id": "s2_suintement", "name": "Suintement enzymatique", "nature": "gisement", "palier": 11, "x": 32, "y": 44, "resource": "enzyme" },
+        { "id": "s2_recif", "name": "Récif de silice", "nature": "expedition", "palier": 12, "x": 48, "y": 72, "dest_id": "recif" },
+        { "id": "s2_aiguille", "name": "Aiguille de silice", "nature": "vestige", "palier": 13, "x": 44, "y": 26, "bonus": "bastion_dmg_mult", "value": 0.08 },
+        { "id": "s2_filon", "name": "Filon d'ADN fossile", "nature": "gisement", "palier": 15, "x": 64, "y": 54, "resource": "adn" },
+        { "id": "s2_balise", "name": "Balise dormante", "nature": "vestige", "palier": 17, "x": 74, "y": 74, "bonus": "free_sortie", "value": 1 },
+        { "id": "s2_antre_myxine", "name": "Antre de la myxine-mère", "nature": "antre", "palier": 20, "x": 84, "y": 34, "boss_name": "Myxine-mère", "bonus": "expedition_speed", "value": 0.1 }
+      ]
+    },
+    {
+      "id": "plaine",
+      "name": "Plaine abyssale",
+      "desc": "Une étendue de vase sans horizon, semée de carcasses. Le silence y est total.",
+      "unlock_palier": 20,
+      "tint": "#3a3c6b",
+      "foyers": [
+        { "id": "s3_spores", "name": "Champ de spores", "nature": "gisement", "palier": 22, "x": 14, "y": 58, "resource": "signaux" },
+        { "id": "s3_epave", "name": "Épave organique", "nature": "expedition", "palier": 24, "x": 28, "y": 78, "dest_id": "epave" },
+        { "id": "s3_carcasse", "name": "Carcasse-atelier", "nature": "vestige", "palier": 26, "x": 30, "y": 34, "bonus": "reserve_cap", "value": 2 },
+        { "id": "s3_soute", "name": "Soute scellée", "nature": "cache", "palier": 28, "x": 46, "y": 62, "resources": ["proteine", "enzyme", "signaux"] },
+        { "id": "s3_tapis", "name": "Tapis bactérien", "nature": "gisement", "palier": 30, "x": 56, "y": 82, "resource": "biomasse" },
+        { "id": "s3_totem", "name": "Totem de chitine", "nature": "vestige", "palier": 33, "x": 62, "y": 28, "bonus": "combat_mult", "value": 0.15 },
+        { "id": "s3_antre_polype", "name": "Antre du polype-roi", "nature": "antre", "palier": 36, "x": 78, "y": 58, "boss_name": "Polype-roi", "bonus": "jeton_max", "value": 5 },
+        { "id": "s3_socle", "name": "Socle basaltique", "nature": "vestige", "palier": 40, "x": 88, "y": 24, "bonus": "bastion_hp_mult", "value": 0.12 }
+      ]
+    },
+    {
+      "id": "hadale",
+      "name": "Fosse hadale",
+      "desc": "Le fond du fond. La pression y écrase tout ce qui n'a pas appris à vivre sans lumière.",
+      "unlock_palier": 40,
+      "tint": "#2a2a4d",
+      "foyers": [
+        { "id": "s4_fumeur_noir", "name": "Fumeur noir", "nature": "gisement", "palier": 44, "x": 20, "y": 62, "resource": "enzyme" },
+        { "id": "s4_abime", "name": "Abîme sans fond", "nature": "abime", "palier": 45, "x": 34, "y": 30 },
+        { "id": "s4_fumeur", "name": "Fumeur abyssal", "nature": "expedition", "palier": 48, "x": 46, "y": 76, "dest_id": "fumeur" },
+        { "id": "s4_vessie", "name": "Vessie fossile", "nature": "vestige", "palier": 52, "x": 58, "y": 44, "bonus": "storage_mult", "value": 0.15 },
+        { "id": "s4_veine", "name": "Veine hadale", "nature": "gisement", "palier": 58, "x": 72, "y": 68, "resource": "adn" },
+        { "id": "s4_antre_leviathan", "name": "Antre du léviathan cellulaire", "nature": "antre", "palier": 65, "x": 86, "y": 34, "boss_name": "Léviathan cellulaire", "bonus": "production_mult", "value": 0.08 }
+      ]
+    }
+  ]
+}

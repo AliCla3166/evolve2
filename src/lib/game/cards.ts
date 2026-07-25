@@ -5,6 +5,7 @@
    défense ou expédition (passerelle vers la couche militaire). */
 
 import rawConfig from "@/data/mare_config.json";
+import { bonusValue } from "./territoire";
 import type { CardAssignments, CardEntry, GameState } from "./types";
 
 /* ---------- Typage de la config ---------- */
@@ -92,6 +93,14 @@ export interface MareConfig {
 export const MARE = rawConfig as unknown as MareConfig;
 
 export const SPECIES_IDS = MARE.species.map((s) => s.id);
+
+/** Plafond de jetons de pêche en stock : la constante de config + le vestige « Nasse
+ *  tressée » de La Dérive. Un stock plus profond ne fait pas pêcher plus vite (le coût
+ *  en énergie ne bouge pas) : il permet de mettre de côté pendant une journée chargée
+ *  et de pêcher d'affilée quand on a le temps — exactement le rythme visé. */
+export function jetonMax(state: Pick<GameState, "territoire">): number {
+  return MARE.jetons.max_stock + bonusValue(state.territoire, "jeton_max");
+}
 
 export function speciesConfig(id: string): SpeciesConfig | undefined {
   return MARE.species.find((s) => s.id === id);

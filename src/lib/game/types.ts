@@ -177,6 +177,45 @@ export interface LastCatch {
   teaseTo?: number;
 }
 
+/* ---------- La Dérive : la carte du monde (25/07/2026) ---------- */
+
+/** État d'un foyer de la carte. Absent de `TerritoireState.foyers` = jamais touché.
+ *  La DÉFINITION du foyer (nature, palier, position, bonus) vit dans
+ *  src/data/territoire_config.json — ici on ne persiste que ce qui varie. */
+export interface FoyerState {
+  /** Horodatage de la prise (0 = jamais pris). */
+  capturedAt: number;
+  /** Niveau de développement, gisements uniquement (0..territoire_config.income.max_level). */
+  dev: number;
+  /** Nombre de passages, foyers répétables uniquement (l'abîme). */
+  runs: number;
+}
+
+export interface TerritoireState {
+  foyers: Record<string, FoyerState>;
+  /** Dernier encaissement du revenu de territoire (ms) — le rattrapage est borné
+   *  par territoire_config.income.offline_cap_h. */
+  lastIncomeAt: number;
+  /** Dernier secteur consulté (confort d'affichage, aucun effet de jeu). */
+  lastSectorId: string;
+}
+
+/* ---------- Le Bilan du soir & les Percées (25/07/2026) ---------- */
+
+/** Le rendez-vous de fin de journée. L'énergie des habitudes continue d'être créditée
+ *  à la saisie (aucune régression sur la série ni sur le calibrage) : le Bilan ne
+ *  redistribue rien, il TRANSFORME une bonne journée réelle en Percée. */
+export interface BilanState {
+  /** Dernier jour (clé YYYY-MM-DD) dont le Bilan a été validé — null = jamais. */
+  lastDay: string | null;
+  /** Percées en stock (plafonné par habits_config.json -> bilan.max_stock). */
+  percees: number;
+  /** Percées gagnées depuis le début (statistique, jamais décrémentée). */
+  perceesTotal: number;
+  /** Percées dépensées depuis le début (statistique). */
+  perceesSpent: number;
+}
+
 /** Micro-tutoriel 3 étapes (Phase 4) :
  *  0 = valider une habitude · 1 = lancer une construction ·
  *  2 = comprendre le timer · 3 = terminé (TUTORIAL_DONE).
@@ -243,6 +282,12 @@ export interface GameState {
 
   /* ----- Bastion-Défense jouable (intégration profonde, 24/07) ----- */
   bastion: BastionState;
+
+  /* ----- La Dérive & le Bilan du soir (25/07) ----- */
+  /** La carte du monde : foyers pris, développés, et l'horloge du revenu de territoire. */
+  territoire: TerritoireState;
+  /** Le rendez-vous de fin de journée et le stock de Percées. */
+  bilan: BilanState;
 
   /* ----- Jalons & Points d'Âge (piste 3 du diagnostic UX) ----- */
   /** Ids des jalons déjà encaissés — la SEULE chose que le système persiste :

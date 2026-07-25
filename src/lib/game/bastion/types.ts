@@ -103,6 +103,26 @@ export interface BastionState {
   /** Horodatage de début de la bataille en direct en cours (0 si aucune) — sert à borner
    *  liveBattleActive ci-dessus. */
   liveBattleStartedAt: number;
+
+  /* ----- Les Sorties (25/07/2026) : batailles lancées À LA DEMANDE ----- */
+  /** Jour calendaire (clé `dayKey`) du compteur ci-dessous — `null` = jamais sorti. */
+  sortieDay: string | null;
+  /** Sorties déjà lancées ce jour-là (gratuites comprises). */
+  sortieCount: number;
+  /** Jour pour lequel des sorties gratuites bonus ont été accordées par le Bilan de la veille. */
+  bonusSortieDay: string | null;
+  /** Sorties gratuites supplémentaires offertes pour `bonusSortieDay`. */
+  bonusSorties: number;
+  /** Cible de la sortie en cours : `null` = défense du Bastion, sinon l'id d'un foyer
+   *  de La Dérive (cf. territoire_config.json). Éphémère au sens du jeu mais persisté
+   *  pour que la résolution survive à un rechargement en plein combat. */
+  sortieTargetId: string | null;
+  /** Péril choisi pour la sortie en cours (index dans sorties.peril.levels). */
+  sortiePeril: number;
+  /** Ids des préparatifs achetés pour la sortie en cours. */
+  sortiePreparatifs: string[];
+  /** La sortie en cours est-elle payée par une Percée (Vague de Percée / Assaut d'Antre) ? */
+  sortiePercee: boolean;
 }
 
 /* ---------- Entités de combat éphémères (NON persistées, recréées à chaque bataille) ---------- */

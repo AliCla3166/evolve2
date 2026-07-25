@@ -112,11 +112,40 @@ interface StreakTier {
   energy: number;
 }
 
+/** Une option achetable avec une Percée au Bilan du soir. Les champs optionnels
+ *  ne concernent que certaines options (cf. habits_config.json -> bilan.options). */
+export interface BilanOptionDef {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+  cost: number;
+  /** « Vague de Percée » : paliers ajoutés à la vague jouée. */
+  palier_bonus?: number;
+  /** « Vague de Percée » : cran de Péril imposé. */
+  forced_peril?: number;
+  /** « Vague de Percée » : multiplicateur de butin supplémentaire. */
+  loot_mult?: number;
+  /** « Vague de Percée » : fragments de carte garantis. */
+  fragments?: number;
+  /** « Poussée de croissance » : heures de production offertes d'un coup. */
+  production_hours?: number;
+}
+
 interface HabitsConfig {
   streak: {
     tiers: StreakTier[];
     grace: { per_month: number; max_age_days: number };
     history_days: number;
+  };
+  bilan: {
+    min_hour: number;
+    catchup_until_hour: number;
+    threshold_energy: number;
+    max_stock: number;
+    bonus_sorties_next_day: number;
+    percee_per_streak_tier: number;
+    options: BilanOptionDef[];
   };
 }
 
@@ -132,6 +161,16 @@ export const STREAK_GRACE = HABITS_CFG.streak.grace;
 
 /** Nombre de cases de la grille d'historique (= durée de l'Âge 1). */
 export const HISTORY_DAYS = HABITS_CFG.streak.history_days;
+
+/** Réglages du Bilan du soir (le rendez-vous quotidien qui délivre les Percées). */
+export const BILAN = HABITS_CFG.bilan;
+
+/** Les trois emplois possibles d'une Percée. */
+export const BILAN_OPTIONS: ReadonlyArray<BilanOptionDef> = HABITS_CFG.bilan.options;
+
+export function bilanOptionDef(id: string): BilanOptionDef | undefined {
+  return BILAN_OPTIONS.find((o) => o.id === id);
+}
 
 /** Énergie totale que vaut une série parfaite de 90 jours (affiché dans l'UI). */
 export const TOTAL_STREAK_ENERGY = STREAK_TIERS.reduce((sum, t) => sum + t.energy, 0);

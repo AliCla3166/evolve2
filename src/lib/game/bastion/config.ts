@@ -5,6 +5,7 @@
 
 import rawConfig from "@/data/bastion_config.json";
 import { MARE, cardHp, cardPowerAtk, cardPowerDef, rarityConfig, speciesConfig } from "../cards";
+import { bonusValue } from "../territoire";
 import type { CardEntry, GameState } from "../types";
 import type {
   BarracksSlot,
@@ -55,6 +56,28 @@ export interface PathogenDef {
   atkRange?: number;
 }
 
+/** Un cran de Péril : difficulté volontaire choisie avant la sortie (cf. bastion_config.json). */
+export interface PerilDef {
+  id: number;
+  name: string;
+  hp_mult: number;
+  dmg_mult: number;
+  loot_mult: number;
+  extra_bosses: number;
+}
+
+/** Un préparatif achetable en énergie juste avant de lancer une sortie. */
+export interface PreparatifDef {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+  cost_energie: number;
+  loot_mult?: number;
+  extra_respawn?: number;
+  opening_damage_ratio?: number;
+}
+
 interface BastionConfig {
   slots: {
     turret_total: number;
@@ -84,6 +107,7 @@ interface BastionConfig {
     mortar_splash_radius: number;
   };
   pathogens: { roster: PathogenDef[]; boss: PathogenDef & { value: number }; boss_every: number };
+  bastion: { hp_base: number };
   wave: {
     count_base: number;
     count_per_wave: number;
@@ -98,6 +122,16 @@ interface BastionConfig {
     combat_reward_base: number;
     combat_reward_per_wave: number;
     lead_window_h: number;
+  };
+  sorties: {
+    free_per_day: number;
+    cost_base: number;
+    cost_growth: number;
+    max_per_day: number;
+    defeat_combat_ratio: number;
+    fragment_chance: number;
+    peril: { levels: PerilDef[] };
+    preparatifs: PreparatifDef[];
   };
   scouting: { max_level: number; cost_base: number; cost_growth: number };
 }
@@ -173,6 +207,14 @@ export function freshBastionState(): BastionState {
     liveWaveCount: 0,
     liveBattleActive: false,
     liveBattleStartedAt: 0,
+    sortieDay: null,
+    sortieCount: 0,
+    bonusSortieDay: null,
+    bonusSorties: 0,
+    sortieTargetId: null,
+    sortiePeril: 0,
+    sortiePreparatifs: [],
+    sortiePercee: false,
   };
 }
 
@@ -428,7 +470,11 @@ export function regenFieldStructures(structures: FieldStructure[]): FieldStructu
 /** Assemble le contexte statique passé à initBattle/stepBattle à partir de l'état de
  *  partie complet — slots actifs uniquement, structures déjà régénérées par l'appelant
  *  si besoin (cf. regenFieldStructures), mods de support passifs déjà résolus. */
-export function buildStaticDefs(state: Pick<GameState, "bastion" | "collection">, structures: FieldStructure[]): StaticDefs {
+export function buildStaticDefs(
+  state: Pick<GameState, "bastion" | "collection" | "territoire">,
+  structures: FieldStructure[],
+): StaticDefs {
+  const mods = resolvedSupportMods(state.bastion.support);
   return {
     turretSlots: activeTurretSlots(state.bastion),
     barracksSlots: activeBarracksSlots(state.bastion),
@@ -437,6 +483,31 @@ export function buildStaticDefs(state: Pick<GameState, "bastion" | "collection">
     collection: state.collection,
     slotBonusLevel: state.bastion.slotBonusLevel,
     inWaveRespawnUnlocked: state.bastion.inWaveRespawnUnlocked,
-    mods: resolvedSupportMods(state.bastion.support),
+    // Les vestiges de La Dérive entrent ici, au même endroit que les supports passifs :
+    // le moteur (engine.ts) reste ignorant du territoire, il ne voit qu'un multiplicateur.
+    mods: {
+      ...mods,
+      dmgMult: mods.dmgMult * (1 + bonusValue(state.territoire, "bastion_dmg_mult")),
+    },
   };
+}
+
+/* ---------- Deux plafonds que La Dérive relève ---------- */
+
+/** PV du Bastion pour une bataille jouée : socle de config × Fondations renforcées ×
+ *  vestige « Socle basaltique ». Aucune valeur en dur — cf. bastion_config.json -> bastion. */
+export function bastionHpMax(state: Pick<GameState, "bastion" | "territoire">): number {
+  return Math.round(
+    BASTION.bastion.hp_base *
+      foundationsMult(state.bastion.slotBonusLevel) *
+      (1 + bonusValue(state.territoire, "bastion_hp_mult")),
+  );
+}
+
+/** Places de réserve réellement disponibles : celles achetées en Boutique + celles
+ *  offertes par un vestige (« Carcasse-atelier »). La Boutique, elle, continue de
+ *  raisonner sur `bastion.reserveCap` seul — un vestige ne doit pas consommer le
+ *  budget d'achats du joueur ni buter sur `reserve.max_cap`. */
+export function effectiveReserveCap(state: Pick<GameState, "bastion" | "territoire">): number {
+  return state.bastion.reserveCap + bonusValue(state.territoire, "reserve_cap");
 }

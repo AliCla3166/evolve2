@@ -11,12 +11,35 @@ import {
   cardsExpeditionAtkBonus,
   cardsExpeditionExpBonus,
 } from "./cards";
-import { getBuildingConfig, resourceCap, totalProductionPerHour } from "./economy";
+import {
+  getBuildingConfig,
+  resourceName,
+  stateProductionPerHour,
+  stateResourceCap,
+} from "./economy";
 import { dayKey, ENERGY_CAP } from "./habits";
 import { liveWaveCombatReward } from "./bastion/config";
+import {
+  clearSortie,
+  defeatKeepRatio,
+  fragmentChance,
+  sortieLootMult,
+} from "./bastion/sorties";
+import {
+  abimeLoot,
+  antreLoot,
+  assaultPalier,
+  bonusValue,
+  cacheLoot,
+  foyerDef,
+  natureDef,
+  TERRITOIRE_ANTRES,
+} from "./territoire";
+import { perceeWaveOption } from "./bilan";
 import type { LiveWaveResult } from "./bastion/types";
 import type {
   Expedition,
+  FoyerState,
   GameState,
   Report,
   ResourceId,
@@ -293,6 +316,18 @@ export function dailyOffers(state: GameState, now: number): DestinationOffer[] {
   }));
 }
 
+/** Durée réelle d'une expédition, vestige « Courant porteur » de La Dérive appliqué.
+ *  L'offre du jour reste inchangée (elle est déterministe pour la journée) : c'est
+ *  à l'affichage et au lancement qu'on raccourcit. Le plancher d'un dixième d'heure
+ *  évite qu'un cumul de bonus rende une expédition instantanée. */
+export function expeditionDurationH(
+  state: Pick<GameState, "territoire">,
+  baseDurationH: number,
+): number {
+  const reduction = Math.min(0.9, bonusValue(state.territoire, "expedition_speed"));
+  return Math.max(0.1, Math.round(baseDurationH * (1 - reduction) * 10) / 10);
+}
+
 /** Chance de succès affichée/utilisée pour une escouade sur une offre.
  *  `bonus` = apport des cartes assignées en expédition (Phase 6). */
 export function successChance(
@@ -327,7 +362,7 @@ export function cardExpeditionBonus(
 function addResource(state: GameState, res: string, amount: number): void {
   const id = res as ResourceId;
   if (state.resources[id] === undefined || amount <= 0) return;
-  const cap = res === "energie" ? ENERGY_CAP : resourceCap(id, state.buildings);
+  const cap = res === "energie" ? ENERGY_CAP : stateResourceCap(state, id);
   state.resources[id] = Math.min(cap, state.resources[id] + amount);
 }
 
@@ -363,7 +398,7 @@ function resolveExpedition(state: GameState, exp: Expedition): void {
   // Récompenses en ressources ≈ N heures de production totale, réparties.
   const hoursRange = cfg.reward_hours_by_tier[String(exp.tier)] ?? [2, 4];
   const hours = draw(state, hoursRange);
-  const perHour = totalProductionPerHour(state.buildings);
+  const perHour = stateProductionPerHour(state);
   const totalPerHour = Object.values(perHour).reduce((a, b) => a + b, 0);
   const budget = Math.max(40, hours * totalPerHour) * (success ? 1 : cfg.failure_reward_ratio);
   const share = budget / Math.max(1, exp.rewards.length);
@@ -463,6 +498,19 @@ function resolvePathogenWave(state: GameState, at: number): void {
   );
 }
 
+/* ---------- Les deux chemins de bataille jouée ----------
+   Depuis le 25/07 il y en a DEUX, volontairement dissymétriques :
+
+   1. `resolveLiveWave` — la vague PLANIFIÉE, jouée en direct au lieu d'être auto-résolue.
+      Elle reste l'exact miroir de `resolvePathogenWave` : mêmes récompenses, mêmes pénalités,
+      elle avance `waveCount` et repousse `nextAttackAt`. C'est le rendez-vous subi.
+
+   2. `resolveSortie` — une SORTIE, lancée quand le joueur en a envie. Elle ne touche jamais au
+      calendrier (`nextAttackAt` et `waveCount` sont laissés strictement intacts) et perdre ne
+      coûte RIEN : aucune ressource dévorée, aucune garde tombée, et même une part du butin
+      conservée. Jouer beaucoup n'avance donc pas la difficulté subie, et rater n'installe
+      jamais de mur — les deux piliers qui rendent la répétition agréable dans Grow Castle. */
+
 /** Résout EN DIRECT la vague actuellement planifiée (`state.nextAttackAt`), à partir du
  *  résultat de la bataille jouée dans le Bastion-Défense (cf. bastion/engine.ts). Avance
  *  `waveCount`/`nextAttackAt` exactement comme `resolvePathogenWave`, pour que ce chemin
@@ -502,11 +550,137 @@ export function resolveLiveWave(state: GameState, result: LiveWaveResult, now: n
   );
 }
 
+/** Ce qu'une sortie a rapporté — renvoyé à l'appelant pour l'écran de fin de bataille,
+ *  en plus du rapport poussé dans le journal. */
+export interface SortieResolution {
+  won: boolean;
+  targetId: string | null;
+  targetName: string;
+  /** Le foyer vient-il d'être pris (première victoire sur un foyer non répétable) ? */
+  captured: boolean;
+  combatGain: number;
+  fragments: number;
+  loot: Partial<Record<ResourceId, number>>;
+}
+
+/** Marque un foyer comme assailli et renvoie son état. L'entrée est REMPLACÉE, jamais mutée
+ *  en place : `applyTickDetailed` ne clone la table des foyers qu'en surface. */
+function touchFoyer(state: GameState, foyerId: string): FoyerState {
+  const existing = state.territoire.foyers[foyerId];
+  const copy: FoyerState = existing
+    ? { ...existing }
+    : { capturedAt: 0, dev: 0, runs: 0 };
+  state.territoire.foyers[foyerId] = copy;
+  return copy;
+}
+
+/** Résout une SORTIE : bataille lancée à la demande, contre le Bastion (cible `null`) ou
+ *  contre un foyer de La Dérive. Ne touche NI `waveCount` NI `nextAttackAt` — le calendrier
+ *  des vagues subies est un rail séparé, et c'est ce qui permet d'enchaîner les sorties sans
+ *  que la difficulté de fond ne s'emballe. Perdre ne retire jamais rien. */
+export function resolveSortie(
+  state: GameState,
+  result: LiveWaveResult,
+  now: number,
+): SortieResolution {
+  const b = state.bastion;
+  const targetId = b.sortieTargetId;
+  const foyer = targetId ? foyerDef(targetId) : null;
+  const won = result.won;
+  const perceeOpt = b.sortiePercee ? perceeWaveOption() : undefined;
+
+  // Multiplicateur global : Péril × préparatifs × vestiges « combat_mult » × Percée,
+  // et la prime propre aux antres (le boss paie plus cher que sa difficulté).
+  const antreMult = foyer?.nature === "antre" ? TERRITOIRE_ANTRES.loot_mult : 1;
+  const lootMult =
+    sortieLootMult(
+      b.sortiePeril,
+      b.sortiePreparatifs,
+      bonusValue(state.territoire, "combat_mult"),
+      perceeOpt?.loot_mult ?? 1,
+    ) * antreMult;
+
+  const targetName = foyer ? foyer.name : "Bastion";
+  const lines = [
+    `${result.kills} élimination${result.kills > 1 ? "s" : ""}, bastion à ` +
+      `${Math.round(result.bastionHpFrac * 100)} % PV.`,
+  ];
+
+  // Monnaie de combat : pleine sur une victoire, réduite mais JAMAIS nulle sur une défaite.
+  const raw = liveWaveCombatReward(result) * lootMult;
+  const combatGain = Math.max(1, Math.round(won ? raw : raw * defeatKeepRatio()));
+  addResource(state, "combat", combatGain);
+  lines.push(`+${fmt(combatGain)} monnaie de combat`);
+
+  const loot: Partial<Record<ResourceId, number>> = {};
+  let fragments = 0;
+  let captured = false;
+
+  if (won && foyer) {
+    const entry = touchFoyer(state, foyer.id);
+    entry.runs += 1;
+    const prod = stateProductionPerHour(state);
+
+    if (foyer.nature === "cache") {
+      const spoils = cacheLoot(foyer, prod);
+      for (const [res, amount] of Object.entries(spoils.resources)) {
+        const gain = Math.round((amount ?? 0) * lootMult);
+        if (gain <= 0) continue;
+        addResource(state, res, gain);
+        loot[res as ResourceId] = gain;
+        lines.push(`+${fmt(gain)} ${resourceName(res as ResourceId)}`);
+      }
+    } else if (foyer.nature === "antre") {
+      fragments += antreLoot().fragments;
+    } else if (foyer.nature === "abime") {
+      const spoils = abimeLoot(assaultPalier(foyer, result.waveN));
+      fragments += spoils.fragments;
+    }
+
+    if (!natureDef(foyer.nature).repeatable && entry.capturedAt === 0) {
+      entry.capturedAt = now;
+      captured = true;
+      lines.push(`Foyer sécurisé — ${natureDef(foyer.nature).name}.`);
+    }
+  } else if (won && !foyer) {
+    // Sortie de pure défense : la monnaie de combat est déjà versée ci-dessus.
+    lines.push("Le Bastion tient. Rien n'a franchi la membrane.");
+  }
+
+  // Fragments de carte : une chance de base sur toute sortie gagnée, garantis par une Percée.
+  if (won && drawUnit(state) < fragmentChance()) fragments += 1;
+  if (perceeOpt?.fragments) fragments += perceeOpt.fragments;
+  if (fragments > 0) {
+    state.fragments += fragments;
+    lines.push(`+${fragments} fragment${fragments > 1 ? "s" : ""} de carte`);
+  }
+
+  if (!won) {
+    lines.push("Sortie perdue — aucune perte. Réarme et retente.");
+  }
+
+  b.liveWaveCount += 1;
+  b.liveBattleActive = false;
+  b.liveBattleStartedAt = 0;
+  clearSortie(b);
+
+  pushReport(
+    state,
+    "pathogene",
+    won ? `⚔️ Sortie — ${targetName} emporté !` : `⚔️ Sortie — repli devant ${targetName}`,
+    lines,
+    now,
+    won,
+  );
+
+  return { won, targetId, targetName, captured, combatGain, fragments, loot };
+}
+
 function applyAutoEvent(state: GameState, ev: EventDef, at: number): void {
   const lines: string[] = [];
   if (ev.id === "courant_nutritif" && ev.production_hours) {
     const hours = draw(state, ev.production_hours);
-    const perHour = totalProductionPerHour(state.buildings);
+    const perHour = stateProductionPerHour(state);
     for (const [res, rate] of Object.entries(perHour)) {
       const gain = rate * hours;
       addResource(state, res, gain);
@@ -529,7 +703,7 @@ function applyAutoEvent(state: GameState, ev: EventDef, at: number): void {
     }
   } else if (ev.id === "banc_plancton" && ev.biomasse_hours) {
     const hours = draw(state, ev.biomasse_hours);
-    const rate = totalProductionPerHour(state.buildings).biomasse ?? 12;
+    const rate = stateProductionPerHour(state).biomasse ?? 12;
     const gain = Math.max(30, rate * hours);
     addResource(state, "biomasse", gain);
     lines.push(`+${fmt(gain)} biomasse`);
@@ -575,7 +749,7 @@ export function resolveChoiceEvent(
   const lines: string[] = [];
   const ok = drawUnit(state) < (opt.success_chance ?? 1);
   if (ok && opt.success) {
-    const perHour = totalProductionPerHour(state.buildings);
+    const perHour = stateProductionPerHour(state);
     for (const [key, range] of Object.entries(opt.success)) {
       const res = key.replace(/_hours$/, "");
       const hours = draw(state, range as [number, number]);

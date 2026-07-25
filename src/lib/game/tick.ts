@@ -13,12 +13,13 @@
 import {
   buildingProductionPerHour,
   getBuildingConfig,
-  resourceCap,
   resourceName,
-  totalProductionPerHour,
+  stateProductionPerHour,
+  stateResourceCap,
 } from "./economy";
 import { computeStreak, dayKey, ENERGY_CAP, settleStreakTiers } from "./habits";
 import { applyMilitary, pushReport } from "./military";
+import { territoireAccrual } from "./territoire";
 import type { BuildingId, BuildTask, GameState, Report, ResourceId } from "./types";
 
 /* ---------- Compte rendu de tick ---------- */
@@ -78,22 +79,42 @@ export function totalGained(s: TickSummary): number {
 function produce(state: GameState, fromMs: number, toMs: number, out: TickSummary): void {
   const dtHours = (toMs - fromMs) / 3_600_000;
   if (dtHours <= 0) return;
-  const perHour = totalProductionPerHour(state.buildings);
+  const perHour = stateProductionPerHour(state);
   for (const [res, rate] of Object.entries(perHour)) {
     const id = res as ResourceId;
-    const produced = rate * dtHours;
+    const produced = (rate ?? 0) * dtHours;
     if (produced <= 0) continue;
-    const current = state.resources[id] ?? 0;
-    const cap = resourceCap(id, state.buildings);
-    const room = Math.max(0, cap - current);
-    const kept = Math.min(produced, room);
-    const lost = produced - kept;
-    if (kept > 0) {
-      state.resources[id] = current + kept;
-      out.gains[id] = (out.gains[id] ?? 0) + kept;
-    }
-    if (lost > 0) out.wasted[id] = (out.wasted[id] ?? 0) + lost;
+    credit(state, id, produced, out);
   }
+}
+
+/** Crédite un montant en respectant le plafond, et rend compte du perdu. */
+function credit(state: GameState, id: ResourceId, amount: number, out: TickSummary): void {
+  const current = state.resources[id] ?? 0;
+  const cap = stateResourceCap(state, id);
+  const room = Math.max(0, cap - current);
+  const kept = Math.min(amount, room);
+  const lost = amount - kept;
+  if (kept > 0) {
+    state.resources[id] = current + kept;
+    out.gains[id] = (out.gains[id] ?? 0) + kept;
+  }
+  if (lost > 0) out.wasted[id] = (out.wasted[id] ?? 0) + lost;
+}
+
+/* ---------- Revenu de La Dérive ----------
+   Encaissé À PART de produce(), et pour une raison précise : les gisements ont leur
+   propre fenêtre de rattrapage (territoire_config.json -> income.offline_cap_h). La
+   base, elle, produit sans limite de durée hors ligne — c'est le stockage qui borne
+   son gain. Deux règles différentes, donc deux compteurs différents : `lastIncomeAt`
+   n'est pas `lastTick`. */
+
+function accrueTerritoire(state: GameState, now: number, out: TickSummary): void {
+  const gains = territoireAccrual(state.territoire, stateProductionPerHour(state), now);
+  for (const [res, amount] of Object.entries(gains)) {
+    if ((amount ?? 0) > 0) credit(state, res as ResourceId, amount ?? 0, out);
+  }
+  state.territoire = { ...state.territoire, lastIncomeAt: now };
 }
 
 /** Finalise un chantier : le bâtiment prend son niveau cible (jamais de régression).
@@ -187,6 +208,12 @@ export function applyTickDetailed(
     expeditions: [...state.expeditions],
     reports: state.reports, // pushReport remplace le tableau (jamais de mutation en place)
     pendingEvent: state.pendingEvent ? { ...state.pendingEvent } : null,
+    // La Dérive et le Bilan sont clonés au même titre que le reste : une sortie gagnée écrit
+    // dans `territoire.foyers`, et les sélecteurs React ne rendent à nouveau que si la
+    // référence change. Les entrées de foyer, elles, sont remplacées (jamais mutées) par
+    // military.touchFoyer — ce clone de surface suffit donc.
+    territoire: { ...state.territoire, foyers: { ...state.territoire.foyers } },
+    bilan: { ...state.bilan },
   };
 
   const from = next.lastTick > 0 ? next.lastTick : now;
@@ -201,6 +228,12 @@ export function applyTickDetailed(
   // on se resynchronise sans produire ni annuler quoi que ce soit.
   if (now <= from) {
     next.lastTick = Math.min(from, now);
+    // Même resynchronisation pour le compteur de La Dérive, sinon une horloge reculée
+    // puis remise à l'heure ferait encaisser deux fois la même période.
+    next.territoire = {
+      ...next.territoire,
+      lastIncomeAt: Math.min(next.territoire.lastIncomeAt || now, now),
+    };
     // Les chantiers échus restent finalisables même à temps figé.
     for (const task of next.buildQueue) {
       if (task.endsAt <= now) completeTask(next, task, summary);
@@ -221,6 +254,10 @@ export function applyTickDetailed(
   }
   next.buildQueue = next.buildQueue.filter((t) => t.endsAt > now);
   produce(next, cursor, now, summary);
+
+  // Revenu des gisements de La Dérive — après la production de base, dont il est un
+  // pourcentage, et donc après que les chantiers échus ont relevé les débits.
+  accrueTerritoire(next, now, summary);
 
   // Couche militaire : expéditions échues, vagues de pathogènes, événements.
   applyMilitary(next, now);

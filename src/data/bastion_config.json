@@ -362,6 +362,10 @@
     },
     "boss_every": 5
   },
+  "bastion": {
+    "$comment": "PV du Bastion lui-meme pendant une bataille jouee. Ces valeurs vivaient en dur dans BastionScene.tsx (180 et 0.08) : elles remontent ici le 25/07 avec le branchement des vestiges de La Derive (bastion_hp_mult / bastion_dmg_mult), pour qu'aucun nombre d'equilibrage ne reste dans le TypeScript. Le bonus par niveau de Fondations renforcees n'est plus un chiffre a part : c'est foundations.per_level_mult, le meme que pour la garnison, les tourelles et les mortiers.",
+    "hp_base": 180
+  },
   "wave": {
     "count_base": 4,
     "count_per_wave": 0.55,
@@ -377,6 +381,53 @@
     "combat_reward_per_wave": 2.2,
     "$comment_lead": "lead_window_h : jusqu'à combien d'heures À L'AVANCE la vague planifiée peut être jouée manuellement. Comme resolveLiveWave repousse nextAttackAt à partir de l'heure PLANIFIÉE (pas de 'now'), jouer en avance ne fait qu'avancer les vagues dans le temps sans en créer : le total sur 90 jours reste celui du calendrier. Cette fenêtre borne simplement l'enchaînement (interval_h = 36..84 h => ~1-2 vagues d'avance).",
     "lead_window_h": 96
+  },
+  "sorties": {
+    "$comment": "LES SORTIES (25/07/2026). Avant ce bloc, une vague ne se jouait que dans la fenetre lead_window_h autour de la vague PLANIFIEE (interval_h = 36..84 h) : concretement une bataille tous les deux jours, et jamais quand on en avait envie. Une sortie est une bataille LANCEE A LA DEMANDE, contre le Bastion (defense libre) ou contre un foyer de La Derive (cf. territoire_config.json). Elle ne touche PAS au calendrier : nextAttackAt et le chemin auto de military.ts restent intacts, ils demeurent le filet de securite hors ligne (pilier 'jamais de mur frustrant' du PLAN).",
+    "$comment_gratuite": "PERDRE UNE SORTIE NE COUTE RIEN. Aucune perte de ressources, aucune garde tuee : les penalites de applyWaveOutcome restent reservees au chemin AUTO (la vague subie, celle qu'on n'a pas jouee). C'est la lecon centrale de Grow Castle : l'echec est gratuit et paie quand meme, donc on retente tout de suite. On conserve defeat_combat_ratio de la monnaie de combat proportionnelle aux eliminations.",
+    "$comment_quota": "free_per_day sorties gratuites, puis cout croissant en energie : 12, 19, 31, 49, 79 (cost_base * cost_growth^n arrondi). Une journee d'habitudes parfaite vaut 95 energie : la 4e et la 5e sortie sont abordables, la 8e mange une journee entiere. Le frein n'est donc pas un timer, c'est la vie reelle du joueur — exactement ce qui est demande. max_per_day est une soupape de securite, pas un objectif.",
+    "free_per_day": 3,
+    "cost_base": 12,
+    "cost_growth": 1.6,
+    "max_per_day": 12,
+    "defeat_combat_ratio": 0.35,
+    "fragment_chance": 0.18,
+    "peril": {
+      "$comment": "LE PERIL — difficulte volontaire, gratuite, choisie avant chaque sortie (inspire de la Corne du Diable de Grow Castle). Le butin croit PLUS VITE que le danger (3,2x de butin pour 3x de PV au peril 4) : monter le peril est toujours le bon pari pour qui a la defense pour, et jamais obligatoire pour les autres. extra_bosses ajoute des boss a la vague generee.",
+      "levels": [
+        { "id": 0, "name": "Calme", "hp_mult": 1.0, "dmg_mult": 1.0, "loot_mult": 1.0, "extra_bosses": 0 },
+        { "id": 1, "name": "Trouble", "hp_mult": 1.4, "dmg_mult": 1.25, "loot_mult": 1.35, "extra_bosses": 0 },
+        { "id": 2, "name": "Hostile", "hp_mult": 1.8, "dmg_mult": 1.5, "loot_mult": 1.8, "extra_bosses": 1 },
+        { "id": 3, "name": "Virulent", "hp_mult": 2.3, "dmg_mult": 1.8, "loot_mult": 2.4, "extra_bosses": 1 },
+        { "id": 4, "name": "Cataclysmique", "hp_mult": 3.0, "dmg_mult": 2.2, "loot_mult": 3.2, "extra_bosses": 2 }
+      ]
+    },
+    "preparatifs": [
+      {
+        "id": "butin",
+        "name": "Butin enrichi",
+        "desc": "Récolte de la sortie +30 %.",
+        "icon": "◆",
+        "cost_energie": 18,
+        "loot_mult": 1.3
+      },
+      {
+        "id": "renfort",
+        "name": "Renfort de garnison",
+        "desc": "Une vague de réapparition offerte pendant la bataille.",
+        "icon": "✚",
+        "cost_energie": 25,
+        "extra_respawn": 1
+      },
+      {
+        "id": "salve",
+        "name": "Salve enzymatique",
+        "desc": "Frappe de zone immédiate au premier contact.",
+        "icon": "✹",
+        "cost_energie": 30,
+        "opening_damage_ratio": 0.35
+      }
+    ]
   },
   "scouting": {
     "$comment": "Vigie : dévoile progressivement le contenu de la vague suivante (aperçu). Niveau 0 = aveugle, 1 = effectif + boss, 2 = + espèces présentes, 3 = + effectif par espèce et multiplicateurs. L'aperçu est EXACT : genLiveWave est déterministe pour un numéro de vague donné (graine dérivée du numéro), cf. bastion/engine.ts.",

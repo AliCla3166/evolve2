@@ -14,6 +14,7 @@ import {
   dailyOffers,
   defensePower,
   estimatedWavePower,
+  expeditionDurationH,
   MILITARY,
   recruitCost,
   successChance,
@@ -89,6 +90,8 @@ export function NoyauHub({ onClose }: { onClose: () => void }) {
   const avail = availableUnits(state);
   const offers = dailyOffers(state, now);
   const cardBonus = cardExpeditionBonus(state);
+  // Durée affichée = durée réellement appliquée au lancement (vestige "Courant porteur").
+  const durationOf = (offer: { durationH: number }) => expeditionDurationH(state, offer.durationH);
   const cap = unitCap(buildings);
   const total = totalUnits(units);
   const def = defensePower(state);
@@ -216,7 +219,7 @@ export function NoyauHub({ onClose }: { onClose: () => void }) {
                   <span className="text-xs tracking-wide text-cell-cyan">
                     {"✦".repeat(offer.tier)} {offer.destName}
                   </span>
-                  <span className="text-[11px] text-cell-teal/70">{offer.durationH} h</span>
+                  <span className="text-[11px] text-cell-teal/70">{durationOf(offer)} h</span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-cell-teal/70">
                   <span>risque {Math.round(offer.risk * 100)} %</span>

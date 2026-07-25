@@ -12,8 +12,8 @@ import {
   ECONOMY,
   maxLevel,
   resourceName,
-  storageCap,
-  totalProductionPerHour,
+  stateProductionPerHour,
+  stateStorageCap,
 } from "@/lib/game/economy";
 import { fmtCompact, fmtInt, fmtRate } from "@/lib/game/format";
 import { dayKey, ENERGY_CAP, nextStreakTier } from "@/lib/game/habits";
@@ -134,10 +134,16 @@ function CombatChip({ onOpen }: { onOpen: () => void }) {
 export function Hud({ onOpenHabits }: { onOpenHabits?: () => void }) {
   const resources = useGame((s) => s.resources);
   const buildings = useGame((s) => s.buildings);
+  const territoire = useGame((s) => s.territoire);
   const [info, setInfo] = useState<ResourceId | null>(null);
 
-  const cap = storageCap(buildings);
-  const prod = totalProductionPerHour(buildings);
+  // Chiffres EFFECTIFS (bâtiments × bonus de La Dérive) : le HUD doit dire ce que le
+  // tick applique réellement, sinon les gisements et vestiges seraient invisibles.
+  // Calculés APRÈS sélection (et non dans un sélecteur) : ces fonctions renvoient un
+  // nouvel objet à chaque appel, ce qu'un sélecteur Zustand ne tolère pas.
+  const view = { buildings, territoire };
+  const cap = stateStorageCap(view);
+  const prod = stateProductionPerHour(view);
   const capped = cappedResources();
   const vitaliteMax = vitaliteTarget(buildings.mutation ?? 0, resources.vitalite);
 

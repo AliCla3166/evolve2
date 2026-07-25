@@ -4,6 +4,7 @@
 
 import rawConfig from "@/data/economy_config.json";
 import { freshBastionState } from "./bastion/config";
+import { bonusValue, freshTerritoireState } from "./territoire";
 import type { BuildingId, BuildTask, GameState, ResourceId } from "./types";
 
 /* ---------- Typage de la structure réelle du JSON ---------- */
@@ -392,6 +393,52 @@ export function resourceCap(
   return cappedResources().includes(res) ? storageCap(buildings) : Infinity;
 }
 
+/* ---------- Les bonus de La Dérive appliqués à l'économie ----------
+   Trois fonctions « state-aware » doublent les trois fonctions « buildings-aware »
+   ci-dessus. Les anciennes restent la vérité des BÂTIMENTS (elles servent à afficher
+   ce qu'un chantier apportera, indépendamment de la carte) ; les nouvelles sont la
+   vérité du JOUEUR et doivent être utilisées partout où on produit, plafonne ou affiche.
+
+   Note d'équilibrage : ces multiplicateurs restent volontairement modestes (quelques
+   pour-cent par vestige) et ne touchent QUE la production et le stockage. Le temps de
+   chantier — plus de 96 % du chemin critique des 90 jours, cf. economy_config.json ->
+   pacing_validation — n'est jamais accéléré par La Dérive. */
+
+/** Le strict minimum dont ces fonctions ont besoin. Volontairement plus étroit que
+ *  GameState : un composant React peut ainsi ne s'abonner qu'à `buildings` et
+ *  `territoire` (deux références stables) au lieu de l'état entier. */
+export type EconomyStateView = Pick<GameState, "buildings" | "territoire">;
+
+/** Multiplicateur de production accordé par les vestiges déjà pris (1 = aucun). */
+export function territoireProductionMult(state: EconomyStateView): number {
+  return 1 + bonusValue(state.territoire, "production_mult");
+}
+
+/** Production horaire de la BASE, vestiges compris (hors revenu des gisements, qui
+ *  est encaissé séparément par le tick — cf. territoire.territoireAccrual). */
+export function stateProductionPerHour(
+  state: EconomyStateView,
+): Partial<Record<ResourceId, number>> {
+  const mult = territoireProductionMult(state);
+  const base = totalProductionPerHour(state.buildings);
+  if (mult === 1) return base;
+  const out: Partial<Record<ResourceId, number>> = {};
+  for (const [res, perHour] of Object.entries(base)) {
+    out[res as ResourceId] = (perHour ?? 0) * mult;
+  }
+  return out;
+}
+
+/** Capacité de stockage effective, vestiges `storage_mult` compris. */
+export function stateStorageCap(state: EconomyStateView): number {
+  return storageCap(state.buildings) * (1 + bonusValue(state.territoire, "storage_mult"));
+}
+
+/** Plafond effectif d'une ressource pour CE joueur (Infinity si non plafonnée). */
+export function stateResourceCap(state: EconomyStateView, res: ResourceId): number {
+  return cappedResources().includes(res) ? stateStorageCap(state) : Infinity;
+}
+
 /* ---------- Coûts / achat ---------- */
 
 export function canAfford(
@@ -484,6 +531,9 @@ export function freshGameState(now: number): GameState {
     cardAssignments: { defense: [], expedition: [] },
     lastCatch: null,
     bastion: freshBastionState(),
+    // ----- La Dérive & le Bilan (25/07) — tuning dans territoire_config.json / habits_config.json -----
+    territoire: freshTerritoireState(now),
+    bilan: { lastDay: null, percees: 0, perceesTotal: 0, perceesSpent: 0 },
     claimedMilestones: [],
   };
 }

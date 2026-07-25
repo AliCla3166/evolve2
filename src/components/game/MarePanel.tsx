@@ -15,10 +15,12 @@ import {
   cardPowerExp,
   cardsDefenseBonus,
   cardsExpeditionExpBonus,
+  jetonMax,
   MARE,
   nextLevelAt,
   rarityConfig,
 } from "@/lib/game/cards";
+import { effectiveReserveCap } from "@/lib/game/bastion/config";
 import { fmtInt } from "@/lib/game/format";
 import { useGame } from "@/lib/game/store";
 
@@ -262,8 +264,10 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   const collection = useGame((s) => s.collection);
   const assignments = useGame((s) => s.cardAssignments);
   // Le plafond "défense" alimente la réserve plaçable du Bastion-Défense jouable —
-  // dynamique et achetable en Boutique, cf. bastion.reserveCap (store.toggleCardAssign).
-  const defenseCap = useGame((s) => s.bastion.reserveCap);
+  // dynamique : acheté en Boutique + relevé par le vestige "Carcasse-atelier" de
+  // La Dérive (cf. effectiveReserveCap, la même source que store.toggleCardAssign).
+  const defenseCap = useGame(effectiveReserveCap);
+  const jetonCap = useGame(jetonMax);
   const buyJeton = useGame((s) => s.buyJeton);
   const spendJeton = useGame((s) => s.spendJeton);
   const landCatch = useGame((s) => s.landCatch);
@@ -361,10 +365,12 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
         {/* Jetons + fragments */}
         <Panel variant="tooltip" className={`px-3 py-2 ${inertWhileFishing}`} style={{ background: "rgba(5, 11, 20, 0.85)" }}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-cell-cyan">🎣 {jetons} jeton{jetons > 1 ? "s" : ""}</span>
+            <span className="text-xs text-cell-cyan">
+              🎣 {jetons}/{jetonCap} jeton{jetons > 1 ? "s" : ""}
+            </span>
             <PixelButton
               className="!min-w-[150px] !px-5 !py-1 text-[10px]"
-              disabled={energie < MARE.jetons.cost_energie || jetons >= MARE.jetons.max_stock}
+              disabled={energie < MARE.jetons.cost_energie || jetons >= jetonCap}
               onClick={() => buyJeton()}
             >
               +1 🎣 · {MARE.jetons.cost_energie} ⚡
