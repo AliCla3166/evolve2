@@ -23,6 +23,13 @@ import {
   rarityConfig,
 } from "@/lib/game/cards";
 import { effectiveReserveCap } from "@/lib/game/bastion/config";
+import {
+  buildingOfPostedSpecies,
+  getBuildingConfig,
+  posteResource,
+  workLevelOf,
+  workerBonus,
+} from "@/lib/game/economy";
 import { fmtInt } from "@/lib/game/format";
 import { useGame } from "@/lib/game/store";
 import { crewedSpecies, foyerDef, foyerOfCrewSpecies } from "@/lib/game/territoire";
@@ -267,6 +274,11 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   const collection = useGame((s) => s.collection);
   const assignments = useGame((s) => s.cardAssignments);
   const territoire = useGame((s) => s.territoire);
+  // Les postes de travail des organes (26/07). `fauneLevel` accompagne `postes` parce
+  // que l'apport d'une ouvrière dépend de son ancienneté ; `fauneXp`, lui, reste dehors
+  // — il bouge à chaque tick et re-rendrait cette grille de 62 cartes chaque seconde.
+  const postes = useGame((s) => s.postes);
+  const fauneLevel = useGame((s) => s.fauneLevel);
   // Le plafond "défense" alimente la réserve plaçable du Bastion-Défense jouable —
   // dynamique : acheté en Boutique + relevé par le vestige "Carcasse-atelier" de
   // La Dérive (cf. effectiveReserveCap, la même source que store.toggleCardAssign).
@@ -344,6 +356,10 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   // poste depuis la fiche du gisement) — La Mare se contente de le montrer, pour
   // qu'on sache toujours où travaille une créature absente de la défense.
   const postees = crewedSpecies(territoire);
+  // Le quatrième : un POSTE dans un organe de la base. Même principe — le lieu porte
+  // ses ouvrières, on les affecte depuis la fiche de l'organe, La Mare ne fait que dire
+  // où elles sont. Quatre emplois possibles, un seul à la fois par créature.
+  const employees = Object.values(postes).reduce((n, crew) => n + (crew?.length ?? 0), 0);
 
   // Pendant le mini-jeu : le panneau passe au-dessus de la barre de navigation
   // (z-40) et tout ce qui n'est pas le bassin devient inerte — un appui égaré
@@ -479,10 +495,19 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
               🛡️ Défense : bonus passif de la cellule ET réserve plaçable du Bastion-Défense jouable
               (plafond achetable dans sa Boutique).
             </p>
+            {/* Les {" "} ne sont pas décoratifs : le compilateur de cette version mange
+                l'espace écrit entre un pluriel ternaire et le texte qui le suit quand
+                celui-ci passe à la ligne — on lisait « 9 créaturesau travail ». Vérifié
+                dans le chunk compilé, pas deviné. Ne pas les retirer en reformatant. */}
             <p className="text-center text-[10px] text-cell-teal/50">
-              ⛏️ Récolte : {postees.size} créature{postees.size > 1 ? "s" : ""} au travail sur les
-              gisements de La Dérive. Une créature ne tient qu&apos;UN poste — on la poste depuis la
-              fiche du gisement, sur la carte.
+              ⛏️ Récolte : {postees.size} créature{postees.size > 1 ? "s" : ""}{" "}
+              au travail sur les gisements de La Dérive. Une créature ne tient qu&apos;UN poste — on
+              la poste depuis la fiche du gisement, sur la carte.
+            </p>
+            <p className="text-center text-[10px] text-cell-teal/50">
+              ⚙️ Postes : {employees} créature{employees > 1 ? "s" : ""}{" "}
+              au travail dans les organes de la base — chacune fait monter le rendement du sien et
+              gagne un niveau de travail sans plafond. On la poste depuis la fiche de l&apos;organe.
             </p>
 
             {/* La collection : toutes les espèces de MARE.species (62 au 24/07) */}
@@ -506,6 +531,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 const inDef = assignments.defense.includes(sp.id);
                 const inExp = assignments.expedition.includes(sp.id);
                 const posteA = foyerOfCrewSpecies(territoire, sp.id);
+                const posteB = buildingOfPostedSpecies({ postes }, sp.id);
                 return (
                   <div key={sp.id} className="flex flex-col items-center gap-1">
                     <CardFrame rarity={rar.id as Rarity}>
@@ -545,6 +571,18 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                         ⛏️ {foyerDef(posteA)?.name ?? posteA}
                         {" +"}
                         {Math.round(creatureRecolteBonus(sp.id, entry) * 100)} %
+                      </span>
+                    )}
+                    {posteB && (
+                      <span className="text-center text-[9px] leading-tight text-cell-lime/90">
+                        ⚙️ {getBuildingConfig(posteB).name} · nv{" "}
+                        {workLevelOf({ fauneLevel }, sp.id)}
+                        {" +"}
+                        {Math.round(
+                          workerBonus({ collection, fauneLevel }, sp.id, posteResource(posteB)) *
+                            100,
+                        )}{" "}
+                        %
                       </span>
                     )}
                     <div className="mt-0.5 flex w-full gap-1">

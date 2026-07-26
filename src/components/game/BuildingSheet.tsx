@@ -6,6 +6,7 @@
 "use client";
 
 import { BoostButton } from "@/components/game/BoostButton";
+import { PostesSection } from "@/components/game/PostesSection";
 import { Panel, PixelButton, ResourceBar } from "@/components/ui/Pixel";
 import { buildingPurpose } from "@/lib/game/buildingInfo";
 import {
@@ -222,6 +223,12 @@ export function BuildingSheet({
                   }
                 />
               </div>
+
+              {/* Les ouvrières postées dans cet organe. La section se masque d'elle-même
+                  si l'organe ne produit rien ou n'est pas encore bâti — elle est placée
+                  juste sous la production parce qu'elle en est la suite immédiate : ce
+                  qu'on lit au-dessus, c'est le débit nu ; ici, qui le fait monter. */}
+              <PostesSection id={id} />
 
               {inConstruction && task ? (
                 <div className="space-y-1">

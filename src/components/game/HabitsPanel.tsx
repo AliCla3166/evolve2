@@ -1,8 +1,13 @@
-/* Panneau "Habitudes du jour" — saisie quotidienne -> Points d'énergie.
-   Une saisie par jour calendaire (modifiable seulement le jour même — le
-   store n'écrit que sur la clé du jour courant). Overlay plein écran ouvert
-   depuis un bouton dédié de la nav basse (retour lisibilité : ça vivait avant
-   en plein milieu de la page principale, ça prenait toute la place).
+/* Panneau "Habitudes" — saisie quotidienne -> Points d'énergie.
+   Une saisie par jour calendaire, éditable pendant la fenêtre glissante de
+   SAISIE_WINDOW_DAYS jours (la bande de sélection en tête du bloc de saisie) :
+   une journée réellement tenue mais notée après minuit ne doit pas être perdue.
+   Une journée renseignée après son jour paie son énergie en entier mais ne tient
+   pas la série — le panneau le dit AVANT la saisie, pas après, parce que la
+   conséquence (un 🔥 30 qui reste à 30 au lieu de 31) serait sinon une très
+   mauvaise surprise. Overlay plein écran ouvert depuis un bouton dédié de la nav
+   basse (retour lisibilité : ça vivait avant en plein milieu de la page
+   principale, ça prenait toute la place).
 
    Piste 6 du diagnostic UX : c'était le plus austère des six panneaux alors
    que c'est le cœur du concept. Il porte maintenant trois choses de plus —
@@ -25,8 +30,10 @@ import {
   CALORIE_DELTA_MAX,
   CALORIE_DELTA_MIN,
   CALORIE_STEP,
+  canEditDay,
   currentStreakTier,
   dayKey,
+  editableDayKeys,
   emptyDayEntry,
   graceAvailable,
   habitEnergy,
@@ -35,6 +42,7 @@ import {
   HISTORY_DAYS,
   nextStreakTier,
   repairableDay,
+  SAISIE_WINDOW_DAYS,
   STREAK_GRACE,
   STREAK_TIERS,
   TOTAL_STREAK_ENERGY,
@@ -81,12 +89,16 @@ function HabitRow({
   def,
   entry,
   calorieGoal,
+  day,
 }: {
   def: HabitDef;
   entry: HabitDayEntry;
   calorieGoal: number;
+  /** Journée éditée (clé YYYY-MM-DD) — aujourd'hui, ou un jour de la fenêtre. */
+  day: string;
 }) {
-  const updateHabitToday = useGame((s) => s.updateHabitToday);
+  const updateHabitDay = useGame((s) => s.updateHabitDay);
+  const patch = (p: Parameters<typeof updateHabitDay>[1]) => updateHabitDay(day, p);
   const energy = habitEnergy(def, entry, calorieGoal);
   const valid = habitValidated(def, entry, calorieGoal);
 
@@ -96,7 +108,7 @@ function HabitRow({
       <div className="flex flex-wrap items-center gap-2">
         <MiniBtn
           onClick={() =>
-            updateHabitToday({ calories: Math.max(CALORIE_DELTA_MIN, entry.calories - CALORIE_STEP) })
+            patch({ calories: Math.max(CALORIE_DELTA_MIN, entry.calories - CALORIE_STEP) })
           }
         >
           −
@@ -108,12 +120,12 @@ function HabitRow({
           max={CALORIE_DELTA_MAX}
           value={entry.caloriesDone ? entry.calories : ""}
           placeholder="0"
-          onChange={(e) => updateHabitToday({ calories: Number(e.target.value) || 0 })}
+          onChange={(e) => patch({ calories: Number(e.target.value) || 0 })}
           className="w-24 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-center text-xs text-white outline-none focus:border-cell-cyan"
         />
         <MiniBtn
           onClick={() =>
-            updateHabitToday({ calories: Math.min(CALORIE_DELTA_MAX, entry.calories + CALORIE_STEP) })
+            patch({ calories: Math.min(CALORIE_DELTA_MAX, entry.calories + CALORIE_STEP) })
           }
         >
           +
@@ -126,13 +138,13 @@ function HabitRow({
   } else if (def.type === "rate") {
     controls = (
       <div className="flex items-center gap-2">
-        <MiniBtn onClick={() => updateHabitToday({ steps: entry.steps - (def.step ?? 500) })}>
+        <MiniBtn onClick={() => patch({ steps: entry.steps - (def.step ?? 500) })}>
           −
         </MiniBtn>
         <span className="min-w-20 text-center text-xs text-white">
           {fmtInt(entry.steps)} {def.unit}
         </span>
-        <MiniBtn onClick={() => updateHabitToday({ steps: entry.steps + (def.step ?? 500) })}>
+        <MiniBtn onClick={() => patch({ steps: entry.steps + (def.step ?? 500) })}>
           +
         </MiniBtn>
       </div>
@@ -141,13 +153,13 @@ function HabitRow({
     const id = def.id as "mf" | "alilou" | "rituals";
     controls = (
       <div className="flex items-center gap-2">
-        <MiniBtn onClick={() => updateHabitToday({ [id]: entry[id] - 1 })}>−</MiniBtn>
+        <MiniBtn onClick={() => patch({ [id]: entry[id] - 1 })}>−</MiniBtn>
         <span className="min-w-14 text-center text-xs text-white">
           {entry[id]} / {def.capItems}
         </span>
         <MiniBtn
           disabled={entry[id] >= (def.capItems ?? Infinity)}
-          onClick={() => updateHabitToday({ [id]: entry[id] + 1 })}
+          onClick={() => patch({ [id]: entry[id] + 1 })}
         >
           +
         </MiniBtn>
@@ -185,15 +197,99 @@ function HabitRow({
   );
 }
 
+/* ---------- La bande des jours saisissables ----------
+   Le jeu ne demandait la journée qu'AU JOUR LE JOUR : passé minuit, une journée
+   réellement tenue mais pas notée était perdue pour toujours — la règle la plus
+   punitive du jeu, et elle punissait exactement le mauvais joueur. La bande ouvre
+   la semaine écoulée, et chaque case dit son état d'un coup d'œil : tenue,
+   rattrapée par la grâce, notée après coup, ou vide. Les mêmes trois couleurs que
+   la grille des 90 jours — un joueur n'a qu'un seul code à apprendre. */
+
+/** Lundi = 0, comme weekdayIndex(). */
+const WEEKDAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
+
+function DayStrip({
+  habits,
+  todayKey,
+  selected,
+  onSelect,
+}: {
+  habits: HabitsState;
+  todayKey: string;
+  selected: string;
+  onSelect: (key: string) => void;
+}) {
+  const grace = new Set(habits.graceDays);
+  return (
+    <div className="flex gap-1">
+      {editableDayKeys(todayKey).map((k) => {
+        const day = habits.days[k];
+        const validated = (day?.validatedCount ?? 0) > 0;
+        const isLate = Boolean(day?.late);
+        const isGrace = grace.has(k);
+        const isToday = k === todayKey;
+        const isSel = k === selected;
+        const tone = isGrace
+          ? "border-cell-magenta/50 bg-cell-magenta/10 text-cell-magenta"
+          : validated && isLate
+            ? "border-amber-400/50 bg-amber-400/10 text-amber-300"
+            : validated
+              ? "border-cell-lime/50 bg-cell-lime/10 text-cell-lime"
+              : "border-cell-cyan/15 bg-abyss/40 text-cell-teal/55";
+        const state = isGrace
+          ? "rattrapée par la grâce"
+          : validated && isLate
+            ? "notée après coup"
+            : validated
+              ? `${day?.validatedCount}/${HABITS.length} validées · ${day?.energy} ⚡`
+              : "rien de saisi";
+        return (
+          <button
+            key={k}
+            onClick={() => onSelect(k)}
+            aria-pressed={isSel}
+            title={`${k} — ${state}`}
+            className={`flex flex-1 flex-col items-center justify-center rounded-md border py-1 transition active:translate-y-px ${tone} ${
+              isSel ? "ring-1 ring-cell-cyan" : "opacity-80"
+            }`}
+          >
+            <span className="text-[9px] leading-none opacity-70">
+              {isToday ? "AUJ" : WEEKDAY_LETTERS[weekdayIndex(k)]}
+            </span>
+            <span className="mt-0.5 text-xs leading-none">{Number(k.slice(8))}</span>
+            <span className="mt-0.5 text-[8px] leading-none">
+              {isGrace ? "🩹" : validated && isLate ? "◷" : validated ? "✓" : "·"}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ---------- Grille d'historique (façon calendrier de contributions) ---------- */
 
 /** Teinte d'une case selon l'énergie du jour : quatre paliers + la case « parfaite ».
  *  Le dégradé rend la constance lisible d'un coup d'œil — un mois de vert clair
  *  raconte autre chose qu'un mois de trous, et c'est exactement la preuve que le
- *  joueur vient chercher. */
-function cellStyle(energy: number, validated: number, grace: boolean): React.CSSProperties {
+ *  joueur vient chercher.
+ *
+ *  Trois teintes hors dégradé, et elles ne doivent pas se confondre : magenta =
+ *  jour RATTRAPÉ par la grâce (il tient la chaîne), ambre = jour NOTÉ APRÈS COUP
+ *  (il a payé, il ne tient pas), vide = rien de saisi. Le vert reste réservé à ce
+ *  qui a été fait ET noté le jour même — c'est la seule chose que la grille
+ *  prétend prouver. */
+function cellStyle(
+  energy: number,
+  validated: number,
+  grace: boolean,
+  late = false,
+): React.CSSProperties {
   if (grace) {
     return { background: "rgba(255, 84, 214, 0.45)", boxShadow: "inset 0 0 0 1px rgba(255,84,214,0.8)" };
+  }
+  if (validated > 0 && late) {
+    return { background: "rgba(251, 191, 36, 0.38)", boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.7)" };
   }
   if (validated <= 0) return { background: "rgba(109, 246, 255, 0.06)" };
   if (energy >= PERFECT_DAY_ENERGY) {
@@ -219,11 +315,12 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
     const energy = day?.energy ?? 0;
     const validated = day?.validatedCount ?? 0;
     const isGrace = grace.has(k);
+    const isLate = Boolean(day?.late);
     const isToday = k === todayKey;
     const label = isGrace
       ? `${k} — jour rattrapé (grâce)`
       : validated > 0
-        ? `${k} — ${validated}/${HABITS.length} validées · ${energy} ⚡`
+        ? `${k} — ${validated}/${HABITS.length} validées · ${energy} ⚡${isLate ? " · noté après coup" : ""}`
         : `${k} — rien de saisi`;
     cells.push(
       <div
@@ -231,13 +328,18 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
         title={label}
         aria-label={label}
         className={`h-3 w-3 rounded-[2px] ${isToday ? "ring-1 ring-cell-cyan" : ""}`}
-        style={cellStyle(energy, validated, isGrace)}
+        style={cellStyle(energy, validated, isGrace, isLate)}
       />,
     );
   }
 
-  const perfect = Object.values(habits.days).filter((d) => d.energy >= PERFECT_DAY_ENERGY).length;
-  const held = Object.values(habits.days).filter((d) => d.validatedCount > 0).length;
+  const all = Object.values(habits.days);
+  const perfect = all.filter((d) => d.energy >= PERFECT_DAY_ENERGY).length;
+  // « Tenus » = ce que la série compte réellement : saisi le jour même. Les
+  // journées notées après coup ont leur propre compteur plutôt que d'être
+  // fondues dans le premier — la grille ne doit jamais surestimer la constance.
+  const held = all.filter((d) => d.validatedCount > 0 && !d.late).length;
+  const lateCount = all.filter((d) => d.validatedCount > 0 && d.late).length;
 
   return (
     <div className="space-y-1">
@@ -247,6 +349,7 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
         </span>
         <span className="text-[10px] text-cell-teal/60">
           {held} jours tenus · {perfect} parfaits
+          {lateCount > 0 ? ` · ${lateCount} après coup` : ""}
         </span>
       </div>
       <div
@@ -268,6 +371,10 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
         <span className="ml-2 flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-[2px]" style={cellStyle(0, 0, true)} />
           rattrapé
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-[2px]" style={cellStyle(40, 1, false, true)} />
+          noté après coup
         </span>
       </div>
     </div>
@@ -519,24 +626,44 @@ export function HabitsPanel({
   const now = useGame((s) => s.lastTick);
 
   const key = dayKey(now);
-  const entry = habits.days[key] ?? emptyDayEntry();
+
+  /* JOURNÉE ÉDITÉE. Par défaut aujourd'hui — c'est le geste de tous les jours et
+     il ne doit pas coûter un clic de plus.
+
+     La sélection est ESTAMPILLÉE du jour où elle a été faite, et non simplement
+     mémorisée : `editing` est alors une pure dérivée du rendu, sans effet de
+     bord ni setState en cascade. Deux remises à zéro tombent gratuitement de
+     cette forme — au passage de minuit (rester bloqué sur la veille au réveil
+     serait le meilleur moyen de saisir sa journée dans la mauvaise case) et
+     quand le jour choisi sort de la fenêtre pendant que le panneau est ouvert
+     (repli par `canEditDay`). Dans les deux cas on retombe sur aujourd'hui. */
+  const [picked, setPicked] = useState<{ day: string; stampedOn: string } | null>(null);
+  const editing =
+    picked && picked.stampedOn === key && canEditDay(picked.day, key) ? picked.day : key;
+  const isToday = editing === key;
+  const selectDay = (d: string) => setPicked({ day: d, stampedOn: key });
+
+  const entry = habits.days[editing] ?? emptyDayEntry();
+  const todayEntry = habits.days[key] ?? emptyDayEntry();
   const streak = habits.streak;
   const next = nextStreakTier(streak);
   const current = currentStreakTier(streak);
-  const todayOk = entry.validatedCount > 0;
+  // La carte de série parle TOUJOURS d'aujourd'hui, même quand on remplit lundi.
+  const todayOk = todayEntry.validatedCount > 0;
   const repairable = repairableDay(habits, key);
   const graceLeft = graceAvailable(habits, key);
+  const repairIsLate = Boolean(repairable && habits.days[repairable]?.late);
 
   // Célébration de la journée parfaite (5/5). Aucun état persisté : on compare
   // simplement au compte précédent — le but est de marquer le geste au moment
   // où il est fait, pas de tenir une comptabilité de plus.
   const [burst, setBurst] = useState(false);
   const prevValidated = useRef<number | null>(null);
-  const prevKey = useRef(key);
+  const prevKey = useRef(editing);
 
   useEffect(() => {
-    if (prevKey.current !== key) {
-      prevKey.current = key;
+    if (prevKey.current !== editing) {
+      prevKey.current = editing;
       prevValidated.current = null;
     }
     const before = prevValidated.current;
@@ -550,7 +677,7 @@ export function HabitsPanel({
       // le repère de victoire plutôt qu'une simple collecte.
       playCue("victory");
     }
-  }, [key, entry.validatedCount]);
+  }, [editing, entry.validatedCount]);
 
   useEffect(() => {
     if (!burst) return;
@@ -571,9 +698,13 @@ export function HabitsPanel({
         <div className="flex items-center gap-3">
           <span className="text-3xl">🧬</span>
           <div className="flex-1">
-            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">Habitudes du jour</h1>
+            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">
+              {isToday ? "Habitudes du jour" : "Habitudes"}
+            </h1>
             <p className="text-[11px] text-cell-teal/60">
-              {key} — modifiable jusqu&apos;à minuit · {entry.validatedCount}/{HABITS.length} validées
+              {editing} —{" "}
+              {isToday ? "modifiable jusqu'à minuit" : "journée notée après coup"} ·{" "}
+              {entry.validatedCount}/{HABITS.length} validées
             </p>
           </div>
           <button
@@ -641,9 +772,14 @@ export function HabitsPanel({
           {/* Filet de sécurité : le jour de grâce */}
           {repairable ? (
             <div className="rounded-lg border border-cell-magenta/40 bg-cell-magenta/5 p-2">
+              {/* Deux trous très différents portent le même bouton : la journée
+                  jamais saisie, et celle notée après coup (qui a payé son énergie
+                  mais ne tient pas la chaîne). Dire « oubliée » à quelqu'un qui
+                  vient justement de la remplir serait le contredire. */}
               <p className="mb-2 text-[11px] leading-4 text-cell-magenta">
-                Journée du {repairable} oubliée. Tu peux la rattraper avec ton jour de grâce du mois —
-                la chaîne repart, mais ce jour ne rapporte aucune énergie.
+                {repairIsLate
+                  ? `Journée du ${repairable} notée après coup : son énergie est déjà versée, mais elle ne tient pas la série. Ton jour de grâce du mois peut recoller la chaîne — sans énergie supplémentaire.`
+                  : `Journée du ${repairable} oubliée. Tu peux la rattraper avec ton jour de grâce du mois — la chaîne repart, mais ce jour ne rapporte aucune énergie.`}
               </p>
               <button
                 onClick={() => repairStreak()}
@@ -663,8 +799,31 @@ export function HabitsPanel({
           <HistoryGrid habits={habits} todayKey={key} />
         </Panel>
 
-        {/* ----- La saisie du jour ----- */}
+        {/* ----- La saisie ----- */}
         <Panel variant="noyau" className="p-3">
+          {/* La bande des jours. En tête du bloc de saisie et nulle part ailleurs :
+              c'est le seul endroit où le choix du jour a une conséquence, et le
+              mettre plus haut ferait croire que tout le panneau change de date
+              (la série, elle, parle toujours d'aujourd'hui). */}
+          <DayStrip habits={habits} todayKey={key} selected={editing} onSelect={selectDay} />
+          <p className="mt-1 mb-2 text-[9px] leading-3 text-cell-teal/50">
+            Pas eu le temps de noter un jour ? Les {SAISIE_WINDOW_DAYS} derniers jours restent
+            ouverts.
+          </p>
+
+          {/* L'avertissement arrive AVANT la saisie, jamais après : découvrir que
+              son 🔥 30 est resté à 30 une fois les cinq habitudes cochées serait
+              la pire des surprises. */}
+          {!isToday && (
+            <div className="mb-2 rounded-lg border border-amber-400/40 bg-amber-400/5 p-2">
+              <p className="text-[10px] leading-4 text-amber-300">
+                ◷ Journée notée après coup. L&apos;énergie est versée en entier — le travail a
+                bien été fait. Mais la série mesure la régularité du rendez-vous, pas le travail :
+                ce jour ne recollera pas la chaîne. Seul le jour de grâce le peut.
+              </p>
+            </div>
+          )}
+
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span
               className={`rounded-full border px-2 py-0.5 text-[10px] ${
@@ -674,7 +833,7 @@ export function HabitsPanel({
               }`}
             >
               {entry.energy >= 0 ? "+" : ""}
-              {entry.energy} ⚡ aujourd&apos;hui
+              {entry.energy} ⚡ {isToday ? "aujourd'hui" : "ce jour-là"}
             </span>
             <span className="text-[10px] text-cell-teal/60">
               journée parfaite = {PERFECT_DAY_ENERGY} ⚡ ({HABITS.length}/{HABITS.length})
@@ -682,7 +841,13 @@ export function HabitsPanel({
           </div>
           <div className="space-y-2">
             {HABITS.map((def) => (
-              <HabitRow key={def.id} def={def} entry={entry} calorieGoal={habits.calorieGoal} />
+              <HabitRow
+                key={def.id}
+                def={def}
+                entry={entry}
+                calorieGoal={habits.calorieGoal}
+                day={editing}
+              />
             ))}
           </div>
         </Panel>
@@ -700,11 +865,22 @@ export function HabitsPanel({
             <p className="text-[11px] leading-4 text-cell-teal/80">
               {HABITS.length}/{HABITS.length} habitudes · {entry.energy} ⚡
               <br />
-              La mue du jour est complète.
+              {isToday ? "La mue du jour est complète." : `La journée du ${editing} est complète.`}
             </p>
-            <p className="mt-1 rounded-full border border-cell-lime/40 px-3 py-0.5 text-[11px] text-cell-lime">
-              {`🔥 ${streak} jour${streak > 1 ? "s" : ""} d'affilée`}
-            </p>
+            {/* La pastille de série ne s'affiche que pour aujourd'hui : brandir
+                « 🔥 30 jours d'affilée » au moment précis où le joueur remplit un
+                jour qui, lui, ne compte pas dans la chaîne serait une promesse
+                fausse. Hors d'aujourd'hui, on dit exactement ce qui vient de se
+                passer. */}
+            {isToday ? (
+              <p className="mt-1 rounded-full border border-cell-lime/40 px-3 py-0.5 text-[11px] text-cell-lime">
+                {`🔥 ${streak} jour${streak > 1 ? "s" : ""} d'affilée`}
+              </p>
+            ) : (
+              <p className="mt-1 rounded-full border border-amber-400/40 px-3 py-0.5 text-[11px] text-amber-300">
+                ◷ énergie versée · série inchangée
+              </p>
+            )}
           </div>
         </div>
       )}

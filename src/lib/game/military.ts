@@ -601,6 +601,11 @@ export function resolveSortie(
   const targetId = b.sortieTargetId;
   const foyer = targetId ? foyerDef(targetId) : null;
   const won = result.won;
+  // Le cran de Péril franchi ouvre le suivant, et c'est tout ce qu'il déverrouille :
+  // l'échelle proposée s'arrête toujours un barreau au-dessus (cf. maxPeril), donc elle
+  // n'affiche jamais son dernier. Enregistré sur la VICTOIRE seulement — sinon lancer une
+  // sortie perdue d'avance suffirait à ouvrir la suite, et le palier ne voudrait rien dire.
+  if (won) b.bestPeril = Math.max(b.bestPeril, b.sortiePeril);
   // L'option de Percée est relue par son ID, jamais déduite d'un booléen : une Vague de
   // Percée (×3 de butin, fragments garantis) et un Assaut d'Antre (qui n'ouvre qu'une
   // porte) coûtent tous deux une Percée, mais ne paient pas du tout pareil.

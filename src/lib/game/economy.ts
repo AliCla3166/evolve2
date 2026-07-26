@@ -4,6 +4,7 @@
 
 import rawConfig from "@/data/economy_config.json";
 import { freshBastionState } from "./bastion/config";
+import { cardPowerRec, speciesAffinity } from "./cards";
 import { bonusValue, freshTerritoireState } from "./territoire";
 import type { BuildingId, BuildTask, GameState, ResourceId } from "./types";
 
@@ -45,6 +46,30 @@ export interface BuildSlotConfig {
   requires_built?: number;
 }
 
+/** Les postes de travail : cf. economy_config.json -> postes (commentaires compris). */
+export interface PosteConfig {
+  /** Places d'un organe = slots_base + slots_per_level * (niveau - 1), borné par slots_max. */
+  slots_base: number;
+  slots_per_level: number;
+  slots_max: number;
+  /** Apport d'une ouvrière : prime de présence + part indexée sur sa puissance de
+   *  récolte + part indexée sur son niveau de travail. */
+  bonus_per_worker: number;
+  bonus_per_power: number;
+  bonus_per_work_level: number;
+  /** Facteur appliqué à l'apport quand l'espèce travaille SA ressource. */
+  affinity_mult: number;
+  /** Multiplicateur saturant : 1 + span * B / (B + half), donc borné par 1 + span. */
+  span: number;
+  half: number;
+  /** XP gagnée par heure de travail : xp_per_hour + par niveau de l'organe. */
+  xp_per_hour: number;
+  xp_per_hour_per_building_level: number;
+  /** Courbe polynomiale : XP cumulée du niveau L = level_xp_base * (L-1)^level_exponent. */
+  level_xp_base: number;
+  level_exponent: number;
+}
+
 export interface EconomyConfig {
   age: string;
   global_params: {
@@ -82,6 +107,7 @@ export interface EconomyConfig {
     /** En dessous, on ne propose plus de rachat (micro-achats sans intérêt). */
     min_step_minutes: number;
   };
+  postes: PosteConfig;
   buildings: Record<string, BuildingConfig>;
   resources: Record<string, ResourceConfig>;
   storage: {
@@ -404,38 +430,194 @@ export function resourceCap(
    chantier — plus de 96 % du chemin critique des 90 jours, cf. economy_config.json ->
    pacing_validation — n'est jamais accéléré par La Dérive. */
 
+/* ---------- Les postes de travail (26/07) ----------
+
+   Le pendant, côté base, de l'équipage de récolte de La Dérive : on poste une créature
+   pêchée dans un organe producteur, elle y travaille à l'écran, l'organe produit
+   davantage, et elle gagne un niveau de travail qui n'a pas de plafond.
+
+   La jointure collection × organes vit ICI plutôt que dans cards.ts, à l'inverse de
+   l'équipage des gisements, et pour une raison symétrique : c'est economy_config.json
+   qui porte le tuning, et economy.ts dépend déjà de cards.ts (via bastion/config.ts).
+   L'inverse — cards.ts important economy.ts — créerait le cycle. */
+
+export const POSTES = ECONOMY.postes;
+
+/** Un organe accepte des ouvrières s'il PRODUIT quelque chose : c'est le seul endroit
+ *  où un bonus de production a un sens. La liste n'est écrite nulle part, elle se lit
+ *  dans buildings[].role — tout organe producteur ajouté plus tard suivra tout seul. */
+export function acceptsPostes(id: BuildingId): boolean {
+  return getBuildingConfig(id).role === "producer";
+}
+
+/** La ressource travaillée par un organe (celle qu'il produit), ou null. Lue au niveau 1
+ *  et non au niveau courant : un organe pas encore construit doit quand même pouvoir
+ *  annoncer sa ressource dans l'UI d'affectation. */
+export function posteResource(id: BuildingId): ResourceId | null {
+  const prod = getBuildingConfig(id).levels["1"]?.production_per_hour;
+  const first = prod ? Object.keys(prod)[0] : undefined;
+  return (first as ResourceId | undefined) ?? null;
+}
+
+/** Places d'un organe à un niveau donné. 0 si non construit ou non producteur —
+ *  la première place s'ouvre donc exactement à la construction. */
+export function posteSlots(id: BuildingId, level: number): number {
+  if (level <= 0 || !acceptsPostes(id)) return 0;
+  const p = POSTES;
+  return Math.min(p.slots_max, p.slots_base + p.slots_per_level * (level - 1));
+}
+
+/** Ouvrières postées dans un organe. Accesseur à repli : `postes` est absent des
+ *  sauvegardes < v15 et une entrée manquante vaut « personne », jamais undefined. */
+export function posteOf(state: Pick<GameState, "postes">, id: BuildingId): string[] {
+  return state.postes?.[id] ?? [];
+}
+
+/** L'organe où cette espèce travaille, ou null. Le pendant exact de
+ *  `foyerOfCrewSpecies` pour La Dérive, et il existe pour la même raison : sans lui,
+ *  retrouver une ouvrière obligerait à ouvrir les six organes un par un. La Mare peut
+ *  ainsi l'écrire sur la carte elle-même. L'exclusivité d'emploi (cf. store.togglePoste)
+ *  garantit qu'il n'y a jamais qu'une seule réponse. */
+export function buildingOfPostedSpecies(
+  state: Pick<GameState, "postes">,
+  speciesId: string,
+): BuildingId | null {
+  for (const [id, crew] of Object.entries(state.postes ?? {})) {
+    if (crew?.includes(speciesId)) return id as BuildingId;
+  }
+  return null;
+}
+
+/** Niveau de travail correspondant à une ancienneté. Inversion FERMÉE de la courbe
+ *  polynomiale (XP cumulée du niveau L = level_xp_base * (L-1)^level_exponent), donc
+ *  O(1) et sans table : il n'existe aucun dernier niveau à borner. */
+export function workLevel(xp: number): number {
+  if (!Number.isFinite(xp) || xp <= 0) return 1;
+  const p = POSTES;
+  return 1 + Math.floor(Math.pow(xp / p.level_xp_base, 1 / p.level_exponent));
+}
+
+/** Ancienneté nécessaire pour atteindre un niveau donné (l'aller de workLevel).
+ *  Sert à afficher « prochain palier dans … » sans jamais annoncer une fin. */
+export function workXpForLevel(level: number): number {
+  if (level <= 1) return 0;
+  return POSTES.level_xp_base * Math.pow(level - 1, POSTES.level_exponent);
+}
+
+/** XP gagnée par heure de travail dans un organe d'un niveau donné : un organe
+ *  développé forme plus vite, donc y poster une jeune recrue est un vrai choix. */
+export function posteXpPerHour(buildingLevel: number): number {
+  if (buildingLevel <= 0) return 0;
+  return POSTES.xp_per_hour + POSTES.xp_per_hour_per_building_level * buildingLevel;
+}
+
+/** Niveau de travail d'une espèce (cache `fauneLevel`, repli sur 1). */
+export function workLevelOf(state: Pick<GameState, "fauneLevel">, speciesId: string): number {
+  return Math.max(1, state.fauneLevel?.[speciesId] ?? 1);
+}
+
+/** Apport d'UNE ouvrière au rendement de son organe : une prime de présence, une part
+ *  indexée sur sa puissance de récolte (la MÊME stat qu'aux gisements — une seule à
+ *  expliquer au joueur), une part indexée sur son ancienneté, le tout amplifié quand
+ *  elle travaille sa ressource d'affinité. L'affinité est un bonus, jamais un péage :
+ *  n'importe quelle espèce peut tenir n'importe quel poste. */
+export function workerBonus(
+  state: Pick<GameState, "collection" | "fauneLevel">,
+  speciesId: string,
+  resource: ResourceId | null,
+): number {
+  const entry = state.collection[speciesId];
+  if (!entry) return 0;
+  const p = POSTES;
+  const raw =
+    p.bonus_per_worker +
+    p.bonus_per_power * cardPowerRec(speciesId, entry) +
+    p.bonus_per_work_level * (workLevelOf(state, speciesId) - 1);
+  const matches = resource !== null && speciesAffinity(speciesId) === resource;
+  return matches ? raw * p.affinity_mult : raw;
+}
+
+/** Somme des apports des ouvrières effectivement postées dans un organe. */
+export function posteBonus(state: PosteStateView, id: BuildingId): number {
+  const crew = posteOf(state, id);
+  if (crew.length === 0) return 0;
+  const res = posteResource(id);
+  const cap = posteSlots(id, state.buildings[id] ?? 0);
+  let sum = 0;
+  /* On ne compte que les places réellement ouvertes : rétrograder n'est pas possible
+     aujourd'hui, mais une sauvegarde bricolée ne doit pas pouvoir dépasser le plafond. */
+  for (const speciesId of crew.slice(0, cap)) sum += workerBonus(state, speciesId, res);
+  return sum;
+}
+
+/** Multiplicateur SATURANT d'un organe : 1 + span * B / (B + half). Borné par
+ *  1 + span quelle que soit la somme des apports — chaque niveau d'ouvrière fait
+ *  monter le chiffre affiché, aucun ne peut faire exploser le calibrage. */
+export function posteMult(bonus: number): number {
+  if (bonus <= 0) return 1;
+  return 1 + (POSTES.span * bonus) / (bonus + POSTES.half);
+}
+
+export function buildingPosteMult(state: PosteStateView, id: BuildingId): number {
+  return posteMult(posteBonus(state, id));
+}
+
 /** Le strict minimum dont ces fonctions ont besoin. Volontairement plus étroit que
- *  GameState : un composant React peut ainsi ne s'abonner qu'à `buildings` et
- *  `territoire` (deux références stables) au lieu de l'état entier. */
-export type EconomyStateView = Pick<GameState, "buildings" | "territoire">;
+ *  GameState : un composant React peut ainsi ne s'abonner qu'à cinq références
+ *  STABLES au lieu de l'état entier. `fauneXp` en est délibérément absent — c'est le
+ *  seul champ des postes qui bouge à chaque tick, et la production ne dépend que du
+ *  niveau, qui ne bouge qu'aux paliers. */
+export type PosteStateView = Pick<GameState, "buildings" | "postes" | "collection" | "fauneLevel">;
+
+/** Ce dont dépend le STOCKAGE : le bâti et les vestiges, rien d'autre. Délibérément
+ *  plus étroit que EconomyStateView — aucune ouvrière n'agrandit une cuve, et un écran
+ *  qui n'affiche qu'un plafond n'a aucune raison de se réveiller parce qu'une créature
+ *  a changé de poste. */
+export type StorageStateView = Pick<GameState, "buildings" | "territoire">;
+
+export type EconomyStateView = PosteStateView & StorageStateView;
 
 /** Multiplicateur de production accordé par les vestiges déjà pris (1 = aucun). */
-export function territoireProductionMult(state: EconomyStateView): number {
+export function territoireProductionMult(state: Pick<GameState, "territoire">): number {
   return 1 + bonusValue(state.territoire, "production_mult");
 }
 
-/** Production horaire de la BASE, vestiges compris (hors revenu des gisements, qui
- *  est encaissé séparément par le tick — cf. territoire.territoireAccrual). */
+/** Production horaire de la BASE, postes ET vestiges compris (hors revenu des gisements,
+ *  qui est encaissé séparément par le tick — cf. territoire.territoireAccrual).
+ *
+ *  Le bonus des ouvrières s'applique organe PAR organe : une créature ne fait avancer
+ *  que la cuve où elle travaille. Il passe donc AVANT le multiplicateur global des
+ *  vestiges, qui lui s'applique à tout.
+ *
+ *  `totalProductionPerHour` reste volontairement nue : c'est la capacité brute du bâti,
+ *  ce qu'on veut quand on chiffre un coût de développement ou l'aperçu d'un chantier —
+ *  pas ce que le joueur encaisse vraiment. Les deux fonctions ont chacune leur usage,
+ *  et les confondre ferait dériver le calibrage.
+ *
+ *  Quand aucune ouvrière n'est postée et aucun vestige pris, les deux multiplicateurs
+ *  valent exactement 1 : le résultat est bit-à-bit celui d'avant les postes. */
 export function stateProductionPerHour(
   state: EconomyStateView,
 ): Partial<Record<ResourceId, number>> {
   const mult = territoireProductionMult(state);
-  const base = totalProductionPerHour(state.buildings);
-  if (mult === 1) return base;
   const out: Partial<Record<ResourceId, number>> = {};
-  for (const [res, perHour] of Object.entries(base)) {
-    out[res as ResourceId] = (perHour ?? 0) * mult;
+  for (const id of BUILDING_ORDER) {
+    const prod = buildingProductionPerHour(id, state.buildings[id] ?? 0);
+    const boost = buildingPosteMult(state, id);
+    for (const [res, perHour] of Object.entries(prod)) {
+      out[res as ResourceId] = (out[res as ResourceId] ?? 0) + perHour * boost * mult;
+    }
   }
   return out;
 }
 
 /** Capacité de stockage effective, vestiges `storage_mult` compris. */
-export function stateStorageCap(state: EconomyStateView): number {
+export function stateStorageCap(state: StorageStateView): number {
   return storageCap(state.buildings) * (1 + bonusValue(state.territoire, "storage_mult"));
 }
 
 /** Plafond effectif d'une ressource pour CE joueur (Infinity si non plafonnée). */
-export function stateResourceCap(state: EconomyStateView, res: ResourceId): number {
+export function stateResourceCap(state: StorageStateView, res: ResourceId): number {
   return cappedResources().includes(res) ? stateStorageCap(state) : Infinity;
 }
 
@@ -500,7 +682,7 @@ export function resourceName(res: ResourceId): string {
  *  une partie neuve se déclarait donc en v4 dans son export de sauvegarde et dans la sync
  *  cloud, alors que ses données étaient bien au format courant. Un seul point de vérité
  *  supprime la dérive : à chaque nouvelle migration, on incrémente cette constante. */
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 16;
 
 export function freshGameState(now: number): GameState {
   return {
@@ -541,6 +723,10 @@ export function freshGameState(now: number): GameState {
     collection: {},
     cardAssignments: { defense: [], expedition: [] },
     lastCatch: null,
+    // ----- Les postes de travail (26/07) — tuning dans economy_config.json -> postes -----
+    postes: {},
+    fauneXp: {},
+    fauneLevel: {},
     bastion: freshBastionState(),
     // ----- La Dérive & le Bilan (25/07) — tuning dans territoire_config.json / habits_config.json -----
     territoire: freshTerritoireState(now),

@@ -2,10 +2,11 @@
 Genere economy_config.json a partir de model.py (source de verite unique).
 Ce fichier est concu pour etre charge directement par le code du jeu.
 
-ATTENTION (24/07/2026) : depuis la v8, economy_config.json contient trois blocs
-ECRITS A LA MAIN que model.py ne connait pas et ne saura jamais recalculer :
-build_slots (file multi-slots), offline_report (rapport de retour) et
-energy_boost (rachat d'heures a l'energie). Ils sont recopies TELS QUELS depuis
+ATTENTION (24/07/2026, complete le 26/07) : depuis la v8, economy_config.json
+contient des blocs ECRITS A LA MAIN que model.py ne connait pas et ne saura
+jamais recalculer : build_slots (file multi-slots), offline_report (rapport de
+retour), energy_boost (rachat d'heures a l'energie) et postes (les ouvrieres
+pechees affectees aux organes). Ils sont recopies TELS QUELS depuis
 le fichier existant — ce script ne doit jamais les detruire silencieusement.
 Si un bloc manque a l'arrivee, on echoue bruyamment plutot que d'ecrire un
 config ampute que le jeu chargerait avec des `undefined` partout.
@@ -27,7 +28,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TARGET = os.path.normpath(os.path.join(HERE, "..", "..", "src", "data", "economy_config.json"))
 
 # Blocs regles a la main, hors modele : preserves a l'identique.
-HANDWRITTEN_BLOCKS = ("build_slots", "offline_report", "energy_boost")
+HANDWRITTEN_BLOCKS = ("build_slots", "offline_report", "energy_boost", "postes")
 
 
 def load_handwritten():
@@ -129,7 +130,7 @@ def build_config(handwritten=None):
         pacing_validation["multi_system_validation"] = multi_system
 
     config = {
-        "$comment": "Modele economique complet et modifiable de l'Age 1 'Cellule' d'EVOLVE. Genere par economy/export_json.py a partir de economy/model.py (source de verite). Perimetre : 9 batiments (hors mini-jeux Peche/Bastion-Defense/Bastion-Raid, marques designed:false). Pour retoucher le calibrage : modifier les constantes en tete de model.py (PARALLEL_UPLIFT, TIME_BUDGET_SHARES, TIME_RATIO, PROD_RATIO, COST_RATIO, COST_SCALE, STARTING_STOCK, BASE_CAP) puis relancer 'python3 export_json.py' — le script reecrit src/data/economy_config.json en preservant les blocs regles a la main (build_slots, offline_report, energy_boost). Toute modification du calibrage doit etre revalidee par 'python3 simulate_full.py --seeds 12'.",
+        "$comment": "Modele economique complet et modifiable de l'Age 1 'Cellule' d'EVOLVE. Genere par economy/export_json.py a partir de economy/model.py (source de verite). Perimetre : 9 batiments (hors mini-jeux Peche/Bastion-Defense/Bastion-Raid, marques designed:false). Pour retoucher le calibrage : modifier les constantes en tete de model.py (PARALLEL_UPLIFT, TIME_BUDGET_SHARES, TIME_RATIO, PROD_RATIO, COST_RATIO, COST_SCALE, STARTING_STOCK, BASE_CAP) puis relancer 'python3 export_json.py' — le script reecrit src/data/economy_config.json en preservant les blocs regles a la main (build_slots, offline_report, energy_boost, postes). Toute modification du calibrage doit etre revalidee par 'python3 simulate_full.py --seeds 12'.",
         "age": "age01_cellule",
         "global_params": {
             "total_target_days": TOTAL_DAYS,

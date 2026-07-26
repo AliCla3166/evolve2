@@ -13,7 +13,13 @@ import {
   TERRITOIRE_RECOLTE,
   type CrewMultOf,
 } from "./territoire";
-import type { CardAssignments, CardEntry, GameState, TerritoireState } from "./types";
+import type {
+  CardAssignments,
+  CardEntry,
+  GameState,
+  ResourceId,
+  TerritoireState,
+} from "./types";
 
 /* ---------- Typage de la config ---------- */
 
@@ -39,6 +45,10 @@ export interface SpeciesConfig {
   /** Portrait PixelLab de la charte utilisé comme art de carte. */
   portrait: string;
   role: "defense" | "exploration" | "assaut";
+  /** Ressource avec laquelle l'espèce travaille le mieux quand elle est POSTÉE dans
+   *  un organe (cf. economy_config.json -> postes). Bonus multiplicatif, jamais une
+   *  condition : aucune espèce n'est nulle au travail. */
+  affinity: ResourceId;
   power_def: number;
   power_exp: number;
   power_atk: number;
@@ -194,6 +204,13 @@ export function cardPowerRec(speciesId: string, entry: CardEntry): number {
   const w = MARE.recolte.stat_weights;
   const raw = sp.power_def * w.def + sp.power_exp * w.exp + sp.power_atk * w.atk;
   return Math.round(raw * cardMult(entry));
+}
+
+/** Ressource d'affinité d'une espèce (mare_config.json -> species[].affinity).
+ *  `null` pour un id inconnu : une sauvegarde peut contenir une espèce retirée du
+ *  catalogue, et une affinité absente doit valoir « aucun bonus », jamais un crash. */
+export function speciesAffinity(speciesId: string): ResourceId | null {
+  return speciesConfig(speciesId)?.affinity ?? null;
 }
 
 /* ---------- L'équipage d'un gisement (étape B) ----------

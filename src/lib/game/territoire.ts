@@ -109,11 +109,12 @@ interface TerritoireConfig {
     offline_cap_h: number;
   };
   development: {
-    cost_hours_base: number;
-    cost_hours_growth: number;
+    cost_cap_share_base: number;
+    cost_cap_share_growth: number;
+    cost_cap_share_max: number;
     cost_combat_base: number;
     cost_combat_growth: number;
-    deep_cost_combat_growth: number;
+    deep_cost_combat_quad: number;
   };
   reconquete: {
     palier_offset: number;
@@ -496,30 +497,54 @@ export function devLootMult(dev: number): number {
 /** Coût du passage de `dev` à `dev + 1`. Ne renvoie jamais null pour un gisement :
  *  il n'y a plus de dernier niveau (étape D).
  *
- *  Au-delà du plafond de rendement, la part en RESSOURCE cesse de croître — le
- *  stockage de la base est fini, une exigence qui grimperait indéfiniment
- *  finirait par dépasser la réserve maximale et recréerait le mur qu'on
- *  supprime ici. Toute la croissance passe dans la monnaie de combat, que rien
- *  ne plafonne et qu'on gagne précisément en re-conquérant des foyers. */
-export function devCost(
-  foyer: FoyerDef,
-  dev: number,
-  prodPerHour: Partial<Record<ResourceId, number>>,
-): DevCost | null {
+ *  Le prix se lit en PART DE LA RÉSERVE, pas en heures de production — c'est la
+ *  correction du 26/07, et elle vaut d'être expliquée ici parce que l'intention
+ *  d'origine était déjà la bonne, seule l'unité était fausse.
+ *
+ *  L'ancienne formule demandait N heures de production de la ressource, N gelé au
+ *  dernier palier calibré pour ne pas dépasser une réserve finie. Sauf que la
+ *  réserve ne tient pas un nombre d'heures constant : elle en tient de MOINS EN
+ *  MOINS à mesure que la base s'améliore, parce que la production monte plus vite
+ *  que le plafond de stockage. Mesuré (w_derive_cap2.ts) : 55,6 h de réserve à
+ *  mi-parcours, 28,6 h sur une base terminée, contre 113,6 h exigées. Le dernier
+ *  niveau réellement payable tombait donc de 3 à 2 pendant que le joueur
+ *  progressait — un mur qui se rapproche quand on avance.
+ *
+ *  Une part de réserve, elle, est payable par construction et à tout moment : une
+ *  réserve pleine paie toujours, et une meilleure base la remplit plus vite. Le
+ *  prix ne dépend plus que du bâti, jamais de la vitesse à laquelle il tourne.
+ *
+ *  `storageCap` = le plafond de stockage effectif du joueur (economy.stateStorageCap).
+ *  Il arrive en argument pour la même raison que `prodPerHour` ailleurs dans ce
+ *  module : territoire.ts n'importe pas economy.ts, sinon le cycle. */
+export function devCost(foyer: FoyerDef, dev: number, storageCap: number): DevCost | null {
   if (foyer.nature !== "gisement" || !foyer.resource) return null;
   const d = TERRITOIRE.development;
   const soft = devSoftCap();
   const paid = Math.min(dev, soft); // les paliers calibrés, une seule fois
   const deep = Math.max(0, dev - soft);
-  const hours = d.cost_hours_base * Math.pow(d.cost_hours_growth, paid);
-  const base = prodPerHour[foyer.resource] ?? 0;
+  /* La borne `cost_cap_share_max` est structurelle et non cosmétique : c'est elle,
+     et non le réglage de l'échelle, qui garantit qu'un niveau reste payable. */
+  const share = Math.min(
+    d.cost_cap_share_max,
+    d.cost_cap_share_base * Math.pow(d.cost_cap_share_growth, paid),
+  );
+  /* Les six productibles sont toutes plafonnées par le stockage, donc ce cap est
+     toujours un nombre fini ; on retombe sur 0 plutôt que de laisser un NaN ou un
+     Infinity contaminer un montant affiché. */
+  const cap = Number.isFinite(storageCap) ? Math.max(0, storageCap) : 0;
   return {
     resource: foyer.resource,
-    amount: Math.ceil(hours * base),
+    amount: Math.ceil(share * cap),
+    /* Coût QUADRATIQUE en profondeur, et non géométrique : le butin cumulé des
+       reconquêtes est quadratique (butin linéaire en palier × palier linéaire en
+       nombre de reprises), donc seule cette famille garde un nombre de sorties
+       CONSTANT par niveau, à n'importe quelle profondeur. Mesuré : 3 sorties par
+       niveau, de la profondeur 10 à la profondeur 320. */
     combat: Math.ceil(
       d.cost_combat_base *
         Math.pow(d.cost_combat_growth, paid) *
-        Math.pow(d.deep_cost_combat_growth, deep),
+        (1 + d.deep_cost_combat_quad * deep * deep),
     ),
   };
 }

@@ -51,7 +51,9 @@ export interface BuildTask {
 /** Identifiants des 5 habitudes réelles (repris du prototype v1). */
 export type HabitId = "calories" | "steps" | "mf" | "alilou" | "rituals";
 
-/** Saisie d'une journée calendaire (clé YYYY-MM-DD locale). Modifiable le jour même uniquement. */
+/** Saisie d'une journée calendaire (clé YYYY-MM-DD locale). Éditable pendant la
+ *  fenêtre de saisie glissante — aujourd'hui et les jours précédents jusqu'à
+ *  SAISIE_WINDOW_DAYS (cf. habits_config.json -> saisie). */
 export interface HabitDayEntry {
   /** Bilan calorique du jour, en kcal (signé — négatif = déficit, positif = surplus). */
   calories: number;
@@ -69,6 +71,13 @@ export interface HabitDayEntry {
   energy: number;
   /** Nombre d'habitudes validées (>=1 valide la journée pour le streak). */
   validatedCount: number;
+  /** Journée renseignée APRÈS son jour, dans la fenêtre de saisie rétroactive.
+   *  Elle paie son énergie en entier mais ne tient PAS la série : la série
+   *  mesure la régularité du rendez-vous, pas le travail (cf. habits_config.json
+   *  -> saisie). Absent = saisie à l'heure, donc les sauvegardes antérieures à
+   *  cette fonctionnalité n'ont rien à migrer. Corriger une journée déjà tenue à
+   *  l'heure ne pose jamais ce marqueur. */
+  late?: boolean;
 }
 
 export interface HabitsState {
@@ -160,6 +169,15 @@ export interface CardAssignments {
   defense: string[];
   expedition: string[];
 }
+
+/** LES POSTES DE TRAVAIL (26/07) — les ouvrières affectées à chaque organe.
+ *  Tuning dans economy_config.json -> postes ; affinités dans mare_config.json.
+ *
+ *  L'affectation appartient au LIEU (l'organe), exactement comme `FoyerState.crew`
+ *  appartient au gisement : c'est ce qui permet de la lire, la dessiner et la migrer
+ *  sans jamais toucher à la collection. Seuls les organes de rôle "producer" ont une
+ *  entrée ; les autres restent simplement absents de la table. */
+export type PosteAssignments = Partial<Record<BuildingId, string[]>>;
 
 /** Dernière prise (affichée par la modal de révélation, puis effacée). */
 export interface LastCatch {
@@ -285,6 +303,22 @@ export interface GameState {
   cardAssignments: CardAssignments;
   /** Dernière prise à révéler (null si déjà vue). */
   lastCatch: LastCatch | null;
+
+  /* ----- Les postes de travail (26/07) ----- */
+  /** Ouvrières postées dans chaque organe producteur. */
+  postes: PosteAssignments;
+  /** Ancienneté de travail par espèce, en points d'XP.
+   *  Table SÉPARÉE de `collection` exprès : l'XP avance à chaque tick, et invalider
+   *  `collection` une fois par seconde ferait re-rendre la grille des 62 cartes de
+   *  La Mare sans qu'un seul pixel change. Ici, seuls les écrans qui montrent
+   *  vraiment l'ancienneté s'en aperçoivent. */
+  fauneXp: Record<string, number>;
+  /** Niveau de travail par espèce. CACHE : la vérité est `fauneXp` (cf. workLevel).
+   *  On le stocke parce qu'il ne change QUE lors d'une montée de niveau — l'objet
+   *  garde donc son identité entre deux paliers, et les sélecteurs qui calculent la
+   *  production (Hud, La Dérive) ne se réveillent pas soixante fois par minute pour
+   *  recalculer un chiffre identique. Même principe que `habits.streak`. */
+  fauneLevel: Record<string, number>;
 
   /* ----- Bastion-Défense jouable (intégration profonde, 24/07) ----- */
   bastion: BastionState;

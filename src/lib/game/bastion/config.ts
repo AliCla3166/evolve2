@@ -21,6 +21,9 @@ import type {
 /* ---------- Typage du JSON ---------- */
 
 export interface BuildingDef {
+  /** Justification chiffrée d'un réglage, quand il en faut une au niveau de l'entrée
+   *  (convention du projet : aucun nombre d'équilibrage sans la mesure qui le fonde). */
+  $comment?: string;
   id: string;
   name: string;
   category: "turret" | "wall" | "trap" | "support";
@@ -89,7 +92,10 @@ interface BastionConfig {
   rarity_acc: number[];
   reserve: { base_cap: number; max_cap: number; cost_base: number; cost_growth: number };
   tree_cap: { base_level: number; max_level: number; cost_base: number; cost_growth: number };
-  foundations: { max_level: number; per_level_mult: number; cost_base: number; cost_growth: number };
+  /** Pas de `max_level` : c'est l'axe sans dernier niveau (cf. le $comment du JSON).
+   *  Coût LINÉAIRE (`cost_base + cost_step·L`) et puissance ADDITIVE — la seule forme
+   *  où le niveau abordable croît comme le numéro de vague. */
+  foundations: { per_level_mult: number; cost_base: number; cost_step: number };
   in_wave_respawn: { cost: number };
   slot_unlock_cost: Record<"turret" | "barracks" | "mortar", { base: number; growth: number }>;
   recruit_building_cost: { base: number; growth: number };
@@ -105,12 +111,18 @@ interface BastionConfig {
     mortar_rate: number;
     mortar_range: number;
     mortar_splash_radius: number;
+    /** Rayon maximal, autour de son ancrage, où une troupe de barracks peut poursuivre.
+     *  C'est ce nombre qui fixe la position de la ligne de front, donc l'endroit où la
+     *  bataille se donne à voir (cf. engine.ts §3). */
+    pursuit_leash: number;
   };
   pathogens: { roster: PathogenDef[]; boss: PathogenDef & { value: number }; boss_every: number };
   bastion: { hp_base: number };
   wave: {
     count_base: number;
     count_per_wave: number;
+    /** Plafond d'effectif : au-delà, la vague durcit au lieu de s'allonger. */
+    count_max: number;
     hp_mult_per_wave: number;
     dmg_mult_per_wave: number;
     spawn_gap_base: number;
@@ -130,7 +142,16 @@ interface BastionConfig {
     max_per_day: number;
     defeat_combat_ratio: number;
     fragment_chance: number;
-    peril: { levels: PerilDef[] };
+    peril: {
+      levels: PerilDef[];
+      /** Extrapolation géométrique au-delà du dernier cran écrit à la main. */
+      endless: {
+        hp_growth: number;
+        dmg_growth: number;
+        loot_growth: number;
+        extra_boss_every: number;
+      };
+    };
     preparatifs: PreparatifDef[];
   };
   scouting: { max_level: number; cost_base: number; cost_growth: number };
@@ -213,6 +234,7 @@ export function freshBastionState(): BastionState {
     bonusSorties: 0,
     sortieTargetId: null,
     sortiePeril: 0,
+    bestPeril: 0,
     sortiePreparatifs: [],
     sortiePerceeId: null,
   };
@@ -315,9 +337,11 @@ export function computeTreeMods(slot: BarracksSlot): TreeMods {
 }
 
 /** "Fondations renforcées" — bonus passif global, indépendant du niveau de chaque
- *  barracks, appliqué aux PV/dégâts de toute la garnison + tourelles + mortiers. */
+ *  barracks, appliqué aux PV/dégâts de toute la garnison + tourelles + mortiers.
+ *  Additif et SANS PLAFOND : c'est ce qui permet à la puissance du joueur de suivre
+ *  la menace indéfiniment (cf. le $comment de `foundations` dans le JSON). */
 export function foundationsMult(slotBonusLevel: number): number {
-  return 1 + slotBonusLevel * BASTION.foundations.per_level_mult;
+  return 1 + Math.max(0, slotBonusLevel) * BASTION.foundations.per_level_mult;
 }
 
 /* ---------- Coûts Boutique (courbes géométriques, cohérent avec le reste du projet) ---------- */
@@ -346,9 +370,13 @@ export function specCapCost(currentMax: number): number {
   const c = BASTION.tree_cap;
   return geometric(c.cost_base, c.cost_growth, currentMax - c.base_level);
 }
+/** Coût du niveau suivant des Fondations. LINÉAIRE, pas géométrique : une courbe
+ *  géométrique face à une menace linéaire ne déplace le mur que de quelques paliers
+ *  (le niveau abordable n'y croît qu'en logarithme du butin). Ici le cumul croît en
+ *  L², le butin cumulé en N² — donc L ∝ N, et la puissance suit la vague. */
 export function foundationsCost(currentLevel: number): number {
   const c = BASTION.foundations;
-  return geometric(c.cost_base, c.cost_growth, currentLevel);
+  return Math.round(c.cost_base + c.cost_step * Math.max(0, currentLevel));
 }
 export function scoutCost(currentLevel: number): number {
   const c = BASTION.scouting;

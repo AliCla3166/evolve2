@@ -28,10 +28,10 @@
     "cost_growth": 1.6
   },
   "foundations": {
-    "max_level": 3,
-    "per_level_mult": 0.06,
-    "cost_base": 45,
-    "cost_growth": 1.7
+    "$comment": "FONDATIONS RENFORCEES — le seul axe du Bastion SANS DERNIER NIVEAU (26/07/2026). Avant : max_level 3, cout x1,7 par cran, +6 % par cran, soit +18 % pour toujours. Mesure a l'appui (pw_check/w_tiers_bastion.ts), un joueur au maximum absolu de la Boutique gagnait 100 % jusqu'a la vague 220 puis 0 % a partir de la 235 : la progression avait une fin, et on la voyait. Le remede n'est pas de relever le plafond (un cout geometrique face a une menace lineaire ne fait que deplacer le mur) mais de changer la FORME : cout LINEAIRE (cost_base + cost_step * L) et puissance ADDITIVE (1 + per_level_mult * L). Le cumul du cout croit alors en L^2 quand le butin cumule croit en N^2 : le niveau abordable croit comme le numero de vague, donc la puissance du joueur suit exactement la menace, indefiniment. Chiffres : au palier 200, environ 270 niveaux achetes et x30 de puissance, face a des ennemis a x31 de PV. Il y a donc toujours un niveau suivant, il coute toujours un peu plus cher, et il sert toujours a quelque chose.",
+    "per_level_mult": 0.14,
+    "cost_base": 30,
+    "cost_step": 0.6
   },
   "in_wave_respawn": {
     "cost": 90
@@ -84,9 +84,10 @@
       "rarity": "peucommune",
       "dmg": 5,
       "rate": 5.0,
-      "range": 95,
+      "range": 210,
       "cost": 18,
-      "desc": "Portée très courte, mais dégâts continus dévastateurs à qui s'approche."
+      "desc": "Portée courte : elle ne couvre la ligne de front que depuis un avant-poste. En échange, les dégâts continus les plus lourds du catalogue.",
+      "$comment": "95 → 210 (26/07/2026). Seule portée RELEVÉE du catalogue, et seule modifiée. À 95 elle n'avait de cible 0 % du temps, quel que soit le palier (mesuré pw_check/w_ligne.ts) : 25 DPS soutenus, les plus élevés du jeu, dans une tourelle qui ne tirait littéralement jamais. À 210 la géométrie décide : posée dans le cluster (x = 108) elle atteint 318, encore en deçà de la ligne à 360 ; posée sur un avant-poste (x = 180) elle atteint 390 et couvre la ligne — 16 % du temps au palier 20, 67 à 75 % ensuite. C'est la première fois que le CHOIX du slot change quelque chose. On n'a en revanche RABAISSÉ aucune autre portée, malgré l'audit qui le proposait : mesuré (pw_check/w_debut.ts), ramener les tourelles à 330-560 fait perdre au débutant (1 tourelle, 1 escouade commune, 0 Fondations) 180 → 98 PV au palier 1, et coûte au jeune joueur sa victoire du palier 10. Pour qui n'a qu'une tourelle, la portée n'est pas du confort : c'est la durée pendant laquelle elle tire. Le vrai problème n'était pas la portée des tourelles (w_portee.ts : 820 → 250 ne déplace le combat que de 4 px) mais la poursuite illimitée des troupes, corrigée dans unit_combat.pursuit_leash."
     },
     {
       "id": "t_sniper",
@@ -299,8 +300,11 @@
     "barracks_squad_base": 2,
     "barracks_squad_per_rarity": 0.4,
     "mortar_rate": 0.45,
-    "mortar_range": 260,
-    "mortar_splash_radius": 60
+    "mortar_range": 400,
+    "mortar_splash_radius": 60,
+    "pursuit_leash": 170,
+    "$comment_ligne_de_front": "OÙ LA BATAILLE A LIEU (26/07/2026). Avant, une troupe de barracks poursuivait sa cible sans aucune borne : partie de son poste (x = 190) elle sprintait jusqu'à la ligne d'apparition (x = 655), l'ennemi la rencontrait là et s'arrêtait. Mesuré (pw_check/w_ligne.ts, 6 parties par palier) : un ennemi mourait 28 à 41 px après son apparition sur 547 px de champ utile — 6 % du terrain — les mortiers avaient une cible à portée 0 % du temps à TOUS les paliers et le lance-flammes 0 % aussi. Le joueur payait des objets qui ne tiraient jamais, et ne voyait pas ses créatures traverser le champ. pursuit_leash = rayon de sortie mesuré DEPUIS LE POSTE (jamais depuis la position courante : ancrée sur la position courante, la borne fait cliquet et la troupe se plante à la limite). 170 place la ligne de front à x ≈ 360, au milieu du champ. Résultat mesuré : parcours avant mort 228 à 307 px (x10), mortiers 48 à 89 % du temps avec une cible, durée de vague 32 à 53 s au lieu de 12 à 23 s, victoires 100 % et 180/180 PV inchangés aux paliers 20/60/200/800. INVARIANT : pursuit_leash doit rester STRICTEMENT SUPÉRIEUR à la plus longue atkRange du roster (polype 140). En dessous, les pathogènes à distance s'arrêtent hors d'atteinte des troupes, seules les tourelles à dégâts fixes peuvent encore les toucher, et la vague de palier 800 passe de 21 s à plus de 300 s — une agonie, pas un combat (mesuré à leash 130). Testé par o_e2e_pure.mjs.",
+    "$comment_mortar_range": "260 → 400 (26/07/2026). Les mortiers sont en x = 60 ; avec la ligne de front ramenée à x ≈ 360, il leur faut 300 px pour l'atteindre. À 260 ils restaient à 0 % de participation même après le recul de la ligne — le déblocage du slot mortier était un achat mort. À 400 : 48 % au palier 20, 81 à 89 % ensuite. Le taux de victoire et les PV restants sont inchangés (100 %, 180/180) : le mortier ne rend pas la vague plus facile, il la rend visible."
   },
   "pathogens": {
     "$comment": "Ennemis du mini-jeu jouable. L'art réutilise (via cardArt) le portrait d'une espèce de La Mare déjà générée — aucun nouvel asset. Ce sont des stats de combat indépendantes, pas des cartes assignables.",
@@ -369,6 +373,8 @@
   "wave": {
     "count_base": 4,
     "count_per_wave": 0.55,
+    "$comment_count_max": "count_max (26/07/2026) — PLAFOND D'EFFECTIF, pas de difficulte. Sans lui, l'effectif croit lineairement pour toujours : la mesure donnait 444 ennemis et 272 s de bataille au palier 800, plus de quatre minutes de telephone en main pour une sortie censee tenir dans une pause. La menace continue de monter, mais par les PV (hp_mult_per_wave, sans plafond lui) et non par la file d'attente. Effet secondaire voulu : les PV totaux d'une vague croissent alors comme N et non plus comme N au carre, exactement le rythme auquel la puissance du joueur croit via les Fondations — le rapport de force se stabilise au lieu de diverger.",
+    "count_max": 48,
     "hp_mult_per_wave": 0.15,
     "dmg_mult_per_wave": 0.1,
     "spawn_gap_base": 0.85,
@@ -400,7 +406,14 @@
         { "id": 2, "name": "Hostile", "hp_mult": 1.8, "dmg_mult": 1.5, "loot_mult": 1.9, "extra_bosses": 1 },
         { "id": 3, "name": "Virulent", "hp_mult": 2.3, "dmg_mult": 1.8, "loot_mult": 2.4, "extra_bosses": 1 },
         { "id": 4, "name": "Cataclysmique", "hp_mult": 3.0, "dmg_mult": 2.2, "loot_mult": 3.2, "extra_bosses": 2 }
-      ]
+      ],
+      "endless": {
+        "$comment": "AU-DELA DE CATACLYSMIQUE (26/07/2026) — l'echelle ne s'arrete plus. Les cinq crans ci-dessus sont ecrits a la main parce qu'ils portent un nom et une intention ; au-dela, le cran n se DEDUIT du dernier ecrit par croissance geometrique. Pourquoi : une echelle de difficulte volontaire qui affiche son dernier barreau annonce au joueur la fin de son jeu. Ici le panneau montre toujours un cran de plus que le meilleur qu'il ait franchi (cf. maxPeril), donc il reste toujours quelque chose au-dessus, sans jamais rien exiger. INVARIANT PRESERVE : loot_growth > hp_growth, donc a chaque nouveau barreau comme aux cinq premiers, monter le Peril reste le bon pari. La progression du danger (x1,26 de PV par cran) est calee sous celle du butin (x1,34) et bien au-dessus de celle des degats (x1,14) : ce qui monte, c'est le temps qu'il faut pour nettoyer la vague, pas la brutalite avec laquelle on perd.",
+        "hp_growth": 1.26,
+        "dmg_growth": 1.14,
+        "loot_growth": 1.34,
+        "extra_boss_every": 3
+      }
     },
     "preparatifs": [
       {

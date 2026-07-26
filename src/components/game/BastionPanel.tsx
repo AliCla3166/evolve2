@@ -37,7 +37,6 @@ import { previewWave } from "@/lib/game/bastion/engine";
 import {
   maxPeril,
   perilDef,
-  PERILS,
   PREPARATIFS,
   sortieAvailability,
   sortieLootMult,
@@ -248,8 +247,13 @@ export function BastionPanel({
   const perceeOk = !perceeOpt || percees >= perceeOpt.cost;
   // Le Péril choisi ne peut pas descendre sous celui qu'impose la Percée dépensée —
   // même formule que `store.beginSortie`, pour que l'aperçu ne mente jamais.
-  const effPeril = Math.max(0, Math.min(maxPeril(), Math.max(peril, perceeOpt?.forced_peril ?? 0)));
+  const perilTop = maxPeril(bastion.bestPeril);
+  const effPeril = Math.max(0, Math.min(perilTop, Math.max(peril, perceeOpt?.forced_peril ?? 0)));
   const perilInfo = perilDef(effPeril);
+  // Les crans écrits à la main, puis ceux que le joueur a ouverts en gagnant. `perilDef`
+  // les fabrique au-delà du dernier nommé : la liste n'a donc pas de fin, seulement un
+  // bout visible qui recule d'un cran à chaque victoire.
+  const perilLadder = Array.from({ length: perilTop + 1 }, (_, i) => perilDef(i));
   // Palier assailli, calculé UNE FOIS ici et transmis tel quel au moteur : `resolveSortie`
   // le relit sur `result.waveN` et n'y réapplique aucun décalage.
   const sortiePalier =
@@ -491,8 +495,13 @@ export function BastionPanel({
             {/* Péril */}
             <div className="space-y-1">
               <p className="text-[10px] uppercase tracking-widest text-cell-teal/50">Péril</p>
+              {/* L'échelle affichée s'arrête toujours UN CRAN au-dessus du meilleur
+                  franchi (cf. maxPeril) : au-delà de « Cataclysmique », les barreaux sont
+                  déduits, pas écrits, et il y en a toujours un de plus. Le joueur ne voit
+                  donc jamais le dernier — sans que rien ne l'oblige à monter, puisque
+                  perdre une sortie ne coûte rien. */}
               <div className="flex flex-wrap gap-1">
-                {PERILS.map((p) => {
+                {perilLadder.map((p) => {
                   const locked = p.id < (perceeOpt?.forced_peril ?? 0);
                   const active = p.id === effPeril;
                   return (
@@ -875,17 +884,16 @@ export function BastionPanel({
             <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 p-2">
               <div>
                 <div className="text-[11px] text-cell-cyan">🧬 Fondations renforcées</div>
+                {/* Pas de « /max » ici, et c'est le sujet : ce niveau n'en a pas.
+                    Afficher un dénominateur reviendrait à annoncer au joueur la fin de
+                    sa progression, exactement ce qu'on vient de retirer du jeu. */}
                 <div className="text-[10px] text-cell-teal/60">
-                  Niv {bastion.slotBonusLevel}/{BASTION.foundations.max_level} · +{Math.round((foundationsMult(bastion.slotBonusLevel) - 1) * 100)}% PV/dégâts (garnison entière)
+                  Niv {bastion.slotBonusLevel} · +{Math.round((foundationsMult(bastion.slotBonusLevel) - 1) * 100)}% PV/dégâts (garnison entière)
                 </div>
               </div>
-              {bastion.slotBonusLevel >= BASTION.foundations.max_level ? (
-                <span className="text-[10px] text-cell-magenta">MAX</span>
-              ) : (
-                <PixelButton className="text-[10px]" disabled={(resources.combat ?? 0) < foundationsCost(bastion.slotBonusLevel)} onClick={() => buyBastionFoundations() && vibrate(20)}>
-                  +1 — <CombatCost amount={foundationsCost(bastion.slotBonusLevel)} have={resources.combat ?? 0} />
-                </PixelButton>
-              )}
+              <PixelButton className="text-[10px]" disabled={(resources.combat ?? 0) < foundationsCost(bastion.slotBonusLevel)} onClick={() => buyBastionFoundations() && vibrate(20)}>
+                +1 — <CombatCost amount={foundationsCost(bastion.slotBonusLevel)} have={resources.combat ?? 0} />
+              </PixelButton>
             </div>
             <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 p-2">
               <div>

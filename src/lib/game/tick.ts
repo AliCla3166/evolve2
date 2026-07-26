@@ -14,9 +14,13 @@ import { crewMultOf } from "./cards";
 import {
   buildingProductionPerHour,
   getBuildingConfig,
+  posteSlots,
+  posteXpPerHour,
   resourceName,
   stateProductionPerHour,
   stateResourceCap,
+  workLevel,
+  workLevelOf,
 } from "./economy";
 import { computeStreak, dayKey, ENERGY_CAP, settleStreakTiers } from "./habits";
 import { applyMilitary, pushReport } from "./military";
@@ -30,6 +34,17 @@ export interface FinishedBuild {
   targetLevel: number;
   /** Timestamp réel de fin (ms). */
   at: number;
+}
+
+/** Une ouvrière postée qui a franchi un palier de travail pendant ce tick.
+ *  Existe pour que le rapport de retour puisse le DIRE : sans ça, la montée de niveau
+ *  arrivait pendant l'absence et le joueur ne l'apprenait qu'en rouvrant une fiche. */
+export interface WorkPromotion {
+  speciesId: string;
+  /** Niveau avant le tick. */
+  from: number;
+  /** Niveau après le tick (peut sauter plusieurs paliers après une longue absence). */
+  to: number;
 }
 
 /** Ce que le tick a fait, pour le raconter au joueur.
@@ -46,6 +61,8 @@ export interface TickSummary {
   wasted: Partial<Record<ResourceId, number>>;
   /** Chantiers terminés pendant ce tick. */
   finished: FinishedBuild[];
+  /** Ouvrières montées de niveau pendant ce tick (une entrée par espèce au plus). */
+  promotions: WorkPromotion[];
   /** Rapports générés pendant ce tick (expéditions, vagues, événements). */
   newReports: Report[];
 }
@@ -58,6 +75,7 @@ function emptySummary(from: number, to: number): TickSummary {
     gains: {},
     wasted: {},
     finished: [],
+    promotions: [],
     newReports: [],
   };
 }
@@ -101,6 +119,59 @@ function credit(state: GameState, id: ResourceId, amount: number, out: TickSumma
     out.gains[id] = (out.gains[id] ?? 0) + kept;
   }
   if (lost > 0) out.wasted[id] = (out.wasted[id] ?? 0) + lost;
+}
+
+/* ---------- Les postes de travail (26/07) ---------- */
+
+/** Fait vieillir les ouvrières postées entre deux timestamps (ms).
+ *
+ *  Appelée dans les MÊMES segments que produce(), et pour la même raison : le débit
+ *  d'ancienneté dépend du niveau de l'organe (cf. economy_config.json -> postes ->
+ *  xp_per_hour_per_building_level). Une fin de chantier au milieu d'une absence doit
+ *  donc couper le calcul en deux, sinon toute la nuit serait comptée au niveau final.
+ *
+ *  Deux tables, deux régimes d'écriture, et c'est le cœur du truc :
+ *  - `fauneXp` bouge à chaque tick, on le réécrit toujours. Il n'appartient à aucune
+ *    vue de production, donc personne n'est réveillé pour autant.
+ *  - `fauneLevel` n'est REMPLACÉ que si un palier est réellement franchi. Il fait
+ *    partie de PosteStateView : lui donner une nouvelle identité chaque seconde
+ *    ferait re-rendre tous les sélecteurs de production — dont une carte plein
+ *    écran — pour afficher un chiffre rigoureusement identique. */
+function accrueWorkXp(state: GameState, fromMs: number, toMs: number, out: TickSummary): void {
+  const dtHours = (toMs - fromMs) / 3_600_000;
+  if (dtHours <= 0) return;
+  let levels: Record<string, number> | null = null;
+
+  for (const [key, crew] of Object.entries(state.postes)) {
+    if (!crew || crew.length === 0) continue;
+    const id = key as BuildingId;
+    const level = state.buildings[id] ?? 0;
+    const gain = posteXpPerHour(level) * dtHours;
+    if (gain <= 0) continue;
+
+    // Au-delà du nombre de postes ouverts, une ouvrière ne travaille pas : elle ne
+    // produit rien (cf. posteBonus) et ne doit donc pas non plus prendre de l'ancienneté.
+    for (const speciesId of crew.slice(0, posteSlots(id, level))) {
+      // Une sauvegarde peut nommer une espèce absente de la collection (carte recyclée,
+      // catalogue retouché) : on l'ignore au lieu de lui inventer une carrière.
+      if (!state.collection[speciesId]) continue;
+      const before = levels?.[speciesId] ?? workLevelOf(state, speciesId);
+      const xp = (state.fauneXp[speciesId] ?? 0) + gain;
+      state.fauneXp[speciesId] = xp;
+      const after = workLevel(xp);
+      if (after === before) continue;
+
+      levels ??= { ...state.fauneLevel };
+      levels[speciesId] = after;
+      // Une longue absence traverse plusieurs segments : on fusionne au lieu
+      // d'annoncer trois fois la même créature.
+      const seen = out.promotions.find((p) => p.speciesId === speciesId);
+      if (seen) seen.to = after;
+      else out.promotions.push({ speciesId, from: before, to: after });
+    }
+  }
+
+  if (levels) state.fauneLevel = levels;
 }
 
 /* ---------- Revenu de La Dérive ----------
@@ -222,6 +293,11 @@ export function applyTickDetailed(
     // military.touchFoyer — ce clone de surface suffit donc.
     territoire: { ...state.territoire, foyers: { ...state.territoire.foyers } },
     bilan: { ...state.bilan },
+    // L'ancienneté des ouvrières bouge à chaque tick : on la clone systématiquement.
+    // `fauneLevel` et `postes`, eux, gardent leur référence — accrueWorkXp ne remplace
+    // le premier qu'à une vraie montée de niveau, et le second n'appartient qu'aux
+    // actions du joueur. C'est ce qui laisse les vues de production endormies.
+    fauneXp: { ...state.fauneXp },
   };
 
   const from = next.lastTick > 0 ? next.lastTick : now;
@@ -257,11 +333,13 @@ export function applyTickDetailed(
   for (const task of due) {
     const completionAt = Math.max(cursor, task.endsAt);
     produce(next, cursor, completionAt, summary);
+    accrueWorkXp(next, cursor, completionAt, summary);
     completeTask(next, task, summary);
     cursor = completionAt;
   }
   next.buildQueue = next.buildQueue.filter((t) => t.endsAt > now);
   produce(next, cursor, now, summary);
+  accrueWorkXp(next, cursor, now, summary);
 
   // Revenu des gisements de La Dérive — après la production de base, dont il est un
   // pourcentage, et donc après que les chantiers échus ont relevé les débits.

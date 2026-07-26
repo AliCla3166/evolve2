@@ -41,6 +41,14 @@ import type {
 /* ---------- Constantes de combat (comportement, pas de rendu) ---------- */
 
 const MELEE_RANGE = 22;
+/** Vitesse de charge d'une troupe de barracks, px/s. Constante de RYTHME et non
+ *  d'équilibrage (elle ne change ni les dégâts ni les PV) : elle reste ici, comme
+ *  PROJECTILE_SPEED. Ce qui décide de l'issue, c'est jusqu'OÙ la troupe avance —
+ *  et ça, c'est `unit_combat.pursuit_leash`, dans le JSON. */
+const TROOP_PURSUIT_SPEED = 90;
+/** Vitesse de retour au poste, px/s — volontairement plus lente que la charge : on sort
+ *  vite, on rentre tranquillement. */
+const TROOP_RETURN_SPEED = 60;
 const ENEMY_ATTACK_RATE = 1.1; // coups/s au contact
 const RESPAWN_DELAY_S = 2.5;
 const TRAP_TRIGGER_RANGE_PAD = 0; // le rayon du piège suffit
@@ -92,7 +100,10 @@ export function genLiveWave(waveN: number, mod?: SortieModifier): LiveWavePlan {
     chosen.push(copy.splice(idx, 1)[0]);
   }
   if (chosen.length === 0 && pool.length) chosen.push(pool[0]);
-  const count = Math.round(w.count_base + waveN * w.count_per_wave);
+  // Effectif plafonné : passé `count_max`, la vague ne s'allonge plus, elle DURCIT
+  // (hp_mult_per_wave, lui, n'a pas de plafond). Sans ce plafond une sortie de palier
+  // 800 alignait 444 ennemis et durait plus de quatre minutes — mesuré, pas supposé.
+  const count = Math.min(w.count_max, Math.round(w.count_base + waveN * w.count_per_wave));
   const hpMult = (1 + waveN * w.hp_mult_per_wave) * (mod?.hpMult ?? 1);
   const dmgMult = (1 + waveN * w.dmg_mult_per_wave) * (mod?.dmgMult ?? 1);
   const spawnGap = Math.max(w.spawn_gap_min, w.spawn_gap_base - waveN * w.spawn_gap_per_wave);
@@ -513,19 +524,44 @@ export function stepBattle(battle: BattleState, dt: number, ctx: StaticDefs): vo
       }
     });
     if (t.kind === "barracks") {
-      if (target && bestD > t.range) {
+      /* SORTIE ET RETOUR — l'escouade tient un poste, elle ne court plus après la vague.
+         AVANT : la poursuite n'avait aucune borne. Partie de x = 190, la troupe sprintait
+         jusqu'à la ligne d'apparition (x = 655), l'ennemi la rencontrait là et s'arrêtait.
+         Mesuré le 26/07 (pw_check/w_ligne.ts) : un ennemi mourait 28 à 41 px après son
+         apparition sur 547 px de champ utile, les mortiers avaient une cible à portée 0 %
+         du temps et la tourelle de contact 0 % aussi. Le champ ne servait à rien et le
+         joueur payait des objets qui ne tiraient jamais. Après : 228 à 307 px parcourus,
+         mortiers à 48-89 %, vagues de 32 à 53 s au lieu de 12 à 23 s, victoires et PV
+         inchangés (100 %, 180/180) à tous les paliers.
+         À ne pas confondre avec l'hypothèse de l'audit, qui accusait la portée des
+         tourelles : réfutée (pw_check/w_portee.ts, 820 -> 250 déplace le combat de 4 px),
+         et la corriger quand même coûtait 180 -> 98 PV au débutant (w_debut.ts). Une seule
+         portée a donc bougé, vers le haut : le lance-flammes, 95 -> 210.
+         La règle est donc : je sors si l'ennemi entre dans MON rayon de sortie, sinon je
+         rentre. Le rayon se mesure depuis le POSTE, jamais depuis ma position courante —
+         c'est ce détail qui empêche l'effet de cliquet. (Mesuré : une borne posée sur la
+         position courante, circulaire ou en X, laisse la troupe plantée à la limite ; les
+         pathogènes à distance — polype 140 px, isopode 120, boss 130 — s'arrêtent alors
+         hors d'atteinte et seules les tourelles peuvent encore les toucher. Or les
+         tourelles font des dégâts FIXES contre des PV qui montent avec le palier : la
+         vague de palier 800 passait de 21 s à plus de 300 s, une agonie, pas un combat.
+         Avec sortie-et-retour, la troupe revient à son poste dès qu'elle n'a plus rien
+         d'atteignable, l'ennemi à distance se rapproche à nouveau, et le duel a lieu.)
+         `pursuit_leash` doit donc rester SUPÉRIEUR à la plus longue portée ennemie, sans
+         quoi le duel n'a jamais lieu. */
+      const sally = BASTION.unit_combat.pursuit_leash;
+      const tgt = target as BattleEnemy | null;
+      const atteignable = !!tgt && dist(tgt.x, tgt.y, t.homeX, t.homeY) <= sally;
+      if (atteignable && bestD > t.range) {
         const d = bestD;
-        const tgt = target as BattleEnemy;
-        t.x += ((tgt.x - t.x) / d) * 90 * dt;
-        t.y += ((tgt.y - t.y) / d) * 90 * dt;
-      } else {
-        // revient doucement vers sa position d'origine si rien à combattre
-        if (!target) {
-          const d = dist(t.x, t.y, t.homeX, t.homeY);
-          if (d > 4) {
-            t.x += ((t.homeX - t.x) / d) * 60 * dt;
-            t.y += ((t.homeY - t.y) / d) * 60 * dt;
-          }
+        t.x += ((tgt!.x - t.x) / d) * TROOP_PURSUIT_SPEED * dt;
+        t.y += ((tgt!.y - t.y) / d) * TROOP_PURSUIT_SPEED * dt;
+      } else if (!atteignable) {
+        // rien d'atteignable : retour au poste, sans se presser
+        const d = dist(t.x, t.y, t.homeX, t.homeY);
+        if (d > 4) {
+          t.x += ((t.homeX - t.x) / d) * TROOP_RETURN_SPEED * dt;
+          t.y += ((t.homeY - t.y) / d) * TROOP_RETURN_SPEED * dt;
         }
       }
     }

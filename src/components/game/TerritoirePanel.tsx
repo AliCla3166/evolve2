@@ -22,7 +22,7 @@
 
 import { useEffect, useState } from "react";
 import { Panel, PixelButton } from "@/components/ui/Pixel";
-import { resourceName, stateProductionPerHour } from "@/lib/game/economy";
+import { resourceName, stateProductionPerHour, stateStorageCap } from "@/lib/game/economy";
 import { fmtDuration, fmtInt, fmtRate } from "@/lib/game/format";
 import {
   cardArt,
@@ -408,10 +408,12 @@ function FoyerCard({
   const palier = useGame((s) => s.waveCount);
   const percees = useGame((s) => s.bilan.percees);
   const develop = useGame((s) => s.developFoyer);
+  const postes = useGame((s) => s.postes);
+  const fauneLevel = useGame((s) => s.fauneLevel);
 
   // stateProductionPerHour alloue un nouvel objet : on le calcule APRÈS sélection,
   // jamais dans un sélecteur Zustand (cf. le piège corrigé dans Hud.tsx).
-  const prod = stateProductionPerHour({ buildings, territoire });
+  const prod = stateProductionPerHour({ buildings, territoire, postes, collection, fauneLevel });
   const crewMult = crewMultOf({ collection, territoire });
 
   const nat = natureDef(foyer.nature);
@@ -423,7 +425,9 @@ function FoyerCard({
   const target = assaultPalier(foyer, palier, territoire);
   const needsPercee = Boolean(nat.requires_percee);
   const dev = devLevel(territoire, foyer.id);
-  const cost = taken ? devCost(foyer, dev, prod) : null;
+  // Le devis se lit en part de RÉSERVE (cf. territoire.devCost) : c'est le plafond
+  // de stockage qu'on lui passe, pas la production. Même source que le store.
+  const cost = taken ? devCost(foyer, dev, stateStorageCap({ buildings, territoire })) : null;
   /* ÉTAPE D — un foyer pris n'est jamais fini : il se reprend, plus haut.
      `reprises` compte les reconquêtes DÉJÀ menées ; le butin affiché est celui de
      la prochaine, donc indexé sur `reprises` telle qu'elle sera après la victoire. */
@@ -634,6 +638,8 @@ export function TerritoirePanel({
   const now = useGame((s) => s.lastTick);
   const setSector = useGame((s) => s.setTerritoireSector);
   const markOffersSeen = useGame((s) => s.markNoyauSeen);
+  const postes = useGame((s) => s.postes);
+  const fauneLevel = useGame((s) => s.fauneLevel);
 
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -650,7 +656,7 @@ export function TerritoirePanel({
   const stored = SECTORS.find((s) => s.id === territoire.lastSectorId);
   const sector = stored && sectorUnlocked(stored, palier) ? stored : SECTORS[0];
 
-  const prod = stateProductionPerHour({ buildings, territoire });
+  const prod = stateProductionPerHour({ buildings, territoire, postes, collection, fauneLevel });
   const income = territoireIncomePerHour(territoire, prod, crewMultOf({ collection, territoire }));
   const incomeRows = (Object.keys(income) as ResourceId[]).filter((r) => (income[r] ?? 0) > 0);
   // Un gisement rapporte un POURCENTAGE de la production de base : tant que la base

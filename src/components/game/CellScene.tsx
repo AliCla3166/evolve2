@@ -14,6 +14,8 @@ import {
   isDesigned,
   levelCost,
   maxLevel,
+  posteOf,
+  posteSlots,
 } from "@/lib/game/economy";
 import { cardArt } from "@/lib/game/cards";
 import { canRecruit, totalUnits, unitCap, UNIT_IDS } from "@/lib/game/military";
@@ -28,6 +30,7 @@ import {
   socketPos,
   SOCKETS,
 } from "@/lib/game/scene";
+import { creatureSprite } from "@/lib/game/sprites";
 import { useGame } from "@/lib/game/store";
 import { crewedSpecies } from "@/lib/game/territoire";
 import type { BuildingId } from "@/lib/game/types";
@@ -165,11 +168,20 @@ interface SceneAnim {
   levels: Partial<Record<BuildingId, number>>;
   /** Ondes de choc "organe terminé" (coordonnées normalisées). */
   rings: { x: number; y: number; born: number; color: string }[];
+  /** Grains de récolte remontés par les ouvrières vers le bandeau de ressources. */
+  harvest: BurstParticle[];
+  /** Prochaine émission d'un grain, par couple organe:espèce (timestamp rAF).
+   *  Borné par nature (12 organes × 62 espèces), donc jamais purgé. */
+  nextWork: Map<string, number>;
 }
 
 const MOLT_MS = 900;
 /** Durée de l'onde de choc de fin de chantier. */
 const RING_MS = 1100;
+/** Durée de vie d'un grain de récolte (le temps de monter vers le HUD). */
+const HARVEST_MS = 1500;
+/** Au-delà, on cesse d'en empiler : garde-fou, jamais atteint en usage normal. */
+const HARVEST_MAX = 120;
 
 export function CellScene({
   selected,
@@ -209,6 +221,8 @@ export function CellScene({
       burst: [],
       levels: { ...useGame.getState().buildings },
       rings: [],
+      harvest: [],
+      nextWork: new Map(),
     };
 
     let cssSize = 0;
@@ -373,16 +387,25 @@ export function CellScene({
              Dessinées entre le plancton et les organes : elles passent DERRIÈRE
              les bâtiments, donc elles n'entrent jamais en concurrence avec les
              cibles tactiles. Celles postées sur un gisement sont absentes — elles
-             travaillent sur la carte, et on les y voit. */
+             travaillent sur la carte, et on les y voit. Celles POSTÉES DANS UN ORGANE
+             le sont aussi : elles sont dessinées juste après, à leur poste, et une
+             créature qu'on verrait à la fois nager et travailler mentirait sur la
+             règle même du jeu — un seul emploi à la fois. */
       const auTravail = crewedSpecies(state.territoire);
+      for (const crew of Object.values(state.postes)) {
+        if (crew) for (const sid of crew) auTravail.add(sid);
+      }
       const nageuses = Object.keys(state.collection)
         .filter((id) => !auTravail.has(id))
         .sort()
         .slice(0, FAUNA_MAX);
       for (let i = 0; i < nageuses.length; i++) {
         const id = nageuses[i];
-        const img = getImage(cardArt(id));
-        if (!ready(img)) continue;
+        // Portrait détouré (cf. sprites.ts) : sans lui, une nageuse est un carré
+        // noir qui glisse sur le décor. C'est aussi ce qui permet de remonter son
+        // opacité — ce qu'on voulait cacher, c'était le cadre, pas la créature.
+        const img = creatureSprite(cardArt(id));
+        if (!img) continue;
         // Couloir de nage, vitesse et phase : dérivés de l'identifiant de l'espèce.
         const lane = 0.16 + hashed(id, 1) * 0.66;
         const speed = FAUNA_CROSS_S * (0.75 + hashed(id, 2) * 0.7);
@@ -395,7 +418,7 @@ export function CellScene({
         const swim = Math.sin(t * (0.6 + hashed(id, 6) * 0.5) + i) ;
         const y = (lane + swim * 0.035) * S;
         ctx.save();
-        ctx.globalAlpha = 0.42 + 0.12 * Math.sin(t * 0.9 + i);
+        ctx.globalAlpha = 0.66 + 0.14 * Math.sin(t * 0.9 + i);
         ctx.translate(x, y);
         ctx.rotate(swim * 0.16);
         // Le portrait regarde vers la droite : on le retourne quand elle nage à gauche.
@@ -596,6 +619,100 @@ export function CellScene({
       drawBuilding("noyau");
       hitZonesRef.current = zones;
 
+      /* --- LES OUVRIÈRES À LEUR POSTE (26/07) ----------------------------------
+
+         C'est la contrepartie visible du moteur des postes : la créature qu'on a
+         pêchée, puis affectée à un organe depuis sa fiche, on la VOIT y travailler.
+         Elle tourne autour de son organe, se penche dessus par à-coups, et remonte
+         régulièrement un grain de récolte vers le bandeau de ressources.
+
+         Dessinées APRÈS les organes (donc devant) mais AVANT les labels : une
+         ouvrière peut passer sur un sprite, jamais sur le nom d'un bâtiment. Leurs
+         postes sont répartis sur l'arc SUPÉRIEUR pour la même raison — le bas du
+         socle appartient au label.
+
+         Purement décoratif : rien de ce qui est calculé ici ne retourne dans l'état.
+         Toute la chorégraphie est dérivée de l'identifiant de l'espèce (`hashed`),
+         donc identique d'un montage à l'autre — la même créature reprend sa place. */
+      for (const id of BUILDING_ORDER) {
+        const crew = posteOf(state, id);
+        if (crew.length === 0) continue;
+        const slots = posteSlots(id, buildings[id] ?? 0);
+        if (slots <= 0) continue;
+        const actifs = crew.slice(0, slots);
+
+        const socket = SOCKETS[id];
+        const pos = socketPos(id, anim.spread);
+        const phase = animPhase(id);
+        const period = 2.2 + phase * 1.8;
+        // Même flottement que le sprite de l'organe : l'équipe reste collée à lui.
+        const cx = pos.x * S;
+        const cy = pos.y * S + Math.sin((t / period + phase) * Math.PI * 2) * (S * 0.006);
+        const padR = baseSize * socket.size * 0.52;
+        const wsize = baseSize * 0.44;
+
+        for (let i = 0; i < actifs.length; i++) {
+          const sid = actifs[i];
+          const img = creatureSprite(cardArt(sid));
+          if (!img) continue;
+          const ph = hashed(sid, 11);
+
+          const arc = Math.PI * 0.86;
+          const a0 = -Math.PI / 2 - arc / 2 + ((i + 0.5) / actifs.length) * arc;
+          const sway = Math.sin(t * (0.5 + ph * 0.4) + ph * 6) * 0.11;
+          // Coup de collier : elle se penche vers l'organe. La phase vient de son
+          // identifiant, donc deux ouvrières voisines ne travaillent jamais à
+          // l'unisson — c'est ce décalage qui fait qu'une équipe a l'air vivante.
+          const effort = Math.max(0, Math.sin(t * 1.9 + ph * Math.PI * 2));
+          const a = a0 + sway;
+          const r = padR * (1.2 - 0.16 * effort);
+          const wx = cx + Math.cos(a) * r;
+          const wy = cy + Math.sin(a) * r;
+
+          // Halo d'atelier : détache l'ouvrière du sprite de l'organe, sur lequel
+          // elle passe. Il s'intensifie au moment de l'effort.
+          const glow = ctx.createRadialGradient(wx, wy, 0, wx, wy, wsize * 0.75);
+          glow.addColorStop(0, hexA(socket.accent, 0.3 + 0.22 * effort));
+          glow.addColorStop(1, hexA(socket.accent, 0));
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(wx, wy, wsize * 0.75, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.save();
+          ctx.translate(wx, wy);
+          // Elle regarde son organe : le portrait pointe à droite, on le retourne
+          // quand elle se tient à droite du socle.
+          ctx.scale(Math.cos(a) > 0 ? -1 : 1, 1);
+          ctx.rotate(-0.28 * effort);
+          ctx.drawImage(img, -wsize / 2, -wsize / 2, wsize, wsize);
+          ctx.restore();
+
+          /* Grain de récolte : elle remonte quelque chose vers le bandeau, à
+             intervalle irrégulier. C'est le seul lien VISUEL entre une créature
+             et les chiffres du HUD — sans lui, le bonus de production resterait
+             une ligne de texte dans une fiche. */
+          let due = anim.nextWork.get(`${id}:${sid}`);
+          if (due === undefined) {
+            due = nowMs + ph * 1800;
+            anim.nextWork.set(`${id}:${sid}`, due);
+          }
+          if (nowMs >= due) {
+            anim.nextWork.set(`${id}:${sid}`, nowMs + 1400 + hashed(sid, 12) * 1500);
+            if (anim.harvest.length < HARVEST_MAX) {
+              anim.harvest.push({
+                x: wx / S,
+                y: wy / S,
+                vx: (hashed(sid, 13) - 0.5) * 0.06,
+                vy: -0.15 - hashed(sid, 14) * 0.07,
+                born: nowMs,
+                color: socket.accent,
+              });
+            }
+          }
+        }
+      }
+
       // 2e passe : badges de niveau + noms courts, au-dessus de tous les sprites
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -688,6 +805,26 @@ export function CellScene({
         ctx.beginPath();
         ctx.arc(r.x * S, r.y * S, radius, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.restore();
+      }
+
+      /* --- Grains de récolte : ce que les ouvrières remontent vers le HUD ---
+             Ils accélèrent en montant et sortent par le haut du cadre, exactement
+             là où se trouve le bandeau de ressources : le regard fait le trajet. */
+      anim.harvest = anim.harvest.filter((p) => nowMs - p.born < HARVEST_MS);
+      for (const p of anim.harvest) {
+        const age = (nowMs - p.born) / HARVEST_MS;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy -= 0.06 * dt;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, (1 - age) * 1.8);
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 7;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x * S, p.y * S, 2.7 * (1 - age * 0.45), 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
 

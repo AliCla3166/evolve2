@@ -14,9 +14,13 @@
    - Rituels bien-être : +5 ⚡ par rituel, max 5/jour.
    Journée parfaite = 5/5 habitudes validées => max 10+15+30+15+25 = 95 ⚡/jour.
 
-   Anti-triche : une saisie par jour calendaire (clé YYYY-MM-DD en timezone
-   locale), modifiable uniquement le jour même — le store refuse toute écriture
-   sur une autre clé que celle du jour courant. */
+   Saisie : une entrée par jour calendaire (clé YYYY-MM-DD en timezone locale),
+   éditable pendant une FENÊTRE GLISSANTE de SAISIE_WINDOW_DAYS jours, aujourd'hui
+   compris — parce qu'une journée réellement tenue mais notée après minuit ne doit
+   pas être perdue. Le futur reste fermé et le passé se referme au bord de la
+   fenêtre : le garde-fou vit dans le store, pas seulement dans l'UI.
+   Une journée renseignée APRÈS son jour porte le marqueur `late` : elle paie son
+   énergie en entier, mais ne tient pas la série (cf. habits_config.json → saisie). */
 
 import rawHabitsConfig from "@/data/habits_config.json";
 import type { HabitDayEntry, HabitId, HabitsState } from "./types";
@@ -133,6 +137,7 @@ export interface BilanOptionDef {
 }
 
 interface HabitsConfig {
+  saisie: { window_days: number };
   streak: {
     tiers: StreakTier[];
     grace: { per_month: number; max_age_days: number };
@@ -158,6 +163,12 @@ export const STREAK_TIERS: ReadonlyArray<StreakTier> = HABITS_CFG.streak.tiers;
 
 /** Un jour de grâce par mois calendaire, sur un oubli de moins de N jours. */
 export const STREAK_GRACE = HABITS_CFG.streak.grace;
+
+/** Fenêtre de saisie rétroactive : nombre de jours calendaires éditables,
+ *  AUJOURD'HUI COMPRIS (7 = aujourd'hui + les 6 précédents). Le plancher à 1
+ *  garantit qu'un réglage aberrant retombe sur l'ancien comportement — la
+ *  journée en cours — au lieu de fermer toute saisie. */
+export const SAISIE_WINDOW_DAYS = Math.max(1, Math.floor(HABITS_CFG.saisie.window_days));
 
 /** Nombre de cases de la grille d'historique (= durée de l'Âge 1). */
 export const HISTORY_DAYS = HABITS_CFG.streak.history_days;
@@ -241,6 +252,27 @@ export function weekdayIndex(key: string): number {
   return (new Date(y, m - 1, d).getDay() + 6) % 7;
 }
 
+/* ---------- Fenêtre de saisie ----------
+   Les clés YYYY-MM-DD à largeur fixe se comparent comme des chaînes : l'ordre
+   lexicographique EST l'ordre chronologique. On n'y construit donc aucune Date,
+   et surtout on n'y appelle jamais Date.now() — l'appelant fournit le jour
+   courant (state.lastTick côté rendu, Date.now() côté store). */
+
+/** La journée `key` est-elle éditable au jour `todayKey` ? Bornes incluses :
+ *  le futur est fermé, le passé l'est au-delà de la fenêtre. */
+export function canEditDay(key: string, todayKey: string): boolean {
+  if (key > todayKey) return false;
+  return key >= addDaysToKey(todayKey, -(SAISIE_WINDOW_DAYS - 1));
+}
+
+/** Les jours éditables, du plus ancien à aujourd'hui — l'ordre de la bande de
+ *  sélection, qui se lit de gauche à droite comme un calendrier. */
+export function editableDayKeys(todayKey: string): string[] {
+  const keys: string[] = [];
+  for (let i = SAISIE_WINDOW_DAYS - 1; i >= 0; i--) keys.push(addDaysToKey(todayKey, -i));
+  return keys;
+}
+
 /* ---------- Série : moteur pur, DÉRIVÉ de l'historique ----------
    Avant la piste 6, la série était tenue en comptabilité incrémentale
    (« si hier était le dernier jour compté, alors +1 »). Ça marchait, mais ça
@@ -249,13 +281,22 @@ export function weekdayIndex(key: string): number {
    seulement un compteur. On recalcule donc la série à partir des jours saisis —
    la seule source de vérité — et le compteur stocké n'est plus qu'un cache. */
 
-/** Ce jour-là compte-t-il dans la série ? (≥1 habitude validée, ou jour réparé) */
+/** Ce jour-là compte-t-il dans la série ?
+ *
+ *  Trois cas, et l'ordre compte. Un jour RÉPARÉ par la grâce tient toujours :
+ *  c'est la seule chose que la grâce sache faire, et elle doit pouvoir raccrocher
+ *  n'importe quel trou — y compris une journée notée après coup. Un jour saisi à
+ *  l'heure tient dès la première habitude validée. Une journée NOTÉE APRÈS COUP
+ *  (`late`) ne tient pas : elle a payé son énergie, mais la série mesure le
+ *  rendez-vous quotidien, pas le travail (cf. habits_config.json → saisie). */
 export function dayHoldsStreak(
   days: Record<string, HabitDayEntry>,
   graceDays: ReadonlySet<string>,
   key: string,
 ): boolean {
-  return (days[key]?.validatedCount ?? 0) > 0 || graceDays.has(key);
+  if (graceDays.has(key)) return true;
+  const d = days[key];
+  return !!d && d.validatedCount > 0 && !d.late;
 }
 
 /** Garde-fou : on ne remonte jamais plus loin que 10 ans d'historique. */
@@ -295,7 +336,12 @@ export function graceAvailable(habits: HabitsState, todayKey: string): boolean {
  *  cette journée tenait la série. Autrement dit la grâce ne sert qu'à recoller
  *  une chaîne réelle — elle ne fabrique pas une série à partir de rien, et on
  *  ne laisse pas le joueur gâcher sa seule réparation du mois sur un trou
- *  qu'elle ne bouchera pas. */
+ *  qu'elle ne bouchera pas.
+ *
+ *  Depuis la fenêtre de saisie, un « trou » peut aussi être une journée NOTÉE
+ *  APRÈS COUP : elle a payé son énergie sans tenir la chaîne, et la grâce est
+ *  précisément l'outil prévu pour la raccrocher — une fois par mois, comme
+ *  n'importe quel autre oubli. */
 export function repairableDay(habits: HabitsState, todayKey: string): string | null {
   if (!graceAvailable(habits, todayKey)) return null;
   const grace = new Set(habits.graceDays);

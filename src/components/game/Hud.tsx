@@ -135,15 +135,20 @@ export function Hud({ onOpenHabits }: { onOpenHabits?: () => void }) {
   const resources = useGame((s) => s.resources);
   const buildings = useGame((s) => s.buildings);
   const territoire = useGame((s) => s.territoire);
+  const postes = useGame((s) => s.postes);
+  const collection = useGame((s) => s.collection);
+  const fauneLevel = useGame((s) => s.fauneLevel);
   const [info, setInfo] = useState<ResourceId | null>(null);
 
-  // Chiffres EFFECTIFS (bâtiments × bonus de La Dérive) : le HUD doit dire ce que le
-  // tick applique réellement, sinon les gisements et vestiges seraient invisibles.
+  // Chiffres EFFECTIFS (bâtiments × ouvrières postées × bonus de La Dérive) : le HUD
+  // doit dire ce que le tick applique réellement, sinon les postes, les gisements et
+  // les vestiges seraient invisibles.
   // Calculés APRÈS sélection (et non dans un sélecteur) : ces fonctions renvoient un
   // nouvel objet à chaque appel, ce qu'un sélecteur Zustand ne tolère pas.
-  const view = { buildings, territoire };
-  const cap = stateStorageCap(view);
-  const prod = stateProductionPerHour(view);
+  // Aucun de ces quatre champs ne bouge à chaque tick — `fauneXp` est justement resté
+  // dehors pour ça, sinon le HUD se re-rendrait une fois par seconde.
+  const cap = stateStorageCap({ buildings, territoire });
+  const prod = stateProductionPerHour({ buildings, territoire, postes, collection, fauneLevel });
   const capped = cappedResources();
   const vitaliteMax = vitaliteTarget(buildings.mutation ?? 0, resources.vitalite);
 

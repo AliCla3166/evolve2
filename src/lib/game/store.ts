@@ -6,6 +6,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import {
+  acceptsPostes,
   boostQuote,
   buildTimeHours,
   buildTimeMs,
@@ -16,9 +17,11 @@ import {
   levelCost,
   maxLevel,
   OFFLINE_REPORT,
+  posteOf,
+  posteSlots,
   resourceCap,
   SAVE_VERSION,
-  stateProductionPerHour,
+  stateStorageCap,
   totalProductionPerHour,
 } from "./economy";
 import { effectiveReserveCap, freshBastionState } from "./bastion/config";
@@ -50,6 +53,7 @@ import {
   clampHabitValue,
   CALORIE_GOAL_MAX,
   CALORIE_GOAL_MIN,
+  canEditDay,
   computeStreak,
   dayKey,
   emptyDayEntry,
@@ -108,6 +112,7 @@ import {
   type FoyerState,
   type GameState,
   type HabitDayEntry,
+  type PosteAssignments,
   type ResourceId,
   type TerritoireState,
   type UnitId,
@@ -168,8 +173,14 @@ interface GameActions {
    *  `claimedMilestones` (piste 3). Renvoie false si le jalon est inconnu,
    *  déjà réclamé, ou pas encore atteint. */
   claimMilestone: (id: string) => boolean;
-  /** Édite la saisie d'habitudes DU JOUR uniquement (anti-triche : la clé est
-   *  toujours dayKey(Date.now()), l'historique passé est en lecture seule). */
+  /** Édite la saisie d'habitudes d'une journée de la FENÊTRE DE SAISIE
+   *  (aujourd'hui + les SAISIE_WINDOW_DAYS − 1 jours précédents). Toute clé
+   *  future ou hors fenêtre est ignorée sans bruit — le garde-fou est ici, pas
+   *  seulement dans l'UI. Une journée renseignée après son jour reçoit le
+   *  marqueur `late` : elle paie son énergie en entier, mais ne tient pas la
+   *  série (cf. habits_config.json → saisie). */
+  updateHabitDay: (key: string, patch: HabitPatch) => void;
+  /** Raccourci sur la journée en cours — le cas de très loin le plus fréquent. */
   updateHabitToday: (patch: HabitPatch) => void;
   /** Consomme le « jour de grâce » du mois pour recoller une journée oubliée
    *  (piste 6). Renvoie false s'il n'y a rien de réparable ou si la grâce du
@@ -205,6 +216,11 @@ interface GameActions {
    *  Exclusivité stricte : une créature ne tient qu'UN poste à la fois (défense,
    *  expédition, ou un seul gisement) — la poster la retire d'office d'ailleurs. */
   toggleCrew: (foyerId: string, speciesId: string) => boolean;
+  /** Poste/retire une créature dans un organe de la base (rôle "producer").
+   *  Gratuit et réversible à volonté : facturer l'expérimentation punirait exactement
+   *  ce qu'on veut encourager — essayer des combinaisons.
+   *  Même exclusivité stricte que `toggleCrew` : une créature ne fait qu'un métier. */
+  togglePoste: (buildingId: BuildingId, speciesId: string) => boolean;
   /** Ferme la modal de révélation. */
   clearLastCatch: () => void;
   /** Adopte une sauvegarde (sync cloud) — remplace l'état local entier. */
@@ -328,6 +344,25 @@ function stripFromCrews(t: TerritoireState, speciesId: string): TerritoireState 
   return touched ? { ...t, foyers } : t;
 }
 
+/** Retire une espèce de TOUS les postes de travail des organes.
+ *  Même contrat que `stripFromCrews` : si elle ne travaillait nulle part, on rend
+ *  l'objet d'origine tel quel. La production se lit à travers `postes` — lui donner
+ *  une nouvelle identité pour rien réveillerait le HUD et la carte de La Dérive. */
+function stripFromPostes(postes: PosteAssignments, speciesId: string): PosteAssignments {
+  let touched = false;
+  const out: PosteAssignments = {};
+  for (const [id, crew] of Object.entries(postes)) {
+    if (!crew) continue;
+    if (crew.includes(speciesId)) {
+      touched = true;
+      out[id as BuildingId] = crew.filter((s) => s !== speciesId);
+    } else {
+      out[id as BuildingId] = crew;
+    }
+  }
+  return touched ? out : postes;
+}
+
 /** Extrait la partie GameState pure du store (sans les actions). */
 function gameSlice(s: GameStore): GameState {
   return {
@@ -357,6 +392,9 @@ function gameSlice(s: GameStore): GameState {
     collection: s.collection,
     cardAssignments: s.cardAssignments,
     lastCatch: s.lastCatch,
+    postes: s.postes,
+    fauneXp: s.fauneXp,
+    fauneLevel: s.fauneLevel,
     bastion: s.bastion,
     territoire: s.territoire,
     bilan: s.bilan,
@@ -534,9 +572,14 @@ export const useGame = create<GameStore>()(
         return true;
       },
 
-      updateHabitToday: (patch) => {
-        const now = Date.now();
-        const key = dayKey(now); // saisie du jour calendaire local uniquement
+      updateHabitDay: (key, patch) => {
+        const todayKey = dayKey(Date.now());
+        // Le futur ne se remplit pas, et le passé se referme au bord de la
+        // fenêtre. Le refus vit ici : l'UI ne propose que des jours valides,
+        // mais elle n'est pas le dernier rempart (import de sauvegarde, cloud,
+        // horloge reculée…).
+        if (!canEditDay(key, todayKey)) return;
+
         const state = get();
         const habits = state.habits;
         const prev = habits.days[key] ?? emptyDayEntry();
@@ -558,8 +601,17 @@ export const useGame = create<GameStore>()(
         entry.energy = energy;
         entry.validatedCount = validatedCount;
 
-        // Delta d'énergie dû à l'édition (une journée re-modifiée le jour même
-        // ne crédite que la différence — jamais deux fois le total).
+        // ----- NOTÉE APRÈS COUP. Une journée remplie hors de son jour paie son
+        // énergie mais ne tiendra pas la série (cf. dayHoldsStreak). La garde
+        // `dejaTenuALHeure` est le point délicat de toute la fonctionnalité :
+        // sans elle, rectifier le nombre de pas d'hier ferait tomber une série
+        // de trente jours pour une faute de frappe. Une journée déjà tenue à
+        // l'heure ne peut donc JAMAIS devenir une journée notée après coup. -----
+        const dejaTenuALHeure = prev.validatedCount > 0 && !prev.late;
+        entry.late = key !== todayKey && !dejaTenuALHeure && validatedCount > 0;
+
+        // Delta d'énergie dû à l'édition (une journée re-modifiée ne crédite que
+        // la différence — jamais deux fois le total).
         let energyDelta = energy - prev.energy;
 
         // ----- Série (piste 6) : DÉRIVÉE de l'historique, plus de comptabilité
@@ -569,8 +621,13 @@ export const useGame = create<GameStore>()(
         // seul chemin de calcul, celui que lisent aussi le badge du HUD et la
         // grille d'historique. -----
         const days = { ...habits.days, [key]: entry };
-        const streak = computeStreak(days, habits.graceDays, key);
-        const settled = settleStreakTiers(habits.streakAwards, streak, key);
+        // La chaîne se lit TOUJOURS depuis aujourd'hui, quelle que soit la
+        // journée éditée : c'est la série en cours qu'on met à jour, pas celle
+        // qui courait le jour qu'on est en train de remplir. Même raison pour
+        // les paliers — leur date d'attribution (et donc la reprise possible)
+        // se juge au jour courant.
+        const streak = computeStreak(days, habits.graceDays, todayKey);
+        const settled = settleStreakTiers(habits.streakAwards, streak, todayKey);
         energyDelta += settled.energyDelta;
 
         const energie = Math.min(
@@ -584,12 +641,14 @@ export const useGame = create<GameStore>()(
             ...habits,
             days,
             streak,
-            streakDay: key,
+            streakDay: todayKey,
             bestStreak: Math.max(habits.bestStreak, streak),
             streakAwards: settled.awards,
           },
         });
       },
+
+      updateHabitToday: (patch) => get().updateHabitDay(dayKey(Date.now()), patch),
 
       repairStreak: () => {
         const now = Date.now();
@@ -795,11 +854,12 @@ export const useGame = create<GameStore>()(
           next[slot] = [...next[slot], speciesId];
         }
         // Exclusivité : une créature en défense ou en expédition quitte son poste de
-        // récolte. Sans ça, la même carte compterait deux fois (bonus militaire ET
-        // rendement de gisement) et se verrait travailler sur la carte tout en étant
-        // censée garder le Bastion — incohérent à l'écran comme à l'équilibrage.
+        // récolte ET son poste d'organe. Sans ça, la même carte compterait deux fois
+        // (bonus militaire ET rendement) et se verrait travailler à la base tout en
+        // étant censée garder le Bastion — incohérent à l'écran comme à l'équilibrage.
         const territoire = inSlot ? get().territoire : stripFromCrews(get().territoire, speciesId);
-        set({ cardAssignments: next, territoire });
+        const postes = inSlot ? get().postes : stripFromPostes(get().postes, speciesId);
+        set({ cardAssignments: next, territoire, postes });
         return true;
       },
 
@@ -829,10 +889,11 @@ export const useGame = create<GameStore>()(
 
         if (current.length >= crewSlots(state.territoire, foyerId)) return false; // gisement plein
         // Exclusivité, dans l'autre sens : poster une créature la retire de la défense,
-        // des expéditions et de tout autre gisement.
+        // des expéditions, de tout autre gisement et de tout organe de la base.
         const base = stripFromCrews(state.territoire, speciesId);
         const st = base.foyers[foyerId];
         set({
+          postes: stripFromPostes(state.postes, speciesId),
           cardAssignments: {
             defense: state.cardAssignments.defense.filter((id) => id !== speciesId),
             expedition: state.cardAssignments.expedition.filter((id) => id !== speciesId),
@@ -844,6 +905,40 @@ export const useGame = create<GameStore>()(
               [foyerId]: { ...st, crew: [...(st.crew ?? []), speciesId] },
             },
           },
+        });
+        return true;
+      },
+
+      togglePoste: (buildingId, speciesId) => {
+        const state = get();
+        if (!state.collection[speciesId] || !SPECIES_IDS.includes(speciesId)) return false;
+        // Seuls les organes qui produisent quelque chose ont des postes — la liste
+        // n'est écrite nulle part, elle se déduit du rôle déclaré dans le config.
+        if (!acceptsPostes(buildingId)) return false;
+        const slots = posteSlots(buildingId, state.buildings[buildingId] ?? 0);
+        if (slots <= 0) return false; // organe pas encore bâti
+
+        const current = posteOf(state, buildingId);
+        if (current.includes(speciesId)) {
+          set({
+            postes: { ...state.postes, [buildingId]: current.filter((id) => id !== speciesId) },
+          });
+          return true;
+        }
+        if (current.length >= slots) return false; // toutes les places sont prises
+
+        // Exclusivité : poster une créature la retire de la défense, des expéditions,
+        // des équipages de gisement et de tout autre organe. Sans ça la même carte
+        // compterait deux fois à l'équilibrage, et se verrait travailler à deux
+        // endroits à la fois une fois la mise en scène branchée.
+        const base = stripFromPostes(state.postes, speciesId);
+        set({
+          postes: { ...base, [buildingId]: [...(base[buildingId] ?? []), speciesId] },
+          cardAssignments: {
+            defense: state.cardAssignments.defense.filter((id) => id !== speciesId),
+            expedition: state.cardAssignments.expedition.filter((id) => id !== speciesId),
+          },
+          territoire: stripFromCrews(state.territoire, speciesId),
         });
         return true;
       },
@@ -1043,7 +1138,7 @@ export const useGame = create<GameStore>()(
         s.bastion.sortieTargetId = targetId;
         s.bastion.sortiePeril = Math.max(
           0,
-          Math.min(maxPeril(), Math.max(Math.round(peril), opt?.forced_peril ?? 0)),
+          Math.min(maxPeril(s.bastion.bestPeril), Math.max(Math.round(peril), opt?.forced_peril ?? 0)),
         );
         s.bastion.sortiePreparatifs = [...preparatifIds];
         s.bastion.sortiePerceeId = opt ? perceeOptionId! : null;
@@ -1067,13 +1162,13 @@ export const useGame = create<GameStore>()(
         const foyer = foyerDef(foyerId);
         if (!foyer || !isCaptured(s.territoire, foyerId)) return false;
         const dev = devLevel(s.territoire, foyerId);
-        /* `stateProductionPerHour` et non `totalProductionPerHour` : la fiche du foyer
-           affiche le coût avec ce calcul-là (vestiges `production_mult` compris). Les
-           deux divergeaient dès qu'un vestige de production était pris — l'écran
-           annonçait un prix, le moteur en prélevait un autre. Le devis est désormais
-           calculé une seule façon, et c'est celle qui reflète la production réelle :
-           un développement coûte N heures de ce que le joueur produit VRAIMENT. */
-        const cost = devCost(foyer, dev, stateProductionPerHour(s));
+        /* `stateStorageCap` et non `storageCap` : la fiche du foyer chiffre le coût
+           avec ce calcul-là (vestiges `storage_mult` compris). Les deux divergeaient
+           dès qu'un vestige de stockage était pris — l'écran annonçait un prix, le
+           moteur en prélevait un autre. Le devis se calcule d'une seule façon, et
+           c'est celle qui reflète la réserve réelle du joueur : un développement
+           coûte une part de ce que sa base peut VRAIMENT contenir. */
+        const cost = devCost(foyer, dev, stateStorageCap(s));
         if (!cost) return false;
         if (s.resources[cost.resource] < cost.amount) return false;
         if (s.resources.combat < cost.combat) return false;
@@ -1296,6 +1391,24 @@ export const useGame = create<GameStore>()(
           for (const st of Object.values(state.territoire?.foyers ?? {})) {
             if (st.crew === undefined) st.crew = [];
           }
+        }
+        // v14 -> v15 : les postes de travail. Les trois tables partent vides, et c'est
+        // une valeur PROUVÉE neutre : aucun poste ⇒ posteBonus = 0 ⇒ posteMult = 1
+        // exactement, donc stateProductionPerHour rend le même nombre qu'avant, au bit
+        // près. Une sauvegarde existante ne gagne ni ne perd un point de production ;
+        // elle découvre juste des places de travail vides dans ses organes.
+        if (version < 15 || state.postes === undefined) {
+          state.postes = {};
+          state.fauneXp = {};
+          state.fauneLevel = {};
+        }
+        // v15 -> v16 : l'échelle de Péril n'a plus de dernier barreau, et le Bastion
+        // retient le plus haut cran remporté pour savoir lequel proposer ensuite.
+        // 0 est la bonne valeur de départ pour une sauvegarde existante : les cinq crans
+        // nommés restent tous ouverts (`maxPeril` ne descend jamais sous l'échelle
+        // écrite), le joueur ne perd donc aucun accès — il gagne seulement la suite.
+        if (version < 16 || state.bastion.bestPeril === undefined) {
+          state.bastion.bestPeril = 0;
         }
         state.saveVersion = SAVE_VERSION;
         return state;

@@ -119,6 +119,10 @@ export interface BastionState {
   sortieTargetId: string | null;
   /** Péril choisi pour la sortie en cours (index dans sorties.peril.levels). */
   sortiePeril: number;
+  /** Cran de Péril le plus haut jamais REMPORTÉ. Sert à ouvrir le suivant, et lui seul :
+   *  l'échelle proposée s'arrête toujours un cran au-dessus de celui-ci (cf. `maxPeril`),
+   *  donc elle ne montre jamais son dernier barreau. Ne redescend jamais. */
+  bestPeril: number;
   /** Ids des préparatifs achetés pour la sortie en cours. */
   sortiePreparatifs: string[];
   /** Option de Percée dépensée pour lancer la sortie en cours (`vague_percee`,

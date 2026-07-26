@@ -124,16 +124,61 @@ def boost_quote(t, h):
     cost = max(1, -(-(hours * BOOST["energy_per_hour"] * mult) // 1))  # ceil
     return hours, cost
 
-def production_per_hour(levels):
+def production_per_hour(levels, postes=None, worker_mult=None):
+    """Miroir de economy.ts stateProductionPerHour (hors vestiges de La Derive, que ce
+    simulateur ne modelise pas). `worker_mult` est une fonction (batiment -> facteur)
+    fournie par la simulation quand les postes sont actifs ; sans elle le calcul est
+    rigoureusement celui d'avant les postes."""
     out = {r: 0.0 for r in PRODUCIBLE}
     out["vitalite"] = 0.0
     for b, lvl in levels.items():
         if lvl <= 0:
             continue
         prod = (lvl_cfg(b, lvl) or {}).get("production_per_hour", {})
+        boost = worker_mult(b) if worker_mult is not None else 1.0
         for r, v in prod.items():
-            out[r] = out.get(r, 0.0) + v
+            out[r] = out.get(r, 0.0) + v * boost
     return out
+
+# ------------------------------------------------------- les postes (26/07)
+# Miroir exact du moteur de economy.ts : memes formules, meme fichier de tuning.
+# Le simulateur et le jeu lisent economy_config.json -> postes, ils ne peuvent donc
+# pas diverger. Ce bloc existe pour une seule question : est-ce que le bonus des
+# ouvrieres pechees sort la duree vecue de la fenetre 81-99 jours ?
+POSTES = ECO["postes"]
+AFFINITY = {s["id"]: s.get("affinity") for s in MARE["species"]}
+POSTE_BUILDINGS = [b for b, cfg in ECO["buildings"].items() if cfg.get("role") == "producer"]
+
+def poste_resource(b):
+    prod = (ECO["buildings"][b]["levels"].get("1") or {}).get("production_per_hour") or {}
+    return next(iter(prod), None)
+
+POSTE_RESOURCE = {b: poste_resource(b) for b in POSTE_BUILDINGS}
+
+def poste_slots(b, lvl):
+    if lvl <= 0 or b not in POSTE_RESOURCE:
+        return 0
+    return min(POSTES["slots_max"], POSTES["slots_base"] + POSTES["slots_per_level"] * (lvl - 1))
+
+def work_level(xp):
+    if xp <= 0:
+        return 1
+    return 1 + int((xp / POSTES["level_xp_base"]) ** (1.0 / POSTES["level_exponent"]))
+
+def poste_xp_per_hour(lvl):
+    if lvl <= 0:
+        return 0.0
+    return POSTES["xp_per_hour"] + POSTES["xp_per_hour_per_building_level"] * lvl
+
+def poste_mult(bonus):
+    if bonus <= 0:
+        return 1.0
+    return 1.0 + POSTES["span"] * bonus / (bonus + POSTES["half"])
+
+# Bascule globale : --sans-postes rejoue exactement le calibrage d'avant le 26/07,
+# ce qui rend la comparaison A/B honnete (memes graines, meme code, un seul systeme
+# de difference).
+POSTES_ON = True
 
 # ---------------------------------------------------------------- militaire
 def success_chance(exp_power, atk_power, difficulty, risk):
@@ -175,6 +220,8 @@ def simulate(archetype, seed, max_days=150, verbose=False):
     builds = []               # file multi-slots : [{fin, bat, niv, slot, total_h, boosted_h}]
     expeditions = []          # [(fin_h, exp_power, atk_power, difficulty, risk, tier, squad)]
     collection = {}
+    postes = {}               # organe -> [id d'espece] (miroir de GameState.postes)
+    faune_xp = {}             # id d'espece -> anciennete de travail
     fragments = 0
     next_wave_h = MIL["pathogens"]["first_attack_delay_h"]
     next_event_h = rng.uniform(*MIL["events"]["interval_h"])
@@ -187,6 +234,71 @@ def simulate(archetype, seed, max_days=150, verbose=False):
     streak = 0
     streak_awards = set()
     grace_window = -1  # index de fenetre de 30 j ou le jour de grace a deja servi
+
+    # ---------------------------------------------------------- les postes
+    # Le joueur simule ici est OPTIMISTE : il reposte ses meilleures ouvrieres chaque
+    # jour, sans jamais se tromper. C'est volontaire — on cherche la borne BASSE de la
+    # duree vecue, celle qui ferait sortir la fenetre par le haut du bonus.
+    _pow_cache = {}
+
+    def card_power_rec(sid, e):
+        key = (sid, e["count"], e["best"])
+        v = _pow_cache.get(key)
+        if v is None:
+            sp = species_by_id[sid]
+            w = MARE["recolte"]["stat_weights"]
+            raw = sp["power_def"] * w["def"] + sp["power_exp"] * w["exp"] + sp["power_atk"] * w["atk"]
+            v = round(raw * card_mult(e))
+            _pow_cache[key] = v
+        return v
+
+    def worker_bonus(sid, res):
+        e = collection.get(sid)
+        if not e:
+            return 0.0
+        b = (POSTES["bonus_per_worker"]
+             + POSTES["bonus_per_power"] * card_power_rec(sid, e)
+             + POSTES["bonus_per_work_level"] * (work_level(faune_xp.get(sid, 0.0)) - 1))
+        return b * POSTES["affinity_mult"] if (res is not None and AFFINITY.get(sid) == res) else b
+
+    def building_mult(b):
+        crew = postes.get(b)
+        if not crew:
+            return 1.0
+        res = POSTE_RESOURCE.get(b)
+        cap = poste_slots(b, levels.get(b, 0))
+        return poste_mult(sum(worker_bonus(sid, res) for sid in crew[:cap]))
+
+    def reassign_postes():
+        """Glouton : chaque organe prend, pour ses places ouvertes, les especes
+        disponibles qui lui rapportent le plus (l'affinite compte, le niveau aussi).
+        Une espece ne tient qu'un poste a la fois."""
+        taken = set()
+        postes.clear()
+        # Les organes les plus developpes servent en premier : ce sont eux qui ont le
+        # plus de places et qui produisent le plus, donc c'est la que le joueur pose
+        # ses meilleures prises.
+        for b in sorted(POSTE_BUILDINGS, key=lambda x: -levels.get(x, 0)):
+            cap = poste_slots(b, levels.get(b, 0))
+            if cap <= 0:
+                continue
+            res = POSTE_RESOURCE.get(b)
+            ranked = sorted(
+                (sid for sid in collection if sid not in taken),
+                key=lambda sid: -worker_bonus(sid, res),
+            )[:cap]
+            if ranked:
+                postes[b] = ranked
+                taken.update(ranked)
+
+    def accrue_work_xp(hours):
+        for b, crew in postes.items():
+            lvl = levels.get(b, 0)
+            gain = poste_xp_per_hour(lvl) * hours
+            if gain <= 0:
+                continue
+            for sid in crew[:poste_slots(b, lvl)]:
+                faune_xp[sid] = faune_xp.get(sid, 0.0) + gain
 
     def deployed():
         d = {u: 0 for u in UNITS}
@@ -292,8 +404,15 @@ def simulate(archetype, seed, max_days=150, verbose=False):
         day = h / 24.0
         hour_of_day = h % 24
 
+        # ---- les postes : on repose l'equipage une fois par jour, puis on encaisse
+        # l'anciennete de l'heure ecoulee (memes segments que la production).
+        if POSTES_ON:
+            if hour_of_day == 0:
+                reassign_postes()
+            accrue_work_xp(hours_per_step)
+
         # ---- production continue
-        rate = production_per_hour(levels)
+        rate = production_per_hour(levels, worker_mult=building_mult if POSTES_ON else None)
         for r, v in rate.items():
             if r == "vitalite":
                 stock["vitalite"] += v * hours_per_step
@@ -507,7 +626,14 @@ def main():
     ap.add_argument("--streak", choices=["config", "legacy", "none"], default="config",
                     help="table de paliers de serie : celle du jeu (config), celle "
                          "d'avant la piste 6 (legacy), ou aucune (none)")
+    ap.add_argument("--sans-postes", dest="sans_postes", action="store_true",
+                    help="desactive les ouvrieres postees (calibrage d'avant le 26/07) : "
+                         "sert de reference A/B pour mesurer ce que les postes deplacent")
     args = ap.parse_args()
+
+    global POSTES_ON
+    POSTES_ON = not args.sans_postes
+    print(f"Postes de travail : {'actifs' if POSTES_ON else 'DESACTIVES (reference)'}")
 
     global STREAK_TABLE
     STREAK_TABLE = {"config": HAB["streak"]["tiers"], "legacy": LEGACY_TIERS, "none": []}[args.streak]

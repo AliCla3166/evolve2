@@ -1,5 +1,5 @@
 {
-  "$comment": "Modele economique complet et modifiable de l'Age 1 'Cellule' d'EVOLVE. Genere par economy/export_json.py a partir de economy/model.py (source de verite). Perimetre : 9 batiments (hors mini-jeux Peche/Bastion-Defense/Bastion-Raid, marques designed:false). Pour retoucher le calibrage : modifier les constantes en tete de model.py (PARALLEL_UPLIFT, TIME_BUDGET_SHARES, TIME_RATIO, PROD_RATIO, COST_RATIO, COST_SCALE, STARTING_STOCK, BASE_CAP) puis relancer 'python3 export_json.py' — le script reecrit src/data/economy_config.json en preservant les blocs regles a la main (build_slots, offline_report, energy_boost). Toute modification du calibrage doit etre revalidee par 'python3 simulate_full.py --seeds 12'.",
+  "$comment": "Modele economique complet et modifiable de l'Age 1 'Cellule' d'EVOLVE. Genere par economy/export_json.py a partir de economy/model.py (source de verite). Perimetre : 9 batiments (hors mini-jeux Peche/Bastion-Defense/Bastion-Raid, marques designed:false). Pour retoucher le calibrage : modifier les constantes en tete de model.py (PARALLEL_UPLIFT, TIME_BUDGET_SHARES, TIME_RATIO, PROD_RATIO, COST_RATIO, COST_SCALE, STARTING_STOCK, BASE_CAP) puis relancer 'python3 export_json.py' — le script reecrit src/data/economy_config.json en preservant les blocs regles a la main (build_slots, offline_report, energy_boost, postes). Toute modification du calibrage doit etre revalidee par 'python3 simulate_full.py --seeds 12'.",
   "age": "age01_cellule",
   "global_params": {
     "total_target_days": 90,
@@ -45,6 +45,29 @@
     "energy_per_hour": 8,
     "cost_growth_at_cap": 0.6,
     "min_step_minutes": 5
+  },
+  "postes": {
+    "$comment": "LES POSTES DE TRAVAIL (26/07) — le pendant, cote base, de l'equipage de recolte de La Derive (territoire_config.json -> recolte). On peche une creature, on la POSTE dans un organe producteur, elle y travaille a l'ecran, et l'organe produit davantage. C'est ce qui donne enfin une raison de collectionner les 62 especes : les places sont rares, chaque espece a une AFFINITE avec une ressource (mare_config.json -> species[].affinity), et une ouvriere postee gagne un NIVEAU DE TRAVAIL qui n'a pas de plafond.",
+    "$comment_batiments": "Seuls les organes de role \"producer\" (les six productibles) acceptent des postes : c'est le seul endroit ou un bonus de production a un sens. Le Noyau (vitalite), la Membrane, la Mutation et les trois centres de mini-jeu n'en ont pas. La liste n'est ecrite nulle part : elle se lit dans buildings[].role, donc elle suivra automatiquement tout organe producteur ajoute plus tard.",
+    "$comment_places": "Les places d'un organe suivent son niveau : slots_base + slots_per_level * (niveau - 1), soit 1 place des la construction et 5 a plein developpement. Ameliorer un organe ne monte donc plus seulement sa production, il ouvre aussi de la place pour la collection — les deux progressions se nourrissent, exactement comme les gisements de La Derive. slots_max existe pour la meme raison que la-bas : au-dela, la scene devient illisible sur un telephone.",
+    "$comment_stat": "La puissance d'une ouvriere est EXACTEMENT sa puissance de recolte (cards.ts -> cardPowerRec, ponderee par mare_config.json -> recolte.stat_weights). Aucune nouvelle donnee par espece hormis l'affinite : une seule stat << Recolte >> sur la carte, qui vaut aux gisements ET aux postes. Une chose de moins a expliquer au joueur, une chose de moins a equilibrer.",
+    "$comment_plafond": "Le multiplicateur d'un organe est SATURANT : 1 + span * B / (B + half), donc borne par 1 + span = x2,2 quoi qu'il arrive, ou B est la somme des apports des ouvrieres postees. Chaque niveau d'ouvriere fait monter le chiffre affiche ; aucun ne peut faire exploser l'equilibrage. Le calibrage 81-99 jours tient d'autant mieux que le temps de chantier — plus de 96 % du chemin critique, cf. pacing_validation — n'est jamais touche : les postes n'accelerent que l'accumulation de ressources, qui pese moins de 4 %.",
+    "$comment_niveaux": "Courbe POLYNOMIALE, pas geometrique : l'XP cumulee necessaire au niveau L vaut level_xp_base * (L-1)^level_exponent. L'inversion est fermee et O(1) — level = 1 + floor((xp / level_xp_base) ^ (1 / level_exponent)) — donc il n'existe aucune table a borner, et donc aucun dernier niveau. Une geometrique aurait rendu les hauts niveaux inatteignables ; ici ils continuent d'arriver, de plus en plus lentement, sans jamais s'arreter. Ordre de grandeur : niveau 2 en 4 h de travail, 10 en ~6 j, 20 en ~15 j, ~45 au bout des 90 jours de l'Age 1, et ca continue.",
+    "$comment_anciennete": "Le niveau appartient a la CREATURE (GameState.faune), pas au poste : une ouvriere deplacee d'un organe a l'autre garde son anciennete. L'XP se gagne plus vite dans un organe developpe (xp_per_hour_per_building_level), donc poster une jeune recrue chez le voisin de niveau 5 est une vraie decision.",
+    "$comment_gratuit": "Poster et retirer une ouvriere est GRATUIT et instantane, volontairement. Le cout, c'est le choix : les places sont rares et une creature ne peut tenir qu'un seul emploi a la fois (defense, expedition, gisement ou poste). Facturer l'experimentation aurait puni exactement ce qu'on veut encourager — essayer des combinaisons.",
+    "slots_base": 1,
+    "slots_per_level": 1,
+    "slots_max": 5,
+    "bonus_per_worker": 0.1,
+    "bonus_per_power": 0.012,
+    "bonus_per_work_level": 0.02,
+    "affinity_mult": 1.5,
+    "span": 1.2,
+    "half": 1.5,
+    "xp_per_hour": 0.6,
+    "xp_per_hour_per_building_level": 0.35,
+    "level_xp_base": 4.0,
+    "level_exponent": 1.7
   },
   "buildings": {
     "noyau": {

@@ -284,9 +284,10 @@ export function buySpecCap(state: GameState): boolean {
   return true;
 }
 
+/** Le seul achat du Bastion qui n'a pas de dernier niveau : aucun test de plafond ici,
+ *  c'est volontaire (cf. le $comment de `foundations` dans bastion_config.json). */
 export function buyFoundations(state: GameState): boolean {
   const b = state.bastion;
-  if (b.slotBonusLevel >= BASTION.foundations.max_level) return false;
   if (!spend(state, foundationsCost(b.slotBonusLevel))) return false;
   b.slotBonusLevel += 1;
   return true;

@@ -12,6 +12,7 @@ import {
   useRef,
 } from "react";
 import { cardArt, speciesConfig } from "@/lib/game/cards";
+import { creatureSprite } from "@/lib/game/sprites";
 import {
   activeBarracksSlots,
   activeMortarSlots,
@@ -422,9 +423,11 @@ export const BastionScene = forwardRef<BastionSceneHandle, BastionSceneProps>(fu
         } else if (!battle) {
           const sp = speciesConfig(s.occupant);
           drawGroundShadow(ctx, s.x, s.y + 11 * scale, 11 * scale, 4 * scale, 0.35);
-          const img = getImage(cardArt(s.occupant));
+          // Portrait détouré (cf. sprites.ts) : posé brut, le buste 64×64 devient
+          // une vignette carrée collée sur le champ de bataille.
+          const img = creatureSprite(cardArt(s.occupant));
           const size = 26 * scale;
-          if (ready(img)) ctx.drawImage(img, s.x - size / 2, s.y - size / 2 - 3 * scale, size, size);
+          if (img) ctx.drawImage(img, s.x - size / 2, s.y - size / 2 - 3 * scale, size, size);
           ctx.font = `${Math.round(7.5 * scale)}px monospace`;
           ctx.fillStyle = "rgba(207,232,242,0.7)";
           ctx.textAlign = "center";
@@ -455,9 +458,9 @@ export const BastionScene = forwardRef<BastionSceneHandle, BastionSceneProps>(fu
         } else if (!battle) {
           const sp = speciesConfig(s.occupant);
           drawGroundShadow(ctx, s.x, s.y + 13 * scale, 12 * scale, 4 * scale, 0.35);
-          const img = getImage(cardArt(s.occupant));
+          const img = creatureSprite(cardArt(s.occupant));
           const size = 28 * scale;
-          if (ready(img)) ctx.drawImage(img, s.x - size / 2, s.y - size / 2 - 2 * scale, size, size);
+          if (img) ctx.drawImage(img, s.x - size / 2, s.y - size / 2 - 2 * scale, size, size);
           ctx.font = `${Math.round(7.5 * scale)}px monospace`;
           ctx.fillStyle = "rgba(207,232,242,0.7)";
           ctx.textAlign = "center";
@@ -521,12 +524,12 @@ export const BastionScene = forwardRef<BastionSceneHandle, BastionSceneProps>(fu
         battle.troops.forEach((tr) => {
           const scale = depthScale(tr.y);
           drawGroundShadow(ctx, tr.x, tr.y + 14 * scale, 10 * scale, 3.5 * scale, 0.4);
-          const img = getImage(cardArt(tr.speciesId));
+          const img = creatureSprite(cardArt(tr.speciesId));
           const size = 26 * scale;
           ctx.save();
           if (tr.hitFlash > 0) ctx.globalAlpha = 0.6;
           if (tr.dying) ctx.globalAlpha = Math.max(0, 1 - tr.deathTimer / 0.3);
-          if (ready(img)) ctx.drawImage(img, tr.x - size / 2, tr.y - size / 2 - 6 * scale, size, size);
+          if (img) ctx.drawImage(img, tr.x - size / 2, tr.y - size / 2 - 6 * scale, size, size);
           ctx.restore();
           if (!tr.dying) drawHpBar(ctx, tr.x, tr.y + 11 * scale, 24 * scale, 3, tr.hp / tr.hpMax, tr.kind === "mortar" ? "#c9a877" : "#a6ff3d");
         });
@@ -535,11 +538,11 @@ export const BastionScene = forwardRef<BastionSceneHandle, BastionSceneProps>(fu
           const scale = depthScale(en.y);
           const size = (en.isBoss ? 46 : 24) * scale;
           drawGroundShadow(ctx, en.x, en.y + (en.isBoss ? 18 : 9) * scale, (en.isBoss ? 16 : 8) * scale, (en.isBoss ? 6 : 3) * scale, 0.35);
-          const img = getImage(cardArt(en.typeId));
+          const img = creatureSprite(cardArt(en.typeId));
           ctx.save();
           if (en.hitFlash > 0) ctx.globalAlpha = 0.55;
           if (en.dying) ctx.globalAlpha = Math.max(0, 1 - en.deathTimer / 0.3);
-          if (ready(img)) ctx.drawImage(img, en.x - size / 2, en.y - size / 2, size, size);
+          if (img) ctx.drawImage(img, en.x - size / 2, en.y - size / 2, size, size);
           ctx.restore();
           if (!en.dying) {
             drawHpBar(ctx, en.x, en.y - size / 2 - 6, (en.isBoss ? 42 : 22) * scale, 3, en.hp / en.hpMax, "#ff4d5e");

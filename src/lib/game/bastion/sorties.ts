@@ -28,12 +28,45 @@ export const PERILS: ReadonlyArray<PerilDef> = SORTIES.peril.levels;
 /** Les préparatifs achetables en énergie juste avant de lancer. */
 export const PREPARATIFS: ReadonlyArray<PreparatifDef> = SORTIES.preparatifs;
 
+/** Le cran de Péril `level`, écrit à la main s'il existe, DÉDUIT au-delà.
+ *
+ *  Les cinq premiers barreaux portent un nom et une intention, ils restent en dur dans
+ *  le JSON. Passé le dernier, on prolonge géométriquement : le cran 5 vaut le cran 4
+ *  multiplié une fois par `endless`, le cran 6 deux fois, etc. Aucun dernier barreau
+ *  n'existe donc — c'est tout l'objet de la fonction. L'invariant du bloc tient à
+ *  chaque cran déduit comme aux cinq écrits : `loot_growth > hp_growth`, donc monter
+ *  reste toujours le bon pari.
+ *
+ *  Le nom affiché devient « Cataclysmique +3 » : on lit d'un coup d'œil de combien on a
+ *  dépassé le dernier palier nommé, ce qu'un simple « Péril 7 » ne dirait pas. */
 export function perilDef(level: number): PerilDef {
-  return PERILS[Math.max(0, Math.min(PERILS.length - 1, Math.round(level)))];
+  const last = PERILS[PERILS.length - 1];
+  const lvl = Math.max(0, Math.round(level));
+  if (lvl < PERILS.length) return PERILS[lvl];
+  const e = SORTIES.peril.endless;
+  const n = lvl - last.id;
+  return {
+    id: lvl,
+    name: `${last.name} +${n}`,
+    hp_mult: round2(last.hp_mult * Math.pow(e.hp_growth, n)),
+    dmg_mult: round2(last.dmg_mult * Math.pow(e.dmg_growth, n)),
+    loot_mult: round2(last.loot_mult * Math.pow(e.loot_growth, n)),
+    extra_bosses: last.extra_bosses + Math.floor(n / e.extra_boss_every),
+  };
 }
 
-export function maxPeril(): number {
-  return PERILS.length - 1;
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+/** Le cran le plus haut PROPOSÉ au joueur : toujours un de plus que le meilleur qu'il
+ *  ait franchi, jamais moins que l'échelle nommée au complet.
+ *
+ *  C'est la règle qui fait qu'on ne voit jamais la fin : le panneau montre en permanence
+ *  un barreau au-dessus du dernier gagné, sans jamais l'imposer (perdre une sortie ne
+ *  coûte rien). Un plafond fixe, lui, annonce au joueur la date de fin de son jeu. */
+export function maxPeril(bestPeril = 0): number {
+  return Math.max(PERILS.length - 1, Math.max(0, Math.round(bestPeril)) + 1);
 }
 
 export function preparatifDef(id: string): PreparatifDef | undefined {
