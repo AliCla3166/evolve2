@@ -16,8 +16,15 @@
     "streak": "Serie en cours de jours consecutifs avec au moins une habitude validee.",
     "expeditions_sent": "Expeditions envoyees depuis le debut de la partie.",
     "waves_survived": "Vagues de pathogenes affrontees (auto-resolues ou jouees).",
-    "bastion_waves": "Vagues jouees en direct au Bastion-Defense.",
-    "species_total": "(target_metric) Nombre total d'especes existantes, lu dans mare_config.json."
+    "bastion_waves": "Vagues jouees en direct au Bastion-Defense (sorties comprises).",
+    "species_total": "(target_metric) Nombre total d'especes existantes, lu dans mare_config.json.",
+    "$comment_2607": "SIX METRIQUES NOUVELLES (26/07/2026, amelioration n4 du retour complet). Constat mesure : sur les 22 jalons d'origine, DEUX SYSTEMES ENTIERS n'en avaient aucun — La Derive (29 foyers, 4 secteurs, reconquete infinie : zero objectif dans tout le jeu) et le Bilan du soir / les Percees, qui sont pourtant l'identite d'Evolve2. La discipline n'etait mesuree que par `streak`. Les 16 jalons ajoutes ne fabriquent AUCUN contenu : ils NOMMENT ce qui existe deja. Cadence : de 22 jalons pour 90 jours (un tous les 4,1 j) a 38 (un tous les 2,4 j). Toutes ces metriques restent des fonctions PURES de l'etat, conformement a la doctrine du module — aucun compteur nouveau a persister. Cibles choisies ATTEIGNABLES par tous les archetypes mesures (lecon du jalon serie_90) : le secteur 4 s'ouvre au palier 40, hors de portee des ~36 vagues de 90 jours, donc PAS de jalon dessus ; pas non plus de jalon << 29 foyers >>.",
+    "foyers_captured": "Foyers de La Derive captures (capturedAt > 0), toutes natures confondues.",
+    "sectors_unlocked": "Secteurs de la carte ouverts par le palier courant (waveCount).",
+    "percees_total": "Percees gagnees depuis le debut (bilan.perceesTotal — chaque Bilan valide en verse au moins une).",
+    "percees_spent": "Percees depensees depuis le debut (bilan.perceesSpent — une Percee encaissee mais jamais jouee ne raconte rien).",
+    "perfect_days": "Journees parfaites dans l'historique (les 4 piliers valides, cf. isPerfectDay).",
+    "reconquetes": "Reprises de foyers deja captures (somme des runs au-dela de la premiere victoire, foyers non repetables)."
   },
   "milestones": [
     {
@@ -57,6 +64,30 @@
       }
     },
     {
+      "id": "premiere_percee",
+      "category": "discipline",
+      "label": "Première Percée",
+      "hint": "Valide ton Bilan du soir (dès 17 h) : une bonne journée réelle devient un événement de jeu.",
+      "metric": "percees_total",
+      "target": 1,
+      "age_points": 20,
+      "reward": {
+        "energie": 40
+      }
+    },
+    {
+      "id": "premiere_journee_parfaite",
+      "category": "discipline",
+      "label": "Première journée parfaite",
+      "hint": "Les 4 piliers validés le même jour — chaque pilier se contente d'une seule de ses habitudes.",
+      "metric": "perfect_days",
+      "target": 1,
+      "age_points": 30,
+      "reward": {
+        "energie": 80
+      }
+    },
+    {
       "id": "mue_2",
       "category": "croissance",
       "label": "Deuxième mue — la membrane s'épaissit",
@@ -78,6 +109,30 @@
       "age_points": 20,
       "reward": {
         "combat": 50
+      }
+    },
+    {
+      "id": "premier_foyer",
+      "category": "expansion",
+      "label": "Premier foyer sécurisé",
+      "hint": "Lance une sortie sur un foyer de La Dérive — tu as 3 sorties gratuites par jour.",
+      "metric": "foyers_captured",
+      "target": 1,
+      "age_points": 25,
+      "reward": {
+        "combat": 80
+      }
+    },
+    {
+      "id": "percee_depensee",
+      "category": "discipline",
+      "label": "Percée jouée",
+      "hint": "Une Percée encaissée mais jamais dépensée ne raconte rien : déclenche-la.",
+      "metric": "percees_spent",
+      "target": 1,
+      "age_points": 20,
+      "reward": {
+        "combat": 60
       }
     },
     {
@@ -114,6 +169,30 @@
       "age_points": 30,
       "reward": {
         "jetons": 3
+      }
+    },
+    {
+      "id": "cinq_foyers",
+      "category": "expansion",
+      "label": "Cinq foyers sécurisés",
+      "hint": "Chaque gisement pris produit pour toi, chaque vestige te renforce.",
+      "metric": "foyers_captured",
+      "target": 5,
+      "age_points": 50,
+      "reward": {
+        "signaux": 150
+      }
+    },
+    {
+      "id": "deux_secteurs",
+      "category": "expansion",
+      "label": "Les Récifs s'ouvrent",
+      "hint": "Le deuxième secteur s'ouvre au palier 8 — chaque vague affrontée fait monter le palier.",
+      "metric": "sectors_unlocked",
+      "target": 2,
+      "age_points": 40,
+      "reward": {
+        "combat": 100
       }
     },
     {
@@ -165,6 +244,30 @@
       }
     },
     {
+      "id": "premiere_reconquete",
+      "category": "expansion",
+      "label": "Première reconquête",
+      "hint": "Reprends un foyer déjà à toi : le palier monte, le butin de reconquête aussi.",
+      "metric": "reconquetes",
+      "target": 1,
+      "age_points": 40,
+      "reward": {
+        "combat": 120
+      }
+    },
+    {
+      "id": "cinq_journees_parfaites",
+      "category": "discipline",
+      "label": "Cinq journées parfaites",
+      "hint": "Cinq jours où les 4 piliers ont tenu ensemble.",
+      "metric": "perfect_days",
+      "target": 5,
+      "age_points": 70,
+      "reward": {
+        "energie": 200
+      }
+    },
+    {
       "id": "premiere_mythique",
       "category": "collection",
       "label": "Une mythique au bout de la ligne",
@@ -189,6 +292,18 @@
       }
     },
     {
+      "id": "douze_percees",
+      "category": "discipline",
+      "label": "Douze Percées gagnées",
+      "hint": "Douze soirs où la journée réelle a dépassé le seuil du Bilan.",
+      "metric": "percees_total",
+      "target": 12,
+      "age_points": 60,
+      "reward": {
+        "energie": 150
+      }
+    },
+    {
       "id": "serie_30",
       "category": "discipline",
       "label": "Trente jours d'affilée",
@@ -198,6 +313,30 @@
       "age_points": 120,
       "reward": {
         "energie": 370
+      }
+    },
+    {
+      "id": "bastion_25",
+      "category": "defense",
+      "label": "Vingt-cinq batailles menées en personne",
+      "hint": "Vagues défendues et sorties confondues — le terrain se lit désormais d'un coup d'œil.",
+      "metric": "bastion_waves",
+      "target": 25,
+      "age_points": 100,
+      "reward": {
+        "combat": 500
+      }
+    },
+    {
+      "id": "trois_secteurs",
+      "category": "expansion",
+      "label": "La Plaine abyssale s'ouvre",
+      "hint": "Le troisième secteur s'ouvre au palier 20.",
+      "metric": "sectors_unlocked",
+      "target": 3,
+      "age_points": 80,
+      "reward": {
+        "combat": 200
       }
     },
     {
@@ -222,6 +361,30 @@
       "age_points": 110,
       "reward": {
         "adn": 600
+      }
+    },
+    {
+      "id": "cinq_reconquetes",
+      "category": "expansion",
+      "label": "Cinq reconquêtes",
+      "hint": "Le butin de reconquête est indexé sur le palier réellement joué — il n'a pas de dernier échelon.",
+      "metric": "reconquetes",
+      "target": 5,
+      "age_points": 80,
+      "reward": {
+        "combat": 300
+      }
+    },
+    {
+      "id": "quinze_foyers",
+      "category": "expansion",
+      "label": "Quinze foyers sécurisés",
+      "hint": "La moitié de la carte connue porte tes couleurs.",
+      "metric": "foyers_captured",
+      "target": 15,
+      "age_points": 90,
+      "reward": {
+        "biomasse": 400
       }
     },
     {
@@ -250,6 +413,18 @@
       }
     },
     {
+      "id": "dix_percees_depensees",
+      "category": "discipline",
+      "label": "Dix Percées jouées",
+      "hint": "Dix coups d'éclat déclenchés : vagues hors norme, antres, poussées de croissance.",
+      "metric": "percees_spent",
+      "target": 10,
+      "age_points": 70,
+      "reward": {
+        "fragments": 3
+      }
+    },
+    {
       "id": "tout_nv4",
       "category": "croissance",
       "label": "Toute la cellule au niveau 4",
@@ -262,16 +437,41 @@
       }
     },
     {
+      "id": "quarante_percees",
+      "category": "discipline",
+      "label": "Quarante Percées gagnées",
+      "hint": "Quarante soirs au-dessus du seuil — le rendez-vous est devenu un rituel.",
+      "metric": "percees_total",
+      "target": 40,
+      "age_points": 130,
+      "reward": {
+        "energie": 400
+      }
+    },
+    {
+      "id": "vingt_journees_parfaites",
+      "category": "discipline",
+      "label": "Vingt journées parfaites",
+      "hint": "Vingt jours où rien n'a été laissé de côté.",
+      "metric": "perfect_days",
+      "target": 20,
+      "age_points": 120,
+      "reward": {
+        "energie": 500
+      }
+    },
+    {
       "id": "serie_90",
       "category": "discipline",
-      "label": "Quatre-vingt-dix jours d'affilée",
-      "hint": "La durée d'un Âge entier, sans un jour manqué.",
+      "label": "Deux mois sans faillir",
+      "hint": "Soixante jours d'affilée — la discipline devenue seconde nature.",
       "metric": "streak",
-      "target": 90,
+      "target": 60,
       "age_points": 250,
       "reward": {
         "energie": 920
-      }
+      },
+      "$comment": "90 -> 60 JOURS (26/07/2026, amelioration n5 du retour complet). Mesure (economy_config.json -> multi_system_validation, 30 graines par archetype) : l'assidu termine l'Age a J83,2 avec une serie qui culmine a 83,4 j — il lui manquait sept jours de discipline parfaite APRES avoir deja fini. Le regulier plafonne a 40,0 j de serie, le dilettante a 13,9 j. AUCUN archetype ne pouvait atteindre 90 : on affichait au joueur une jauge de Points d'Age dont on avait mesure qu'elle ne se remplirait jamais (meilleur plafond 86,6 %, le plus decontracte 80,2 %). Conforme a la consigne d'Ali : on ne gonfle pas les gains pour rendre un prix atteignable, on baisse le prix — les 250 PA et la recompense ne bougent pas, seule la cible descend. A 60 jours, l'assidu (83,4 j de serie max) passe large, le regulier (40,0 j) garde un objectif exigeant mais reel. L'id reste `serie_90` : le renommer orphelinerait les listes claimedMilestones des sauvegardes existantes."
     },
     {
       "id": "ascension",

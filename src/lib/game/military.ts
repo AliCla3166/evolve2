@@ -18,7 +18,7 @@ import {
   stateResourceCap,
 } from "./economy";
 import { bilanOptionDef, dayKey, ENERGY_CAP } from "./habits";
-import { liveWaveCombatReward } from "./bastion/config";
+import { BASTION, liveWaveCombatReward } from "./bastion/config";
 import {
   clearSortie,
   defeatKeepRatio,
@@ -544,9 +544,24 @@ export function resolveLiveWave(state: GameState, result: LiveWaveResult, now: n
 
   applyWaveOutcome(state, success, lines);
 
-  const combatGain = liveWaveCombatReward(result);
+  /* « Appeler la vague en avance » (n°7, 26/07/2026) : jouer la vague planifiée au
+     moins early_call.min_lead_h heures avant son échéance majore la monnaie de
+     combat. Le pari est réel (on renonce au temps de préparation restant) et le
+     calendrier n'y gagne aucune vague : nextAttackAt est déjà repoussée depuis
+     l'heure PLANIFIÉE, pas depuis `now`. Payé victoire ou défaite : c'est le
+     choix qu'on récompense, et perdre une vague appelée coûte déjà assez. */
+  const early = BASTION.wave.early_call;
+  const calledEarly =
+    state.nextAttackAt > 0 && state.nextAttackAt - now >= early.min_lead_h * 3_600_000;
+
+  const combatGain = Math.round(
+    liveWaveCombatReward(result) * (calledEarly ? early.reward_mult : 1),
+  );
   addResource(state, "combat", combatGain);
-  lines.push(`+${fmt(combatGain)} monnaie de combat`);
+  lines.push(
+    `+${fmt(combatGain)} monnaie de combat` +
+      (calledEarly ? ` (vague appelée en avance : ×${early.reward_mult})` : ""),
+  );
 
   state.waveCount = wave;
   state.bastion.liveWaveCount += 1;

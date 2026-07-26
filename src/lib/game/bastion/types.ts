@@ -93,6 +93,11 @@ export interface BastionState {
   /** Nombre de vagues jouées EN DIRECT (indépendant de waveCount du militaire, qui compte
    *  aussi les vagues auto-résolues hors-ligne). Sert à calibrer la difficulté affichée. */
   liveWaveCount: number;
+  /** Tirages de recrutement depuis le dernier mythique — la PITIÉ (26/07/2026,
+   *  amélioration n°9) : un mythique est garanti au plus tard au
+   *  recruit_pity.mythique_every-ième tirage, et le compteur est affiché en
+   *  Boutique. Remis à zéro par tout mythique, forcé ou naturel. */
+  recruitsSinceMythic: number;
   /** Une bataille en direct est en cours pour la vague actuellement planifiée
    *  (nextAttackAt) — empêche applyMilitary de l'auto-résoudre PAR-DESSUS pendant que le
    *  joueur la joue (cf. JOURNAL.md, bug détecté en vérification : double résolution).

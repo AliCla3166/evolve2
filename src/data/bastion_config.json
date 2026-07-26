@@ -21,6 +21,10 @@
     "cost_base": 20,
     "cost_growth": 1.35
   },
+  "starting": {
+    "$comment": "L'UNITE DE DEPART (26/07/2026, amelioration n6 du retour complet — le garde-fou). Constat verifie : freshBastionState() livrait buildingReserve: [] et RIEN dans canLaunchSortie/sortieAvailability/beginSortie n'exigeait une garnison. Un nouveau joueur pouvait donc lancer le tower-defense avec strictement rien a poser sur le terrain, face a count_base pathogenes, avec une Boutique inaccessible puisqu'elle se paie en monnaie combat qu'on n'obtient qu'en gagnant. Deux remedes solidaires : une tourelle commune offerte en RESERVE (pas posee — la poser est justement le premier geste a apprendre), et le verrou hasGarrison() qui bloque tout lancement tant que rien n'est sur le terrain, avec la phrase qui explique quoi faire. Cout : 16 combat, la plus modeste du catalogue — negligeable pour une partie avancee migree.",
+    "building": "t_spore"
+  },
   "tree_cap": {
     "base_level": 2,
     "max_level": 5,
@@ -54,6 +58,19 @@
     "base": 18,
     "growth": 1.08
   },
+  "recruit_rarity_weights": {
+    "$comment": "SORTI DU TYPESCRIPT (26/07/2026, amelioration n9 du retour complet). Cette table vivait codee en dur dans bastion/config.ts (RARITY_WEIGHT) — une violation de la doctrine d'architecture du projet (aucun nombre d'equilibrage dans le TS), et surtout AUCUN taux n'etait affiche au joueur : il voyait << RECRUTER — {cout} >> sans taux, sans pool, sans pitie. Les taux de la peche, eux, sont proprement documentes dans mare_config.json — le bon patron existait dans le meme depot. Les poids ne changent pas d'un centieme (46/26/15/8/3,5/1) : ce qui change, c'est qu'ils sont desormais LISIBLES, dans ce fichier ET a l'ecran de recrutement (les pourcentages exacts sont derives de cette table, jamais recopies).",
+    "commune": 46,
+    "peucommune": 26,
+    "rare": 15,
+    "epique": 8,
+    "legendaire": 3.5,
+    "mythique": 1
+  },
+  "recruit_pity": {
+    "$comment": "LA PITIE (26/07/2026, amelioration n9). Poids mythique = 1/99,5 = 1,005 % par tirage : sans garantie, 1 joueur sur 8 n'a toujours pas de mythique apres 200 tirages (0,99^200 = 13 %). mythique_every = 45 : un mythique est GARANTI au plus tard au 45e tirage depuis le dernier (compteur bastion.recruitsSinceMythic, remis a zero par tout mythique, force ou naturel). Esperance quasi inchangee (~+0,7 % de mythiques), variance ecrasee — c'est un plancher de malchance, pas un robinet. Le compteur est AFFICHE a l'ecran de recrutement : une garantie invisible ne rassure personne.",
+    "mythique_every": 45
+  },
   "buildings": [
     {
       "id": "t_spore",
@@ -62,9 +79,10 @@
       "rarity": "commune",
       "dmg": 7,
       "rate": 1.2,
-      "range": 820,
+      "range": 640,
       "cost": 16,
-      "desc": "Tourelle fixe, couvre tout le champ depuis sa position."
+      "desc": "Tourelle fixe, couvre tout le champ depuis sa position.",
+      "$comment_range_2607": "820 -> 640 (26/07/2026, amelioration n8 du retour complet — LA VERSION MESUREE, PAS CELLE DE L'AUDIT). L'audit proposait de diviser les portees par trois (~220-380) pour creer une decision spatiale. Ce depot contient deja la refutation mesuree (cf. $comment de t_flamme) : ramener les tourelles a 330-560 fait perdre au debutant 180 -> 98 PV au palier 1 et lui coute sa victoire du palier 10 (pw_check/w_debut.ts), et 820 -> 250 ne deplace le combat que de 4 px (w_portee.ts) — la decision spatiale vient de la ligne de front (pursuit_leash), du lance-flammes et des avant-postes, pas d'un rabotage uniforme. Ce qui restait FAUX, c'etait le NOMBRE : 820 px de portee sur un terrain de 700 x 400 (diagonale 806), et le sniper a 1100 — le halo de portee debordait de l'ecran et le chiffre ne voulait rien dire. Mesure : la plus grande distance tourelle -> point d'apparition vaut 614,5 px (pire cas : tourelle du cluster en y=80, apparition en y=360). 640 est donc le plus petit rond qui couvre ENCORE tout le champ (marge 4 %) : zero changement de comportement — a verifier bit a bit par pw_check/o_e2e_pure.mjs — mais un halo qui tient dans le terrain et un affichage honnete. Applique a l'identique aux trois autres tourelles pleine-couverture (electrique, chaine, abyssale) ; le sniper garde une marge d'un quart a 780 (son identite est le sur-horizon) ; le lance-flammes ne bouge pas (210, la seule portee qui decide deja)."
     },
     {
       "id": "t_electrique",
@@ -73,7 +91,7 @@
       "rarity": "rare",
       "dmg": 12,
       "rate": 1.6,
-      "range": 820,
+      "range": 640,
       "cost": 26,
       "desc": "Cadence de tir rapide."
     },
@@ -96,7 +114,7 @@
       "rarity": "epique",
       "dmg": 46,
       "rate": 0.35,
-      "range": 1100,
+      "range": 780,
       "cost": 48,
       "desc": "Portée immense, très lente, ne vise qu'une seule cible — mais dévastatrice."
     },
@@ -107,7 +125,7 @@
       "rarity": "rare",
       "dmg": 10,
       "rate": 1.1,
-      "range": 820,
+      "range": 640,
       "chainCount": 4,
       "chainRadius": 100,
       "cost": 30,
@@ -120,7 +138,7 @@
       "rarity": "legendaire",
       "dmg": 22,
       "rate": 1.8,
-      "range": 820,
+      "range": 640,
       "splash": 55,
       "cost": 58,
       "desc": "Chaque tir éclabousse les ennemis proches de la cible."
@@ -194,9 +212,10 @@
       "active": true,
       "chargeKills": 16,
       "effect": "strikeAll",
-      "value": 40,
+      "value": 0.3,
       "cost": 45,
-      "desc": "Pouvoir actif : se charge en 16 éliminations, puis inflige 40 dégâts à tous les ennemis visibles d'un tap."
+      "desc": "Pouvoir actif : se charge en 16 éliminations, puis retire d'un tap 30 % de leurs PV max à tous les ennemis visibles.",
+      "$comment": "40 DEGATS FIXES -> 30 % DES PV MAX (26/07/2026, amelioration n7 du retour complet, troisieme point). Mesure : pendant une bataille de 40-60 s le joueur ne dispose que d'UNE action, ce pouvoir — et ses 40 degats constants pesaient ~30 % de l'issue au palier 20 mais ~6 % au palier 120 (PV d'un virus : 20 x (1 + 0,15 x N), soit 80 PV au palier 20 et 380 au palier 120). L'unique levier du joueur s'evaporait exactement quand la difficulte montait. En pourcentage des PV MAX de chaque ennemi touche, le poids du tap est constant a tous les paliers : 0,30 est cale sur ce que valaient les 40 fixes a l'epoque ou le pouvoir etait bon (40/80 = 50 % sur un virus de palier 20, mais bien moins sur un isopode a 240 PV — 30 % uniforme est la moyenne honnete). s_bouclier etait DEJA en ratio (0,35 des PV du Noyau) : c'est la meme grammaire pour les deux pouvoirs actifs desormais."
     },
     {
       "id": "s_bouclier",
@@ -386,7 +405,14 @@
     "combat_reward_base": 14,
     "combat_reward_per_wave": 2.2,
     "$comment_lead": "lead_window_h : jusqu'à combien d'heures À L'AVANCE la vague planifiée peut être jouée manuellement. Comme resolveLiveWave repousse nextAttackAt à partir de l'heure PLANIFIÉE (pas de 'now'), jouer en avance ne fait qu'avancer les vagues dans le temps sans en créer : le total sur 90 jours reste celui du calendrier. Cette fenêtre borne simplement l'enchaînement (interval_h = 36..84 h => ~1-2 vagues d'avance).",
-    "lead_window_h": 96
+    "lead_window_h": 96,
+    "early_call": {
+      "$comment": "APPELER LA VAGUE EN AVANCE (26/07/2026, amelioration n7 du retour complet) — le mecanisme le plus rentable du genre TD : une decision, un risque, zero contenu a produire. Jouer la vague planifiee au moins min_lead_h heures AVANT son echeance multiplie sa monnaie de combat par reward_mult. Le risque est reel (on affronte la vague sans le temps de preparation restant) et le cout systeme est nul : resolveLiveWave repousse deja nextAttackAt depuis l'heure PLANIFIEE, donc appeler en avance n'ajoute AUCUNE vague au calendrier des 90 jours — c'est le meme butin total, majore de 25 % quand on prend le pari. min_lead_h = 6 : en-deca, la vague est de toute facon imminente, il n'y a plus de pari a recompenser. NEUTRE pour l'economie principale : la monnaie de combat ne touche pas au chemin critique des chantiers.",
+      "min_lead_h": 6,
+      "reward_mult": 1.25
+    },
+    "$comment_preview_free": "preview_free_level (26/07/2026, amelioration n7 — le Boss Blind de Balatro annonce sa regle A L'AVANCE, le joueur prepare au lieu de subir) : la vague PLANIFIEE — celle qu'on subit, celle que l'auto-resolution tranchera si on l'ignore — s'annonce toujours au moins au niveau 1 de la Vigie (effectif + boss), meme sans Vigie achetee. Les niveaux 2 et 3 (especes, stats) restent payants, et l'aperçu des SORTIES reste entierement derriere la Vigie : on ne devalue pas l'achat, on refuse juste qu'une menace subie soit une surprise.",
+    "preview_free_level": 1
   },
   "sorties": {
     "$comment": "LES SORTIES (25/07/2026). Avant ce bloc, une vague ne se jouait que dans la fenetre lead_window_h autour de la vague PLANIFIEE (interval_h = 36..84 h) : concretement une bataille tous les deux jours, et jamais quand on en avait envie. Une sortie est une bataille LANCEE A LA DEMANDE, contre le Bastion (defense libre) ou contre un foyer de La Derive (cf. territoire_config.json). Elle ne touche PAS au calendrier : nextAttackAt et le chemin auto de military.ts restent intacts, ils demeurent le filet de securite hors ligne (pilier 'jamais de mur frustrant' du PLAN).",

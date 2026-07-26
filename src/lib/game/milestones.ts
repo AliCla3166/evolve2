@@ -14,7 +14,8 @@
 import rawConfig from "@/data/milestones_config.json";
 import { BUILDING_ORDER, isDesigned, stateResourceCap } from "./economy";
 import { SPECIES_IDS } from "./cards";
-import { ENERGY_CAP } from "./habits";
+import { ENERGY_CAP, isPerfectDay } from "./habits";
+import { ALL_FOYERS, natureDef, unlockedSectors } from "./territoire";
 import type { BuildingId, GameState, ResourceId } from "./types";
 
 export interface MilestoneConfig {
@@ -97,6 +98,33 @@ export function milestoneProgress(state: GameState, m: MilestoneConfig): number 
       // compte aussi les auto-résolutions offline — ce jalon récompense le fait
       // de venir défendre soi-même, pas de laisser le moteur trancher).
       return state.bastion?.liveWaveCount ?? 0;
+    /* ----- Les six métriques du 26/07 (amélioration n°4) : La Dérive et le Bilan
+       entrent enfin dans les jalons. Toutes PURES, comme les précédentes — La
+       Dérive persiste déjà ses captures, le Bilan ses compteurs de Percées, les
+       habitudes leur historique : il n'y a rien de nouveau à compter, seulement
+       ce qui existait déjà à NOMMER. ----- */
+    case "foyers_captured":
+      return Object.values(state.territoire?.foyers ?? {}).filter((f) => f.capturedAt > 0).length;
+    case "sectors_unlocked":
+      return unlockedSectors(state.waveCount).length;
+    case "percees_total":
+      return state.bilan?.perceesTotal ?? 0;
+    case "percees_spent":
+      return state.bilan?.perceesSpent ?? 0;
+    case "perfect_days":
+      return Object.values(state.habits.days).filter((d) =>
+        isPerfectDay(d, state.habits.calorieGoal),
+      ).length;
+    case "reconquetes":
+      // Reprises au-delà de la première victoire, foyers NON répétables seulement :
+      // l'abîme se rejoue à l'infini par nature, le compter ferait du jalon un
+      // compteur de grind au lieu d'un compteur de reconquêtes.
+      return ALL_FOYERS.reduce((sum, def) => {
+        if (natureDef(def.nature).repeatable) return sum;
+        const st = state.territoire?.foyers?.[def.id];
+        if (!st || st.capturedAt <= 0) return sum;
+        return sum + Math.max(0, st.runs - 1);
+      }, 0);
     default:
       return 0;
   }

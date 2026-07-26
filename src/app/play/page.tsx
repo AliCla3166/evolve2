@@ -34,6 +34,7 @@ import { WAVE_LEAD_WINDOW_MS } from "@/lib/game/bastion/config";
 import { freeSortiesToday, sortiesUsedToday } from "@/lib/game/bastion/sorties";
 import { fmtDuration } from "@/lib/game/format";
 import { dayKey } from "@/lib/game/habits";
+import { tabDef, tabLockText, tabUnlocked } from "@/lib/game/progression";
 import { portalTarget } from "@/lib/game/scene";
 import { bonusValue } from "@/lib/game/territoire";
 import { installAudio, playCue } from "@/lib/audio";
@@ -47,8 +48,15 @@ import type { BuildingId } from "@/lib/game/types";
 function WaveWarning({ onOpenBastion }: { onOpenBastion: () => void }) {
   const nextAttackAt = useGame((s) => s.nextAttackAt);
   const now = useGame((s) => s.lastTick);
+  // Abonnement : l'ouverture du Bastion dépend de waveCount (cf. progression.ts).
+  const waveCount = useGame((s) => s.waveCount);
+  void waveCount;
   const remaining = nextAttackAt - now;
   if (nextAttackAt <= 0 || remaining <= 0 || remaining > 12 * 3_600_000) return null;
+  /* Onglet Bastion encore verrouillé (avant la première vague vécue) : l'alerte se
+     tait — pointer vers un écran fermé serait pire que rien. La première vague se
+     résout d'elle-même, son rapport ET l'ouverture de l'onglet racontent la suite. */
+  if (!tabUnlocked(useGame.getState(), "bastion")) return null;
   return (
     <Panel
       variant="tooltip"
@@ -133,6 +141,7 @@ function NavBtn({
   badge,
   onClick,
   title,
+  locked = false,
 }: {
   icon: NavIconId;
   label: string;
@@ -140,23 +149,35 @@ function NavBtn({
   badge?: string | null;
   onClick: () => void;
   title?: string;
+  /** Onglet pas encore ouvert (amélioration n°6) : grisé, cadenas, et le tap
+   *  explique la condition au lieu d'ouvrir — la contrainte, le chiffre, la raison. */
+  locked?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       title={title}
       aria-label={title ?? label}
+      aria-disabled={locked || undefined}
       aria-current={active ? "page" : undefined}
       className="tap-h relative flex w-full flex-col items-center justify-center gap-0.5 px-0.5"
     >
-      <NavIcon id={icon} size={24} active={active} />
-      {badge && (
-        <span className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-cell-magenta px-1 text-[9px] font-bold text-abyss">
-          {badge}
+      <span className={locked ? "opacity-35 grayscale" : undefined}>
+        <NavIcon id={icon} size={24} active={active} />
+      </span>
+      {locked ? (
+        <span className="pointer-events-none absolute right-0 top-0 text-[10px]" aria-hidden>
+          🔒
         </span>
+      ) : (
+        badge && (
+          <span className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-cell-magenta px-1 text-[9px] font-bold text-abyss">
+            {badge}
+          </span>
+        )
       )}
       <span
-        className={`leading-none ${active ? "text-cell-cyan" : "text-cell-teal/70"}`}
+        className={`leading-none ${locked ? "text-cell-teal/35" : active ? "text-cell-cyan" : "text-cell-teal/70"}`}
         style={{ fontSize: "clamp(8px, 2.35vw, 10px)", letterSpacing: "0.04em" }}
       >
         {label}
@@ -171,9 +192,12 @@ function NavBtn({
 function BottomNav({
   panel,
   setPanel,
+  onLockedTap,
 }: {
   panel: PanelId;
   setPanel: (p: PanelId) => void;
+  /** Tap sur un onglet verrouillé : la page affiche la condition en clair. */
+  onLockedTap: (msg: string) => void;
 }) {
   const reports = useGame((s) => s.reports);
   const reportsSeenAt = useGame((s) => s.reportsSeenAt);
@@ -181,10 +205,40 @@ function BottomNav({
   const bastion = useGame((s) => s.bastion);
   const territoire = useGame((s) => s.territoire);
   const now = useGame((s) => s.lastTick);
+  /* Abonnements des conditions d'ouverture (amélioration n°6) : les champs que
+     lisent tabUnlocked/tabProgress. Le calcul, lui, passe par getState() — même
+     patron que estimatedWavePower dans BastionPanel. */
+  const buildings = useGame((s) => s.buildings);
+  const waveCount = useGame((s) => s.waveCount);
+  const perceesTotal = useGame((s) => s.bilan.perceesTotal);
+  const tabIntroSeen = useGame((s) => s.tabIntroSeen);
+  void buildings;
+  void waveCount;
+  void perceesTotal;
 
   const unseen = reports.filter((r) => r.ts > reportsSeenAt).length;
   const waveIn = nextAttackAt - now;
   const wavePlayable = nextAttackAt > 0 && waveIn > 0 && waveIn <= WAVE_LEAD_WINDOW_MS;
+
+  /* L'état des quatre onglets à condition. Un onglet verrouillé n'affiche AUCUN
+     badge d'activité (c'était le constat n°6 : DÉRIVE et BASTION s'allumaient à
+     la seconde zéro) ; un onglet fraîchement ouvert porte ✦ jusqu'à sa première
+     visite (la carte d'explication éteint le badge). */
+  const gameState = useGame.getState();
+  const tabState = (id: string) => {
+    const def = tabDef(id);
+    if (!def) return { locked: false, isNew: false, lockText: "" };
+    const unlocked = tabUnlocked(gameState, id);
+    return {
+      locked: !unlocked,
+      isNew: unlocked && !tabIntroSeen.includes(id),
+      lockText: tabLockText(gameState, def),
+    };
+  };
+  const mareTab = tabState("mare");
+  const deriveTab = tabState("derive");
+  const bastionTab = tabState("bastion");
+  const reportsTab = tabState("reports");
   /* Sorties gratuites qu'il reste à dépenser aujourd'hui. C'est le seul chiffre
      de la barre qui dit « il y a quelque chose à faire MAINTENANT, et c'est
      gratuit » : il se remet à plein tous les jours, il s'éteint dès qu'on a tout
@@ -201,6 +255,11 @@ function BottomNav({
   const newRelais = useGame((s) => s.noyauSeenDay) !== dayKey(now);
 
   const toggle = (id: Exclude<PanelId, null>) => () => setPanel(panel === id ? null : id);
+  /* Un onglet verrouillé ne s'ouvre pas : il EXPLIQUE. La phrase vient de la
+     config (progression_config.json -> lock_hint), chiffres remplis — la
+     contrainte, le chiffre, la raison, comme le Bilan. */
+  const gatedClick = (id: Exclude<PanelId, null>, st: { locked: boolean; lockText: string }) =>
+    st.locked ? () => onLockedTap(st.lockText) : toggle(id);
 
   return (
     <nav className="px-safe pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-cell-cyan/20 bg-abyss/90 backdrop-blur-sm">
@@ -226,42 +285,55 @@ function BottomNav({
           icon="derive"
           label="DÉRIVE"
           active={panel === "derive"}
-          badge={freeLeft > 0 ? String(freeLeft) : newRelais ? "🧭" : null}
-          title={
-            freeLeft > 0
-              ? `La Dérive — la carte des eaux (${freeLeft} sortie${freeLeft > 1 ? "s" : ""} gratuite${freeLeft > 1 ? "s" : ""} à jouer aujourd'hui)`
-              : newRelais
-                ? "La Dérive — les quatre relais d'expédition du jour ont changé"
-                : "La Dérive — la carte des eaux : gisements, vestiges, antres"
+          locked={deriveTab.locked}
+          badge={
+            deriveTab.isNew ? "✦" : freeLeft > 0 ? String(freeLeft) : newRelais ? "🧭" : null
           }
-          onClick={toggle("derive")}
+          title={
+            deriveTab.locked
+              ? deriveTab.lockText
+              : freeLeft > 0
+                ? `La Dérive — la carte des eaux (${freeLeft} sortie${freeLeft > 1 ? "s" : ""} gratuite${freeLeft > 1 ? "s" : ""} à jouer aujourd'hui)`
+                : newRelais
+                  ? "La Dérive — les quatre relais d'expédition du jour ont changé"
+                  : "La Dérive — la carte des eaux : gisements, vestiges, antres"
+          }
+          onClick={gatedClick("derive", deriveTab)}
         />
         <NavBtn
           icon="mare"
           label="MARE"
           active={panel === "mare"}
-          title="La Mare — pêche et collection de créatures"
-          onClick={toggle("mare")}
+          locked={mareTab.locked}
+          badge={mareTab.isNew ? "✦" : null}
+          title={mareTab.locked ? mareTab.lockText : "La Mare — pêche et collection de créatures"}
+          onClick={gatedClick("mare", mareTab)}
         />
         <NavBtn
           icon="bastion"
           label="BASTION"
           active={panel === "bastion"}
-          badge={wavePlayable ? "⚔" : null}
+          locked={bastionTab.locked}
+          badge={bastionTab.isNew ? "✦" : wavePlayable ? "⚔" : null}
           title={
-            wavePlayable
-              ? `Bastion — vague jouable en direct (attaque dans ${fmtDuration(Math.max(0, waveIn))})`
-              : "Bastion — défense jouable, boutique et garnison"
+            bastionTab.locked
+              ? bastionTab.lockText
+              : wavePlayable
+                ? `Bastion — vague jouable en direct (attaque dans ${fmtDuration(Math.max(0, waveIn))})`
+                : "Bastion — défense jouable, boutique et garnison"
           }
-          onClick={toggle("bastion")}
+          onClick={gatedClick("bastion", bastionTab)}
         />
         <NavBtn
           icon="reports"
           label="RAPPORTS"
           active={panel === "reports"}
-          badge={unseen > 0 ? (unseen > 9 ? "9+" : String(unseen)) : null}
-          title="Comptes rendus d'expéditions et de vagues"
-          onClick={toggle("reports")}
+          locked={reportsTab.locked}
+          badge={
+            reportsTab.isNew ? "✦" : unseen > 0 ? (unseen > 9 ? "9+" : String(unseen)) : null
+          }
+          title={reportsTab.locked ? reportsTab.lockText : "Comptes rendus d'expéditions et de vagues"}
+          onClick={gatedClick("reports", reportsTab)}
         />
         <NavBtn
           icon="settings"
@@ -279,8 +351,20 @@ export default function PlayPage() {
   const hasHydrated = useGame((s) => s.hasHydrated);
   const profile = useGame((s) => s.profile);
   const activeSlot = useGame((s) => s.activeSlot);
+  const markTabIntroSeen = useGame((s) => s.markTabIntroSeen);
   const [selected, setSelected] = useState<BuildingId | null>(null);
   const [panel, setPanelState] = useState<PanelId>(null);
+  /* La phrase d'un onglet verrouillé, affichée en bandeau au-dessus de la nav
+     (amélioration n°6) : sur mobile, le `title` n'existe pas — le tap doit
+     répondre quelque chose. Efface d'elle-même après quelques secondes. */
+  const [lockNotice, setLockNotice] = useState<string | null>(null);
+  /* L'onglet dont la carte d'explication doit s'afficher (première ouverture). */
+  const [introFor, setIntroFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lockNotice) return;
+    const t = setTimeout(() => setLockNotice(null), 5000);
+    return () => clearTimeout(t);
+  }, [lockNotice]);
   /* Tout passe par ce setter : c'est le seul point où le repère sonore de
      membrane (piste 8) est déclenché, plutôt que sur une dizaine de handlers.
      Le repère ne part que si l'état change réellement — retoucher l'onglet
@@ -290,7 +374,20 @@ export default function PlayPage() {
      Bastion des semaines plus tard proposerait encore d'assaillir un foyer oublié. */
   const [sortieTarget, setSortieTarget] = useState<string | null>(null);
   const setPanel = (next: PanelId) => {
+    /* Un panneau verrouillé ne s'ouvre par AUCUN chemin (nav, portail de la scène,
+       alerte, rappel système) : le verrou vit ici, au seul point d'entrée. */
+    if (next && !tabUnlocked(useGame.getState(), next)) {
+      const def = tabDef(next);
+      if (def) setLockNotice(tabLockText(useGame.getState(), def));
+      return;
+    }
     if (next !== panel) playCue(next === null ? "panel_close" : "panel_open");
+    /* Première ouverture d'un onglet à condition : sa carte d'explication
+       s'affiche par-dessus (amélioration n°6 — chaque ouverture est un événement,
+       et l'explication arrive au moment exact où elle sert). */
+    if (next && tabDef(next) && !useGame.getState().tabIntroSeen.includes(next)) {
+      setIntroFor(next);
+    }
     setSortieTarget(null);
     setPanelState(next);
   };
@@ -485,6 +582,47 @@ export default function PlayPage() {
       )}
       {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
       {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
+
+      {/* Carte d'explication à la première ouverture d'un onglet (amélioration n°6) :
+          deux phrases — ce que le système fait, ce qu'il rapporte — au moment exact
+          où elles servent. « COMPRIS » éteint aussi le badge ✦ de la nav. */}
+      {introFor &&
+        (() => {
+          const def = tabDef(introFor);
+          if (!def) return null;
+          return (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-abyss/80 p-4 backdrop-blur-[2px]">
+              <div className="animate-card-reveal flex w-full max-w-xs flex-col items-center gap-2 rounded-2xl border border-cell-cyan/60 bg-deep px-6 py-6 text-center shadow-[0_0_60px_rgba(109,246,255,0.35)]">
+                <span className="text-5xl" aria-hidden>
+                  {def.icon}
+                </span>
+                <p className="text-sm uppercase tracking-[0.25em] text-cell-cyan">
+                  {def.intro_title}
+                </p>
+                <p className="text-[11px] leading-4 text-cell-teal/80">{def.intro}</p>
+                <button
+                  className="pixel-btn mt-1 px-4 py-1.5 text-xs text-cell-cyan"
+                  onClick={() => {
+                    markTabIntroSeen(def.id);
+                    setIntroFor(null);
+                  }}
+                >
+                  COMPRIS
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+      {/* Bandeau d'onglet verrouillé : la condition, en clair, juste au-dessus de la
+          nav — sur mobile le `title` n'existe pas, le tap doit répondre. */}
+      {lockNotice && (
+        <div className="pb-safe pointer-events-none fixed inset-x-0 bottom-14 z-40 px-3">
+          <div className="mx-auto max-w-md rounded-lg border border-cell-cyan/40 bg-abyss/95 px-3 py-2 text-center text-[11px] leading-4 text-cell-cyan shadow-lg sm:max-w-2xl">
+            🔒 {lockNotice}
+          </div>
+        </div>
+      )}
       <EventModal />
       <CardReveal />
       {/* Comptes rendus (pistes 1 & 5) — le rapport de retour passe devant la
@@ -497,8 +635,11 @@ export default function PlayPage() {
         }}
       />
 
-      {/* Nav basse — 7 onglets : le Bastion (piste 10) et La Dérive (étape 6c) */}
-      {hasHydrated && profile && <BottomNav panel={panel} setPanel={setPanel} />}
+      {/* Nav basse — 7 onglets : le Bastion (piste 10) et La Dérive (étape 6c) ;
+          ouverture progressive depuis le 26/07 (amélioration n°6). */}
+      {hasHydrated && profile && (
+        <BottomNav panel={panel} setPanel={setPanel} onLockedTap={setLockNotice} />
+      )}
     </main>
   );
 }

@@ -91,6 +91,8 @@ interface BastionConfig {
   };
   rarity_acc: number[];
   reserve: { base_cap: number; max_cap: number; cost_base: number; cost_growth: number };
+  /** L'unité de départ offerte en réserve à toute partie neuve (garde-fou n°6). */
+  starting: { building: string };
   tree_cap: { base_level: number; max_level: number; cost_base: number; cost_growth: number };
   /** Pas de `max_level` : c'est l'axe sans dernier niveau (cf. le $comment du JSON).
    *  Coût LINÉAIRE (`cost_base + cost_step·L`) et puissance ADDITIVE — la seule forme
@@ -99,6 +101,12 @@ interface BastionConfig {
   in_wave_respawn: { cost: number };
   slot_unlock_cost: Record<"turret" | "barracks" | "mortar", { base: number; growth: number }>;
   recruit_building_cost: { base: number; growth: number };
+  /** Poids de rareté du recrutement — en JSON depuis le 26/07 (amélioration n°9) :
+   *  ils vivaient en dur dans ce fichier, en violation de la doctrine, et aucun
+   *  taux n'était affiché au joueur. */
+  recruit_rarity_weights: Record<string, number>;
+  /** La pitié : un mythique garanti tous les `mythique_every` tirages. */
+  recruit_pity: { mythique_every: number };
   buildings: BuildingDef[];
   barracks_tree: {
     a: { name: string; desc: string; mod: Record<string, number> };
@@ -134,6 +142,11 @@ interface BastionConfig {
     combat_reward_base: number;
     combat_reward_per_wave: number;
     lead_window_h: number;
+    /** « Appeler la vague en avance » (n°7) : bonus de butin si la vague planifiée
+     *  est jouée au moins min_lead_h heures avant son échéance. */
+    early_call: { min_lead_h: number; reward_mult: number };
+    /** Niveau de Vigie offert pour la vague PLANIFIÉE (le Boss Blind s'annonce). */
+    preview_free_level: number;
   };
   sorties: {
     free_per_day: number;
@@ -218,14 +231,17 @@ export function freshBastionState(): BastionState {
     fieldStructures: [],
     nextStructureUid: 1,
     support: freshSupport(),
-    buildingReserve: [],
-    nextBuildingUid: 1,
+    // L'unité de départ (garde-fou n°6) : offerte en RÉSERVE, pas posée — la poser
+    // est précisément le premier geste que le Bastion doit apprendre au joueur.
+    buildingReserve: [{ uid: 1, defId: BASTION.starting.building }],
+    nextBuildingUid: 2,
     reserveCap: BASTION.reserve.base_cap,
     maxTreeLevel: BASTION.tree_cap.base_level,
     slotBonusLevel: 0,
     inWaveRespawnUnlocked: false,
     scoutLevel: 0,
     liveWaveCount: 0,
+    recruitsSinceMythic: 0,
     liveBattleActive: false,
     liveBattleStartedAt: 0,
     sortieDay: null,
@@ -238,6 +254,21 @@ export function freshBastionState(): BastionState {
     sortiePreparatifs: [],
     sortiePerceeId: null,
   };
+}
+
+/** Y a-t-il QUELQUE CHOSE à opposer aux pathogènes ? (garde-fou n°6, 26/07/2026)
+ *  Une tourelle posée, une créature en barracks/mortier, ou une structure de terrain —
+ *  n'importe laquelle suffit. Sans ce verrou, une partie neuve pouvait lancer une
+ *  bataille avec un terrain strictement vide : le système le plus spectaculaire du jeu
+ *  se présentait comme une défaite en cinématique. La réserve ne compte PAS : ce qui
+ *  est en réserve ne combat pas, et le message du lanceur dit justement quoi poser. */
+export function hasGarrison(state: BastionState): boolean {
+  return (
+    activeTurretSlots(state).some((s) => s.occupant) ||
+    activeBarracksSlots(state).some((s) => s.occupant) ||
+    activeMortarSlots(state).some((s) => s.occupant) ||
+    state.fieldStructures.length > 0
+  );
 }
 
 /* ---------- Slots actifs (déblocage progressif) ---------- */
@@ -390,28 +421,55 @@ export function recruitBuildingCost(ownedCount: number): number {
 }
 export const IN_WAVE_RESPAWN_COST = BASTION.in_wave_respawn.cost;
 
-/* ---------- Tirage pondéré d'un bâtiment (Boutique — recrutement) ---------- */
+/* ---------- Tirage pondéré d'un bâtiment (Boutique — recrutement) ----------
+   La table des poids vit dans bastion_config.json -> recruit_rarity_weights depuis le
+   26/07 (amélioration n°9) : elle était codée en dur ICI, en violation de la doctrine
+   d'architecture, et aucun taux n'était montré au joueur. Les pourcentages affichés en
+   Boutique sont DÉRIVÉS de cette même table (recruitRarityRates) — jamais recopiés. */
 
-const RARITY_WEIGHT: Record<string, number> = {
-  commune: 46,
-  peucommune: 26,
-  rare: 15,
-  epique: 8,
-  legendaire: 3.5,
-  mythique: 1,
-};
+/** La table des poids, débarrassée de ses clés de documentation ($comment). */
+function recruitWeights(): [string, number][] {
+  return Object.entries(BASTION.recruit_rarity_weights).filter(
+    (e): e is [string, number] => !e[0].startsWith("$") && typeof e[1] === "number",
+  );
+}
+
+/** Les taux de recrutement, en pourcentage, prêts à afficher. Une seule source :
+ *  la table du JSON. Ordre du JSON = ordre d'affichage (commune → mythique). */
+export function recruitRarityRates(): { id: string; pct: number }[] {
+  const weights = recruitWeights();
+  const total = weights.reduce((a, [, b]) => a + b, 0);
+  return weights.map(([id, w]) => ({
+    id,
+    pct: Math.round((w / total) * 1000) / 10,
+  }));
+}
+
+/** Nombre de tirages restants avant le mythique garanti (la pitié, affichée). */
+export function recruitsUntilPity(state: Pick<BastionState, "recruitsSinceMythic">): number {
+  return Math.max(0, BASTION.recruit_pity.mythique_every - (state.recruitsSinceMythic ?? 0));
+}
 
 /** `rarityRoll`/`indexRoll` : deux tirages 0..1 INDÉPENDANTS du PRNG seedé de l'appelant
- *  (comme rollRarity/rollSpecies dans cards.ts — jamais réutiliser le même tirage deux fois). */
-export function rollBuildingDef(rarityRoll: number, indexRoll: number): BuildingDef {
-  const total = Object.values(RARITY_WEIGHT).reduce((a, b) => a + b, 0);
-  let r = rarityRoll * total;
-  let picked = "commune";
-  for (const [rar, w] of Object.entries(RARITY_WEIGHT)) {
-    r -= w;
-    if (r <= 0) {
-      picked = rar;
-      break;
+ *  (comme rollRarity/rollSpecies dans cards.ts — jamais réutiliser le même tirage deux fois).
+ *  `forceRarity` court-circuite le tirage de rareté (la pitié) sans toucher au tirage
+ *  d'index : le mythique garanti reste un mythique au hasard, pas toujours le même. */
+export function rollBuildingDef(
+  rarityRoll: number,
+  indexRoll: number,
+  forceRarity?: string,
+): BuildingDef {
+  const weights = recruitWeights();
+  const total = weights.reduce((a, [, b]) => a + b, 0);
+  let picked = forceRarity ?? "commune";
+  if (!forceRarity) {
+    let r = rarityRoll * total;
+    for (const [rar, w] of weights) {
+      r -= w;
+      if (r <= 0) {
+        picked = rar;
+        break;
+      }
     }
   }
   const opts = BASTION.buildings.filter((b) => b.rarity === picked);

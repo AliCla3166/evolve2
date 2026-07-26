@@ -101,7 +101,10 @@ def day_energy(entry):
             if not entry.get("caloriesDone"):
                 continue
             kcal = entry.get("calories", 0)
-            total += h.get("energy_per_day", 0) if kcal <= 0 else -(kcal // CALORIE_STEP)
+            # NON-ATTRIBUTION (26/07/2026, amelioration n10) : un surplus ne rapporte
+            # rien mais ne retire plus rien — meme regle que habitEnergy() dans
+            # habits.ts. Aucun archetype ne modelise de surplus, la mesure ne bouge pas.
+            total += h.get("energy_per_day", 0) if kcal <= 0 else 0
         elif h["type"] == "rate":
             raw = (entry.get(h["id"], 0) // h.get("per", 1)) * h.get("energy_per", 0)
             total += min(raw, h.get("cap_energy", raw))

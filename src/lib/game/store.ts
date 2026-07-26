@@ -9,8 +9,8 @@ import {
   acceptsPostes,
   boostQuote,
   buildTimeHours,
-  buildTimeMs,
   canAfford,
+  effectiveBuildTimeMs,
   findFreeSlot,
   freshGameState,
   isDesigned,
@@ -24,7 +24,7 @@ import {
   stateStorageCap,
   totalProductionPerHour,
 } from "./economy";
-import { effectiveReserveCap, freshBastionState } from "./bastion/config";
+import { BASTION, effectiveReserveCap, freshBastionState, hasGarrison } from "./bastion/config";
 import {
   buyFoundations,
   buyInWaveRespawn,
@@ -92,6 +92,8 @@ import {
   resolveSortie,
 } from "./military";
 import { applyMilestoneReward, MILESTONES, milestoneView } from "./milestones";
+import { dailyViews } from "./daily";
+import { GATED_TABS } from "./progression";
 import {
   bonusValue,
   crewOf,
@@ -132,7 +134,7 @@ export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
 export type HabitPatch = Partial<
-  Pick<HabitDayEntry, "calories" | "caloriesDone" | "steps" | "mf" | "alilou" | "rituals">
+  Pick<HabitDayEntry, "calories" | "caloriesDone" | "steps" | "mf" | "alilou" | "rituals" | "repas">
 >;
 
 interface GameActions {
@@ -178,6 +180,13 @@ interface GameActions {
    *  `claimedMilestones` (piste 3). Renvoie false si le jalon est inconnu,
    *  déjà réclamé, ou pas encore atteint. */
   claimMilestone: (id: string) => boolean;
+  /** Encaisse un objectif du jour atteint (amélioration n°2). Même contrat que
+   *  claimMilestone ; la liste des réclamés se réarme d'elle-même au changement
+   *  de clé calendaire. */
+  claimDailyObjective: (id: string) => boolean;
+  /** Marque la carte d'explication d'un onglet comme vue (amélioration n°6) —
+   *  éteint le badge « nouveau » et n'affichera plus la carte. */
+  markTabIntroSeen: (id: string) => void;
   /** Édite la saisie d'habitudes d'une journée de la FENÊTRE DE SAISIE
    *  (aujourd'hui + les SAISIE_WINDOW_DAYS − 1 jours précédents). Toute clé
    *  future ou hors fenêtre est ignorée sans bruit — le garde-fou est ici, pas
@@ -404,6 +413,8 @@ function gameSlice(s: GameStore): GameState {
     territoire: s.territoire,
     bilan: s.bilan,
     claimedMilestones: s.claimedMilestones,
+    dailyClaimed: s.dailyClaimed,
+    tabIntroSeen: s.tabIntroSeen,
   };
 }
 
@@ -523,7 +534,11 @@ export const useGame = create<GameStore>()(
           buildingId: id,
           targetLevel: target,
           startedAt: now,
-          endsAt: now + buildTimeMs(id, target),
+          // Le premier chantier d'une partie neuve est SCRIPTÉ à quelques minutes
+          // (economy_config.json -> tutorial) : le nouveau joueur voit sa première
+          // mue avant de fermer l'application. Toutes les autres durées sont celles
+          // de la config — la lenteur savoureuse reste un pilier.
+          endsAt: now + effectiveBuildTimeMs(s, id, target),
           boostedMs: 0,
         };
         set({
@@ -582,6 +597,35 @@ export const useGame = create<GameStore>()(
         return true;
       },
 
+      claimDailyObjective: (id) => {
+        const now = Date.now();
+        // Tick d'abord, comme claimMilestone : l'objectif peut venir d'aboutir.
+        const s = applyTick(gameSlice(get()), now);
+        const view = dailyViews(s, now).find((v) => v.cfg.id === id);
+        if (!view || !view.achieved || view.claimed) return false;
+
+        const today = dayKey(now);
+        const ids = s.dailyClaimed.day === today ? s.dailyClaimed.ids : [];
+        const next: GameState = {
+          ...s,
+          resources: { ...s.resources },
+          // Le changement de jour réarme la liste ici même : une liste d'hier est
+          // simplement remplacée, jamais consultée.
+          dailyClaimed: { day: today, ids: [...ids, id] },
+        };
+        // Les récompenses ont la même forme que celles des jalons : on réutilise
+        // le même verseur (écrêté par le stockage, jamais de dépassement).
+        applyMilestoneReward(next, view.cfg.reward);
+        set(next);
+        return true;
+      },
+
+      markTabIntroSeen: (id) => {
+        const seen = get().tabIntroSeen;
+        if (seen.includes(id)) return;
+        set({ tabIntroSeen: [...seen, id] });
+      },
+
       updateHabitDay: (key, patch) => {
         const todayKey = dayKey(Date.now());
         // Le futur ne se remplit pas, et le passé se referme au bord de la
@@ -606,6 +650,7 @@ export const useGame = create<GameStore>()(
         if (patch.mf !== undefined) entry.mf = clampHabitValue("mf", patch.mf);
         if (patch.alilou !== undefined) entry.alilou = clampHabitValue("alilou", patch.alilou);
         if (patch.rituals !== undefined) entry.rituals = clampHabitValue("rituals", patch.rituals);
+        if (patch.repas !== undefined) entry.repas = clampHabitValue("repas", patch.repas);
 
         const { energy, validatedCount } = evaluateEntry(entry, habits.calorieGoal);
         entry.energy = energy;
@@ -1154,6 +1199,10 @@ export const useGame = create<GameStore>()(
         if (foyer && natureDef(foyer.nature).requires_percee && !perceeOptionId) return false;
         if (perceeOptionId && !canSpendPercee(s, perceeOptionId)) return false;
 
+        // Le garde-fou n°6 vit AUSSI ici, pas seulement dans l'UI : une sauvegarde
+        // importée ou un rappel système ne doivent jamais lancer une bataille à vide.
+        if (!hasGarrison(s.bastion)) return false;
+
         const vestigeFree = bonusValue(s.territoire, "free_sortie");
         const avail = sortieAvailability(
           s.bastion,
@@ -1532,6 +1581,65 @@ export const useGame = create<GameStore>()(
             if (!entry) continue;
             const missing = catchesToPlayable(entry);
             if (missing > 0) entry.count += missing;
+          }
+        }
+        // v19 -> v20 : le retour complet du 26/07 — cinq retouches d'état.
+        //
+        //  1. `repas` (n°10) : la seconde habitude du pilier Nutrition. Chaque
+        //     journée de l'historique reçoit 0, puis TOUT l'historique est
+        //     réévalué au nouveau barème calorique (la soustraction sur surplus
+        //     devient une non-attribution) : comme en v17 et v18, le solde ne
+        //     peut que monter, et on verse la différence — trois mois de
+        //     journées à surplus retrouvent l'énergie qu'on leur avait reprise.
+        //  2. `dailyClaimed` (n°2) : liste vide, datée d'aucun jour — les trois
+        //     premiers objectifs du jour apparaissent dès la prochaine ouverture.
+        //  3. `tabIntroSeen` (n°6) : une sauvegarde existante reçoit la liste
+        //     COMPLÈTE — son joueur connaît déjà le jeu, lui rejouer les cartes
+        //     d'explication (et les badges « nouveau ») serait du bruit. Les
+        //     onglets eux-mêmes restent conditionnés par l'état réel, qui les
+        //     remplit naturellement sur une partie avancée.
+        //  4. `recruitsSinceMythic` (n°9, la pitié) : 0 — le compteur démarre.
+        //  5. La tourelle de départ (n°6, garde-fou) : un Bastion STRICTEMENT
+        //     vide (rien de posé, rien en réserve, aucune bataille jouée) reçoit
+        //     la même unité qu'une partie neuve — sans elle, le garde-fou
+        //     hasGarrison le verrouillerait sans issue, la Boutique se payant en
+        //     monnaie de combat qu'on n'obtient qu'en se battant.
+        if (version < 20) {
+          let delta = 0;
+          for (const entry of Object.values(state.habits?.days ?? {})) {
+            if (entry.repas === undefined) entry.repas = 0;
+            const { energy, validatedCount } = evaluateEntry(entry, state.habits.calorieGoal);
+            delta += energy - entry.energy;
+            entry.energy = energy;
+            entry.validatedCount = validatedCount;
+          }
+          if (delta > 0) {
+            state.resources.energie = Math.min(
+              ENERGY_CAP,
+              (state.resources.energie ?? 0) + delta,
+            );
+          }
+          if (state.dailyClaimed === undefined) {
+            state.dailyClaimed = { day: "", ids: [] };
+          }
+          if (state.tabIntroSeen === undefined) {
+            state.tabIntroSeen = GATED_TABS.map((t) => t.id);
+          }
+          if (state.bastion.recruitsSinceMythic === undefined) {
+            state.bastion.recruitsSinceMythic = 0;
+          }
+          const b = state.bastion;
+          const emptyBastion =
+            b.buildingReserve.length === 0 &&
+            b.fieldStructures.length === 0 &&
+            b.liveWaveCount === 0 &&
+            !b.turretSlots.some((s) => s.occupant) &&
+            !b.barracksSlots.some((s) => s.occupant) &&
+            !b.mortarSlots.some((s) => s.occupant) &&
+            !b.support.some((s) => s);
+          if (emptyBastion) {
+            b.buildingReserve = [{ uid: b.nextBuildingUid, defId: BASTION.starting.building }];
+            b.nextBuildingUid += 1;
           }
         }
         state.saveVersion = SAVE_VERSION;

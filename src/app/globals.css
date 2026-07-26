@@ -140,6 +140,17 @@ body.overlay-open {
 }
 .animate-card-reveal { animation: card-reveal 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
 
+/* La chaîne de calcul animée (26/07/2026, amélioration n°9) — la mécanique la plus
+   copiable de Balatro : le score s'anime ligne par ligne, la causalité est VISIBLE.
+   Ici, l'écran de fin de bataille révèle le butin ligne après ligne (délai posé en
+   inline style par index) au lieu d'afficher un total déjà calculé. Aucune règle ne
+   change, seule la mise en scène. `both` : la ligne reste invisible avant son tour. */
+@keyframes line-reveal {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-line-reveal { animation: line-reveal 0.32s ease-out both; }
+
 /* ===== Révélation graduée par rareté (piste 7 du diagnostic UX) =====
    Avant : UNE animation de 0,45 s pour six raretés — le tirage ne se désirait
    pas. Ici la carte se mérite : le halo monte par paliers de couleur pendant
@@ -201,6 +212,8 @@ body.overlay-open {
   .reveal-shake { animation: none; }
   .reveal-spark { display: none; }
   .animate-card-reveal { animation: none; }
+  /* La chaîne de calcul saute sa mise en scène : toutes les lignes d'un coup. */
+  .animate-line-reveal { animation: none; }
   .cell-pulse,
   .plankton,
   .animate-sheet-up,

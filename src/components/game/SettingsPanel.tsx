@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { Panel, PixelButton, Switch } from "@/components/ui/Pixel";
+import { CodexPanel } from "@/components/game/CodexPanel";
 import { DevPanel } from "@/components/game/DevPanel";
 import { NotifSettings } from "@/components/game/NotifSettings";
 import { SlotSwitch } from "@/components/game/SlotSwitch";
@@ -59,6 +60,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [resetStep, setResetStep] = useState(0);
+  const [codexOpen, setCodexOpen] = useState(false);
 
   const doExport = () => {
     setExported(JSON.stringify(exportSave()));
@@ -116,6 +118,18 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
+
+        {/* Le Codex (amélioration n°6) : l'aide À LA DEMANDE — le jeu invente une
+            vingtaine de termes, un joueur qui rate une explication contextuelle
+            doit pouvoir la retrouver ici. */}
+        <Panel className="p-3">
+          <button
+            onClick={() => setCodexOpen(true)}
+            className="pixel-btn w-full px-3 py-2 text-xs text-cell-cyan"
+          >
+            📖 CODEX — tous les mots du jeu, expliqués
+          </button>
+        </Panel>
 
         {/* Slot de sauvegarde : perso / dev */}
         <Panel className="flex flex-col items-center gap-2 p-3">
@@ -216,6 +230,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             {resetStep === 0 ? "RÉINITIALISER" : resetStep === 1 ? "SÛR ?" : "VRAIMENT SÛR ?"}
           </PixelButton>
         </Panel>
+
+        {codexOpen && <CodexPanel onClose={() => setCodexOpen(false)} />}
 
         {/* À propos */}
         <Panel className="p-3 text-center">

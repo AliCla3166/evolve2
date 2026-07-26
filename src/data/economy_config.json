@@ -47,6 +47,10 @@
     "cost_growth_at_cap": 0.6,
     "min_step_minutes": 5
   },
+  "tutorial": {
+    "$comment": "LE PREMIER CHANTIER SCRIPTE (26/07/2026, amelioration n1 du retour complet). Mesure : le chantier le plus court du jeu dure 1,85 h (adn/enzyme/lipide Nv1) et le rachat d'heures est plafonne a 25 % — plancher reel 1 h 23 min avant le premier batiment termine, alors que le tutoriel promettait en toutes lettres << Reviens le voir aboutir >> et que le premier jalon affiche (premier_organe, 20 PA + 120 adn) ne peut pas tomber dans une session de decouverte. Lecon Grow Castle : un nombre doit monter dans les cinq premieres minutes. On ne reduit AUCUNE duree generale (la lenteur savoureuse est un pilier, et le calibrage 81-99 j repose dessus) : sur une sauvegarde NEUVE uniquement (tutoriel non termine, aucun organe encore bati, file vide), le premier chantier lance a un temps force de first_build_time_minutes. Le joueur valide une habitude, lance un chantier, et voit la premiere mue de membrane AVANT de fermer l'application. Neutre au pacing : l'ecart avec la duree reelle (~1,8 h sur ~2419 h de chantier total) pese moins de 0,08 % de l'Age 1.",
+    "first_build_time_minutes": 4
+  },
   "postes": {
     "$comment": "LES POSTES DE TRAVAIL (26/07) — le pendant, cote base, de l'equipage de recolte de La Derive (territoire_config.json -> recolte). On peche une creature, on la POSTE dans un organe producteur, elle y travaille a l'ecran, et l'organe produit davantage. C'est ce qui donne enfin une raison de collectionner les 62 especes : les places sont rares, chaque espece a une AFFINITE avec une ressource (mare_config.json -> species[].affinity), et une ouvriere postee gagne un NIVEAU DE TRAVAIL qui n'a pas de plafond.",
     "$comment_batiments": "Seuls les organes de role \"producer\" (les six productibles) acceptent des postes : c'est le seul endroit ou un bonus de production a un sens. Le Noyau (vitalite), la Membrane, la Mutation et les trois centres de mini-jeu n'en ont pas. La liste n'est ecrite nulle part : elle se lit dans buildings[].role, donc elle suivra automatiquement tout organe producteur ajoute plus tard.",

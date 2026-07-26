@@ -27,8 +27,11 @@ import {
   effectiveReserveCap,
   foundationsCost,
   foundationsMult,
+  hasGarrison,
   mortarSlotUnlockCost,
   recruitBuildingCost,
+  recruitRarityRates,
+  recruitsUntilPity,
   reserveCapCost,
   scoutCost,
   specCapCost,
@@ -140,6 +143,33 @@ function WavePreview({ waveN, level, mod }: { waveN: number; level: number; mod?
   );
 }
 
+/** La phrase de menace de la vague PLANIFIÉE — le Boss Blind de Balatro : la règle
+ *  est annoncée AVANT, le joueur prépare au lieu de subir. Composée depuis l'aperçu
+ *  exact (previewWave est déterministe), jamais inventée. */
+function threatText(preview: ReturnType<typeof previewWave>): string {
+  const parts: string[] = [];
+  if (preview.boss) {
+    parts.push(
+      preview.boss.count > 1
+        ? `${preview.boss.count} ${preview.boss.name} mènent la vague`
+        : `un ${preview.boss.name} mène la vague`,
+    );
+  }
+  const ranged = preview.types.filter((t) => t.ranged);
+  if (ranged.length > 0) {
+    parts.push(
+      `${ranged.map((t) => t.name).join(" et ")} tirent à distance — tes troupes devront aller les chercher`,
+    );
+  }
+  const swarm = preview.types[0];
+  if (!preview.boss && ranged.length === 0 && swarm) {
+    parts.push(`${swarm.count} ${swarm.name} en tête — du nombre plus que du blindage`);
+  }
+  if (parts.length === 0) return "";
+  const s = parts.join(" · ");
+  return s.charAt(0).toUpperCase() + s.slice(1) + ".";
+}
+
 type ArmedItem =
   | { type: "creature"; speciesId: string; role: "defense" | "assaut" }
   | { type: "building"; uid: number; defId: string; category: "turret" | "support" | "wall" | "trap" };
@@ -236,7 +266,12 @@ export function BastionPanel({
   void cardAssignments;
   const reserveSpecies = availableDefenseSpecies(useGame.getState());
   const waveIn = nextAttackAt - now;
-  const canPlayLive = nextAttackAt > 0 && waveIn <= WAVE_LEAD_WINDOW_MS && !inBattle && !banner;
+  /* Le garde-fou n°6 : AUCUNE bataille ne se lance terrain vide. Sans lui, une partie
+     neuve pouvait ouvrir le tower-defense avec strictement rien à poser — face à 4
+     pathogènes, boutique payable dans une monnaie qu'on n'obtient qu'en gagnant. */
+  const garrisonOk = hasGarrison(bastion);
+  const canPlayLive =
+    nextAttackAt > 0 && waveIn <= WAVE_LEAD_WINDOW_MS && garrisonOk && !inBattle && !banner;
 
   /* ---------- Sortie en préparation ---------- */
   const targetFoyer = targetId ? foyerDef(targetId) : null;
@@ -281,7 +316,8 @@ export function BastionPanel({
      relevé. La seule condition qui subsiste est l'ouverture de son secteur. */
   const targetReachable =
     !targetFoyer || sectorUnlocked(sectorOfFoyer(targetFoyer.id)!, waveCount);
-  const canLaunchSortie = avail.ok && perceeOk && targetReachable && !inBattle && !banner;
+  const canLaunchSortie =
+    avail.ok && perceeOk && targetReachable && garrisonOk && !inBattle && !banner;
 
   function togglePreparatif(id: string) {
     setPreparatifIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -358,24 +394,42 @@ export function BastionPanel({
           </button>
         </div>
 
-        {/* Bannière de fin de bataille */}
+        {/* Bannière de fin de bataille. La CHAÎNE DE CALCUL s'anime ligne par ligne
+            (n°9, la mécanique la plus copiable de Balatro) : chaque gain apparaît à
+            son tour au lieu d'un total déjà calculé — la causalité devient visible.
+            Les lignes de butin (+…) sont soulignées en couleur au passage. */}
         {banner && (
           <Panel
             variant="tooltip"
             className="space-y-1 p-2 text-center"
             style={{ background: banner.result.won ? "rgba(10,40,20,0.9)" : "rgba(40,10,15,0.9)" }}
           >
-            <p className={`text-sm ${banner.result.won ? "text-cell-lime" : "text-red-400"}`}>
+            <p className={`animate-line-reveal text-sm ${banner.result.won ? "text-cell-lime" : "text-red-400"}`}>
               {banner.title}
             </p>
             {banner.lines.map((line, i) => (
-              <p key={i} className="text-[11px] text-cell-teal/70">
+              <p
+                key={i}
+                className={`animate-line-reveal text-[11px] ${
+                  line.startsWith("+")
+                    ? "text-cell-lime"
+                    : line.startsWith("−")
+                      ? "text-red-400/90"
+                      : "text-cell-teal/70"
+                }`}
+                style={{ animationDelay: `${0.25 + i * 0.35}s` }}
+              >
                 {line}
               </p>
             ))}
-            <PixelButton className="text-xs" onClick={() => setBanner(null)}>
-              CONTINUER
-            </PixelButton>
+            <div
+              className="animate-line-reveal"
+              style={{ animationDelay: `${0.25 + banner.lines.length * 0.35}s` }}
+            >
+              <PixelButton className="text-xs" onClick={() => setBanner(null)}>
+                CONTINUER
+              </PixelButton>
+            </div>
           </Panel>
         )}
 
@@ -443,11 +497,35 @@ export function BastionPanel({
                 ⚔️ DÉFENDRE
               </PixelButton>
             </div>
+            {/* Le Boss Blind (n°7) : la vague SUBIE annonce sa règle avant qu'on
+                s'engage. La phrase et l'aperçu viennent de previewWave — exact,
+                jamais indicatif. La Vigie garde ses niveaux 2-3 (espèces, stats)
+                et tout l'aperçu des sorties : ici, seul le minimum vital est
+                offert (cf. bastion_config.json -> $comment_preview_free). */}
+            {(() => {
+              const preview = previewWave(waveCount + 1);
+              const threat = threatText(preview);
+              return threat ? (
+                <p className="text-[10px] leading-4 text-amber-300">⚠ {threat}</p>
+              ) : null;
+            })()}
+            {/* « Appeler la vague en avance » (n°7) : la décision TD la plus simple —
+                de la sécurité contre de la récompense, affichée AVANT le pari. */}
+            {canPlayLive && waveIn >= BASTION.wave.early_call.min_lead_h * 3_600_000 && (
+              <p className="text-[10px] leading-4 text-cell-lime">
+                ⚡ Vague appelée en avance : butin ×{BASTION.wave.early_call.reward_mult} si tu la
+                joues maintenant, plutôt que d&apos;attendre son échéance.
+              </p>
+            )}
+            <WavePreview
+              waveN={waveCount + 1}
+              level={Math.max(BASTION.wave.preview_free_level, bastion.scoutLevel)}
+            />
             {!canPlayLive && (
               <p className="text-[10px] text-cell-teal/60">
-                Les pathogènes ne sont pas encore en approche : une vague se joue jusqu&apos;à{" "}
-                {Math.round(WAVE_LEAD_WINDOW_MS / 3_600_000)} h à l&apos;avance. Fenêtre ouverte dans{" "}
-                {fmtDuration(Math.max(0, waveIn - WAVE_LEAD_WINDOW_MS))}.
+                {!garrisonOk
+                  ? "Terrain vide : pose au moins une défense (ta réserve contient une tourelle de départ) avant d'affronter la vague."
+                  : `Les pathogènes ne sont pas encore en approche : une vague se joue jusqu'à ${Math.round(WAVE_LEAD_WINDOW_MS / 3_600_000)} h à l'avance. Fenêtre ouverte dans ${fmtDuration(Math.max(0, waveIn - WAVE_LEAD_WINDOW_MS))}.`}
               </p>
             )}
           </Panel>
@@ -619,15 +697,17 @@ export function BastionPanel({
             </div>
             {!canLaunchSortie && (
               <p className="text-[10px] text-cell-teal/60">
-                {avail.reason === "quota"
-                  ? `Quota du jour atteint (${avail.maxPerDay} sorties). Le compteur repart demain.`
-                  : avail.reason === "energie"
-                    ? `Il te manque ${fmtInt(avail.cost - Math.floor(resources.energie))} d'énergie — valide des habitudes.`
-                    : avail.reason === "bataille"
-                      ? "Une bataille est déjà engagée."
-                      : !perceeOk
-                        ? "Aucune Percée en stock : valide le Bilan du soir pour en gagner une."
-                        : "Cible indisponible."}
+                {!garrisonOk
+                  ? "Terrain vide : pose au moins une défense (ta réserve contient une tourelle de départ) avant de sortir."
+                  : avail.reason === "quota"
+                    ? `Quota du jour atteint (${avail.maxPerDay} sorties). Le compteur repart demain.`
+                    : avail.reason === "energie"
+                      ? `Il te manque ${fmtInt(avail.cost - Math.floor(resources.energie))} d'énergie — valide des habitudes.`
+                      : avail.reason === "bataille"
+                        ? "Une bataille est déjà engagée."
+                        : !perceeOk
+                          ? "Aucune Percée en stock : valide le Bilan du soir pour en gagner une."
+                          : "Cible indisponible."}
               </p>
             )}
 
@@ -797,6 +877,20 @@ export function BastionPanel({
               >
                 🎲 RECRUTER — <CombatCost amount={recruitBuildingCost(ownedBuildingCount(bastion))} have={resources.combat ?? 0} />
               </PixelButton>
+              {/* Les probabilités honnêtes (n°9) : les taux exacts, dérivés de la même
+                  table que le tirage (jamais recopiés), et la pitié AFFICHÉE — une
+                  garantie invisible ne rassure personne. */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                {recruitRarityRates().map((r) => (
+                  <span key={r.id} className="text-[9px]" style={{ color: buildingRarityColor(r.id) }}>
+                    {RARITY_LABEL[r.id as Rarity] ?? r.id} {r.pct} %
+                  </span>
+                ))}
+              </div>
+              <p className="text-[9px] text-cell-teal/55">
+                🎯 Mythique garanti dans {recruitsUntilPity(bastion)} tirage
+                {recruitsUntilPity(bastion) > 1 ? "s" : ""} au plus tard.
+              </p>
             </Panel>
 
             {/* Emplacements de support (3, hors canvas) */}
@@ -933,7 +1027,7 @@ export function BastionPanel({
               )}
             </div>
 
-            <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">Catalogue (tirage pondéré à l&apos;aveugle)</div>
+            <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">Catalogue (taux affichés au recrutement)</div>
             <div className="grid grid-cols-2 gap-2">
               {(["turret", "wall", "trap", "support"] as const).flatMap((cat) => buildingsByCategory(cat)).map((def) => (
                 <div key={def.id} className="rounded-lg border p-1.5 text-center" style={{ borderColor: buildingRarityColor(def.rarity) }}>

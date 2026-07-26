@@ -160,7 +160,7 @@ function HabitRow({
       </div>
     );
   } else {
-    const id = def.id as "mf" | "alilou" | "rituals";
+    const id = def.id as "mf" | "alilou" | "rituals" | "repas";
     controls = (
       <div className="flex items-center gap-2">
         <MiniBtn onClick={() => patch({ [id]: entry[id] - 1 })}>−</MiniBtn>

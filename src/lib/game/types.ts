@@ -48,8 +48,10 @@ export interface BuildTask {
   boostedMs: number;
 }
 
-/** Identifiants des 5 habitudes réelles (repris du prototype v1). */
-export type HabitId = "calories" | "steps" | "mf" | "alilou" | "rituals";
+/** Identifiants des 6 habitudes réelles. `repas` (26/07/2026) est la seconde porte du
+ *  pilier Nutrition : sans elle, un jour de surplus calorique rendait la journée
+ *  parfaite mathématiquement impossible (cf. habits_config.json, $comment de `repas`). */
+export type HabitId = "calories" | "steps" | "mf" | "alilou" | "rituals" | "repas";
 
 /** Saisie d'une journée calendaire (clé YYYY-MM-DD locale). Éditable pendant la
  *  fenêtre de saisie glissante — aujourd'hui et les jours précédents jusqu'à
@@ -69,6 +71,9 @@ export interface HabitDayEntry {
   alilou: number;
   /** Rituels bien-être. */
   rituals: number;
+  /** Repas maison (seconde habitude du pilier Nutrition, 26/07/2026). Les
+   *  sauvegardes < v20 n'ont pas le champ : la migration le pose à 0. */
+  repas: number;
   /** Énergie déjà créditée pour ce jour (recalculée à chaque édition du jour même). */
   energy: number;
   /** Nombre d'habitudes validées (>=1 valide la journée pour le streak). */
@@ -347,4 +352,18 @@ export interface GameState {
    *  chaque condition est une fonction pure de l'état, rien d'autre à compter.
    *  Voir src/data/milestones_config.json et src/lib/game/milestones.ts. */
   claimedMilestones: string[];
+
+  /* ----- Objectifs du jour (26/07/2026, amélioration n°2) ----- */
+  /** Objectifs du jour déjà réclamés. `day` est la clé calendaire de la liste :
+   *  dès qu'elle diffère d'aujourd'hui, la liste est caduque — c'est tout le
+   *  réarmement. La SÉLECTION du jour, elle, n'est jamais persistée (tirage
+   *  déterministe, cf. daily.ts). */
+  dailyClaimed: { day: string; ids: string[] };
+
+  /* ----- Ouverture progressive des onglets (26/07/2026, amélioration n°6) ----- */
+  /** Onglets dont la carte d'explication a été vue. Un onglet déverrouillé mais
+   *  absent d'ici porte un badge « nouveau » et montre sa carte à la première
+   *  ouverture. Les sauvegardes migrées reçoivent la liste complète : leurs
+   *  joueurs connaissent déjà le jeu. */
+  tabIntroSeen: string[];
 }

@@ -19,10 +19,24 @@
         "id": "calories",
         "icon": "🍽️",
         "name": "Bilan calorique",
-        "desc": "Indique ton solde du jour (négatif = déficit). Déficit : +{energy_per_day} ⚡. Surplus : −1 ⚡ par 100 kcal.",
+        "desc": "Indique ton solde du jour (négatif = déficit). Déficit : +{energy_per_day} ⚡. Surplus : 0 ⚡ — rien n'est retiré.",
         "pilier": "nutrition",
         "type": "calorie",
-        "energy_per_day": 10
+        "energy_per_day": 10,
+        "$comment_surplus": "FIN DE LA SOUSTRACTION (26/07/2026, amelioration n10 du retour complet). Avant : un surplus retirait 1 energie par 100 kcal, jusqu'a -30, PRELEVES SUR LE CAPITAL deja accumule — le seul mecanisme du jeu qui detruisait une ressource deja gagnee, et il frappait le geste le plus intime que le jeu demande. Un jeu de sante qui retire des points parce qu'on a trop mange enseigne exactement le mauvais rapport a la nourriture. Desormais : un surplus ne rapporte pas le bonus, il ne reprend rien (non-attribution). La difference est mathematiquement mince (la punition plafonnait a 22 % d'une journee parfaite) et psychologiquement enorme. NEUTRE AU CALIBRAGE : aucun archetype de simulate_full.py ne modelise de journee en surplus (verifie dans PROFILS), la mesure 81-99 j ne bouge donc pas d'un centieme. La migration v20 reevalue l'historique au nouveau tarif — le solde ne peut que monter, comme en v17 et v18."
+      },
+      {
+        "id": "repas",
+        "icon": "🍲",
+        "name": "Repas maison",
+        "desc": "Cuisiné plutôt que commandé. +{energy_per} ⚡ par repas (max {cap_items}/jour).",
+        "pilier": "nutrition",
+        "type": "count",
+        "energy_per": 4,
+        "cap_items": 3,
+        "unit": "repas",
+        "unit_short": "repas",
+        "$comment": "LA PORTE DE SORTIE DU PILIER NUTRITION (26/07/2026, amelioration n10). Constat verifie sur le code du jour : Nutrition n'avait qu'UNE habitude, le solde calorique, et habitValidated exige energie > 0 — donc un jour de surplus ne validait pas Nutrition et rendait la journee parfaite mathematiquement impossible a 3/4, quoi que le joueur fasse d'autre (30 000 pas, 8 h d'ALILOU, 5 rituels : bloque quand meme). Le mecanisme des piliers existait deja et le commentaire du code le revendique — << un pilier est valide des qu'UNE de ses habitudes l'est >> — Travail en portait deux, Nutrition non. La voici. BAREME : 3 x 4 = 12 energie max, choisi pour que le minimum du pilier reste le deficit (10) — PERFECT_DAY_ENERGY est inchange a 136, et le plafond theorique passe de 196 a 208 (un garde-fou de saisie, pas un revenu ; les archetypes du simulateur s'ecrivent poste par poste et n'incluent pas ce poste, donc la mesure 81-99 j ne bouge pas)."
       },
       {
         "id": "steps",

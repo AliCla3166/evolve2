@@ -681,8 +681,13 @@ export function applySupportActive(battle: BattleState, support: SupportSlotStat
   const def = buildingDef(support.occupant);
   if (!def || !def.active) return;
   if (def.effect === "strikeAll") {
+    // `value` est un RATIO des PV max de chaque ennemi touché (n°7, 26/07/2026) :
+    // 40 dégâts fixes pesaient ~30 % de l'issue au palier 20 et ~6 % au palier 120 —
+    // l'unique levier du joueur s'évaporait quand la difficulté montait. En
+    // pourcentage, le poids du tap est constant à tous les paliers, exactement
+    // comme s_bouclier l'était déjà pour les PV du Noyau.
     battle.enemies.forEach((en) => {
-      if (!en.dying) damageEnemy(battle, en, def.value ?? 40);
+      if (!en.dying) damageEnemy(battle, en, Math.max(1, Math.round(en.hpMax * (def.value ?? 0.3))));
     });
   } else if (def.effect === "shieldBurst") {
     battle.bastionHp = Math.min(battle.bastionHpMax, battle.bastionHp + battle.bastionHpMax * (def.value ?? 0.35));

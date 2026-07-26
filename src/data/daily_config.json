@@ -1,0 +1,113 @@
+{
+  "$comment": "LES OBJECTIFS DU JOUR (26/07/2026, amelioration n2 du retour complet — le manque le plus couteux du jeu). Constat mesure : ZERO des 22 jalons d'origine ne se rearme — tous sont des compteurs cumules a vie, le jeu n'avait litteralement aucun objectif du jour. Pourtant trois rendez-vous quotidiens structurels existaient deja dans le moteur : la saisie des habitudes (fermee par cle calendaire), le Bilan du soir (des 17 h), les 3 sorties gratuites remises a zero chaque jour. Le rythme quotidien existait — il n'etait jamais FORMULE comme un objectif. Lecon TD/Balatro : un but chiffre, visible, atteignable aujourd'hui.",
+  "$comment_regles": "TROIS REGLES DE CONCEPTION, aussi importantes que le principe. 1. TOUJOURS FAISABLES LE JOUR MEME, sans exception — chaque entree du pool porte une condition de disponibilite (available, lue par daily.ts) qui l'ecarte du tirage tant que le systeme concerne n'est pas accessible (ex. les sorties avant la premiere vague) ; un objectif du jour verrouille par un timer de 48 h serait pire que pas d'objectif du tout. 2. LA RECOMPENSE SE RECLAME D'UN TAP, comme les jalons — le commentaire de milestones.ts a raison : un jalon qui se paie tout seul dans le dos du joueur ne produit aucun souvenir. 3. AUCUNE PENALITE EN CAS D'ECHEC — un objectif rate disparait a minuit, c'est tout.",
+  "$comment_tirage": "TIRAGE : count_per_day objectifs, melange deterministe seme par (createdAt, cle calendaire locale) — exactement la recette des offres d'expedition du jour (military.dailyOffers). Rien a persister pour la SELECTION ; seule la liste des objectifs deja reclames aujourd'hui l'est (GameState.dailyClaimed, rearmee au changement de cle).",
+  "$comment_recompenses": "AUCUNE RECOMPENSE EN ENERGIE, et c'est un choix de calibrage, pas une avarice. L'energie se reconvertit en heures de chantier (economy_config.json -> energy_boost) : 20 a 50 energie par jour pendant 90 jours auraient deplace l'ascension de plusieurs jours (la hausse du bareme du 26/07 l'a mesure : +76 energie/jour a prix constants = -13 jours). Les objectifs du jour paient donc en RESSOURCES (l'attente de ressources pese 2,6 % du temps total — genereux au ressenti, neutre au pacing, meme logique que la Poussee de croissance du Bilan) et en MONNAIE DE COMBAT (economie separee du Bastion). Le calibrage 81-99 j n'est pas touche.",
+  "$comment_metriques": "METRIQUES (daily.ts) : toutes PURES, derivees de l'etat pour LA JOURNEE COURANTE — aucune comptabilite nouvelle. piliers/steps/travail/rituels/repas lisent la saisie du jour ; bilan lit bilan.lastDay ; sorties lit le compteur de sorties du jour (bastion.sortieDay/sortieCount) ; chantier et expedition comptent les lancements du jour (file en cours + rapports du jour — un chantier qui ABOUTIT aujourd'hui compte aussi : la regle est genereuse, jamais punitive).",
+  "count_per_day": 3,
+  "pool": [
+    {
+      "id": "jour_piliers3",
+      "icon": "🌗",
+      "label": "Valide 3 piliers",
+      "hint": "Trois des quatre piliers de la journée — une seule habitude suffit par pilier.",
+      "metric": "piliers",
+      "target": 3,
+      "reward": { "biomasse": 90 }
+    },
+    {
+      "id": "jour_piliers4",
+      "icon": "🌟",
+      "label": "Journée parfaite",
+      "hint": "Les quatre piliers validés le même jour.",
+      "metric": "piliers",
+      "target": 4,
+      "reward": { "combat": 25 }
+    },
+    {
+      "id": "jour_pas",
+      "icon": "🚶",
+      "label": "Note 6 000 pas",
+      "hint": "La marche du jour, saisie dans Habitudes.",
+      "metric": "steps",
+      "target": 6000,
+      "reward": { "proteine": 90 }
+    },
+    {
+      "id": "jour_travail",
+      "icon": "🛠️",
+      "label": "Note 2 h de travail",
+      "hint": "Magic Focus ou chantier ALILOU — les deux comptent.",
+      "metric": "travail",
+      "target": 2,
+      "reward": { "adn": 90 }
+    },
+    {
+      "id": "jour_rituels",
+      "icon": "🧘",
+      "label": "Deux rituels bien-être",
+      "hint": "Lire, méditer, marcher, se poser.",
+      "metric": "rituels",
+      "target": 2,
+      "reward": { "enzyme": 80 }
+    },
+    {
+      "id": "jour_repas",
+      "icon": "🍲",
+      "label": "Un repas maison",
+      "hint": "Cuisiné plutôt que commandé.",
+      "metric": "repas",
+      "target": 1,
+      "reward": { "lipide": 80 }
+    },
+    {
+      "id": "jour_bilan",
+      "icon": "🌙",
+      "label": "Valide ton Bilan du soir",
+      "hint": "Dès 17 h, dans Habitudes — il ouvre une Percée.",
+      "metric": "bilan",
+      "target": 1,
+      "reward": { "combat": 20 }
+    },
+    {
+      "id": "jour_sortie",
+      "icon": "⚔️",
+      "label": "Lance une sortie",
+      "hint": "Tu as des sorties gratuites chaque jour — perdre ne coûte rien.",
+      "metric": "sorties",
+      "target": 1,
+      "reward": { "combat": 18 },
+      "available": "sorties"
+    },
+    {
+      "id": "jour_sorties2",
+      "icon": "⚔️",
+      "label": "Lance deux sorties",
+      "hint": "Le quota gratuit du jour en couvre trois.",
+      "metric": "sorties",
+      "target": 2,
+      "reward": { "combat": 35 },
+      "available": "sorties"
+    },
+    {
+      "id": "jour_chantier",
+      "icon": "🏗️",
+      "label": "Lance un chantier",
+      "hint": "Un organe de plus en construction — ou un chantier qui aboutit aujourd'hui.",
+      "metric": "chantier",
+      "target": 1,
+      "reward": { "signaux": 90 },
+      "available": "chantier"
+    },
+    {
+      "id": "jour_expedition",
+      "icon": "🧭",
+      "label": "Envoie une expédition",
+      "hint": "Une escouade vers un relais du jour, depuis le Noyau.",
+      "metric": "expedition",
+      "target": 1,
+      "reward": { "signaux": 110 },
+      "available": "expedition"
+    }
+  ]
+}

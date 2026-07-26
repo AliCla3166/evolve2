@@ -12,11 +12,12 @@ import { buildingPurpose } from "@/lib/game/buildingInfo";
 import {
   buildingProductionPerHour,
   buildTimeHours,
-  buildTimeMs,
   canAfford,
+  effectiveBuildTimeMs,
   findFreeSlot,
   getBuildingConfig,
   isDesigned,
+  isScriptedFirstBuild,
   levelCost,
   maxLevel,
   resourceName,
@@ -106,6 +107,7 @@ export function BuildingSheet({
   const resources = useGame((s) => s.resources);
   const buildings = useGame((s) => s.buildings);
   const queue = useGame((s) => s.buildQueue);
+  const tutorialStep = useGame((s) => s.tutorialStep);
   const startUpgrade = useGame((s) => s.startUpgrade);
   // "now" du rendu = dernier tick appliqué (pas de Date.now() en rendu).
   const now = useGame((s) => s.lastTick);
@@ -132,6 +134,12 @@ export function BuildingSheet({
   const anySlotFree = queue.length < unlockedSlotCount(buildings);
   const prod = buildingProductionPerHour(id, level);
   const nextProd = designed && !maxed ? buildingProductionPerHour(id, nextLevel) : {};
+  /* Le devis affiché est la durée EFFECTIVE : sur une partie neuve, le premier
+     chantier est scripté à quelques minutes (economy_config.json -> tutorial), et
+     annoncer 1 h 51 pour un chantier qui en durera 4 serait un mensonge. */
+  const sheetState = { tutorialStep, buildings, buildQueue: queue };
+  const scripted = isScriptedFirstBuild(sheetState);
+  const nextDurationMs = designed && !maxed ? effectiveBuildTimeMs(sheetState, id, nextLevel) : 0;
 
   return (
     <>
@@ -259,7 +267,10 @@ export function BuildingSheet({
                       </div>
                       <CostLine cost={cost} resources={resources} />
                       <div className="mt-1 text-[11px] text-cell-teal/60">
-                        ⏱ {fmtDuration(buildTimeMs(id, nextLevel))}
+                        ⏱ {fmtDuration(nextDurationMs)}
+                        {scripted && (
+                          <span className="text-cell-lime"> — premier chantier accéléré ✦</span>
+                        )}
                         {Object.entries(nextProd).map(([res, rate]) => (
                           <span key={res} className="text-cell-lime/80">
                             {" "}
@@ -277,6 +288,11 @@ export function BuildingSheet({
                           if (startUpgrade(id)) {
                             vibrate(20);
                             playCue("build_start");
+                            /* Pendant le tutoriel, la fiche se referme d'elle-même : l'étape
+                               suivante du coach (et son bouton « COMPRIS ») vit derrière le
+                               voile z-20 de cette sheet — le laisser ouvert, c'était cacher
+                               le tutoriel derrière la fiche qu'il venait de faire ouvrir. */
+                            if (scripted) onClose();
                           }
                         }}
                       >

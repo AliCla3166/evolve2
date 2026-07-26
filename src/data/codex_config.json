@@ -1,0 +1,84 @@
+{
+  "$comment": "LE CODEX (26/07/2026, amelioration n6 du retour complet, troisieme volet). Constat verifie : le jeu invente une vingtaine de termes (Noyau, Derive, Foyer, Vestige, Percee, Bilan, Peril, Relais, Abime, Mue, Antre, Gisement, Cache, Equipage, Reconquete, Jalon, Point d'Age, Grace, Serie...) et n'offrait AUCUN ecran d'aide — un joueur qui ratait une explication contextuelle (carte d'ouverture d'onglet, fiche de batiment) n'avait aucun moyen de la retrouver. Le bon patron existait deja (buildingInfo.ts pour les batiments et les ressources) mais ne couvrait ni la carte, ni le Bilan, ni le Bastion, ni la progression. Ce fichier est le dictionnaire etendu ; CodexPanel le sert, accessible depuis les Reglages. Purement descriptif : AUCUN chiffre d'equilibrage ici — les nombres vivent dans leurs configs respectives et les ecrans les affichent en direct.",
+  "groups": [
+    {
+      "id": "journee",
+      "name": "La journée réelle",
+      "icon": "🌙",
+      "terms": [
+        { "term": "Série", "icon": "🔥", "desc": "Jours consécutifs avec au moins une habitude validée, saisie le jour même. Elle mesure la régularité du rendez-vous, pas la quantité de travail." },
+        { "term": "Jour de grâce", "icon": "🩹", "desc": "Répare un oubli isolé et récent pour recoller la série — une fois par mois. Le jour réparé ne rapporte aucune énergie : la grâce répare, elle ne paie pas." },
+        { "term": "Journée parfaite", "icon": "🌟", "desc": "Les quatre piliers (Nutrition, Mouvement, Travail, Soin) validés le même jour. Chaque pilier se contente d'une seule de ses habitudes." },
+        { "term": "Bilan du soir", "icon": "🌙", "desc": "Le geste qui clôt la journée, ouvert à partir de 17 h : si ta journée dépasse le seuil, il te verse une Percée et des sorties gratuites pour demain." },
+        { "term": "Percée", "icon": "⚡", "desc": "La monnaie du spectaculaire, gagnée au Bilan du soir. Elle déclenche un coup d'éclat : une vague hors norme, l'assaut d'un antre, ou une poussée de production." },
+        { "term": "Objectif du jour", "icon": "☀️", "desc": "Trois buts tirés chaque matin, toujours faisables le jour même, à réclamer d'un tap. Un objectif raté disparaît à minuit — sans pénalité." }
+      ]
+    },
+    {
+      "id": "cellule",
+      "name": "La cellule",
+      "icon": "🧬",
+      "terms": [
+        { "term": "Proto-organe", "icon": "🫧", "desc": "Un bâtiment de la cellule. Chaque organe construit rapproche la prochaine mue et peut ouvrir un chantier auxiliaire." },
+        { "term": "Mue", "icon": "🧬", "desc": "La membrane change de forme quand assez d'organes sont bâtis — la preuve visible que la cellule grandit." },
+        { "term": "Chantier", "icon": "🏗️", "desc": "Une amélioration en cours. Son timer s'écoule en temps réel, même app fermée ; l'énergie des habitudes peut en racheter une partie." },
+        { "term": "Énergie", "icon": "⚡", "desc": "La ressource que produisent tes habitudes réelles. Elle achète du temps de chantier, des jetons de pêche et des sorties supplémentaires." },
+        { "term": "Poste de travail", "icon": "🛠️", "desc": "Une place dans un organe producteur pour une créature pêchée : elle y travaille à l'écran, l'organe produit davantage, et elle gagne de l'ancienneté." }
+      ]
+    },
+    {
+      "id": "carte",
+      "name": "La Dérive — la carte",
+      "icon": "🧭",
+      "terms": [
+        { "term": "Foyer", "icon": "📍", "desc": "Un point de la carte à prendre par une sortie : gisement, cache, vestige, site d'expédition, antre ou abîme." },
+        { "term": "Secteur", "icon": "🗺️", "desc": "Une région de la carte. Chaque secteur s'ouvre à un palier donné — le palier, c'est ton numéro de vague." },
+        { "term": "Palier", "icon": "📈", "desc": "Le numéro de vague courant, l'échelle de difficulté universelle. Un foyer s'assaille au palier affiché sur sa fiche." },
+        { "term": "Gisement", "icon": "⛏️", "desc": "Un foyer qui, une fois pris, produit une ressource en continu — même hors ligne. Se développe, et accueille un équipage de récolte." },
+        { "term": "Équipage", "icon": "🐚", "desc": "Les créatures postées sur un gisement pris : elles y travaillent à l'écran et augmentent son rendement." },
+        { "term": "Vestige", "icon": "🏺", "desc": "Un foyer qui accorde un bonus global permanent, acquis une seule fois." },
+        { "term": "Cache", "icon": "📦", "desc": "Un foyer au butin unique : ressources, fragments, monnaie de combat." },
+        { "term": "Antre", "icon": "👑", "desc": "Le repaire d'un boss. Son assaut coûte une Percée — c'est le rendez-vous du soir — et sa prime est majorée." },
+        { "term": "Abîme", "icon": "🌀", "desc": "Le foyer sans fin : il se rejoue indéfiniment, toujours calé sur ton palier du moment." },
+        { "term": "Relais", "icon": "🧭", "desc": "Les quatre destinations d'expédition proposées chaque jour. Capturer un site d'expédition rend sa destination disponible en permanence." },
+        { "term": "Reconquête", "icon": "🚩", "desc": "Reprendre un foyer déjà à toi, à un palier plus haut : le butin de reconquête est indexé sur le palier réellement joué, sans dernier échelon." }
+      ]
+    },
+    {
+      "id": "bastion",
+      "name": "Le Bastion — la défense",
+      "icon": "⚔️",
+      "terms": [
+        { "term": "Vague", "icon": "🦠", "desc": "L'attaque périodique des pathogènes. Jouée en direct, elle rapporte plus ; ignorée, elle se résout toute seule — jamais de mur." },
+        { "term": "Sortie", "icon": "⚔️", "desc": "Une bataille lancée quand TU veux, contre le Bastion ou un foyer de la carte. Trois gratuites par jour, et perdre ne coûte rien." },
+        { "term": "Péril", "icon": "☠️", "desc": "La difficulté volontaire d'une sortie : chaque cran monte le danger et monte le butin PLUS vite. L'échelle n'a pas de dernier barreau." },
+        { "term": "Préparatifs", "icon": "✚", "desc": "Des avantages de bataille achetés en énergie juste avant de lancer : butin enrichi, renforts, salve d'ouverture." },
+        { "term": "Garnison", "icon": "⛺", "desc": "Tout ce que tu opposes aux pathogènes : créatures en barracks et mortiers, tourelles, murs et pièges posés sur le terrain." },
+        { "term": "Vigie", "icon": "🔭", "desc": "L'aperçu exact de la vague suivante, dévoilé par niveaux achetés en Boutique. La vague planifiée annonce toujours au moins son effectif." },
+        { "term": "Fondations renforcées", "icon": "🧱", "desc": "Le bonus global de PV et de dégâts de toute la garnison. Sans dernier niveau : il y a toujours un cran suivant, et il sert toujours." },
+        { "term": "Monnaie de combat", "icon": "🪙", "desc": "La monnaie propre au Bastion, gagnée en bataille, dépensée dans sa Boutique. Elle ne touche pas à l'économie de la cellule." }
+      ]
+    },
+    {
+      "id": "mare",
+      "name": "La Mare — la collection",
+      "icon": "🐟",
+      "terms": [
+        { "term": "Jeton de pêche", "icon": "🪙", "desc": "Un lancer de ligne. S'achète en énergie — c'est ta journée réelle qui paie la pêche." },
+        { "term": "Fragment", "icon": "🧩", "desc": "Un éclat de carte rapporté par les expéditions et les sorties : huit fusionnent en une carte, rareté Rare garantie au minimum." },
+        { "term": "Édition", "icon": "✨", "desc": "La finition d'une prise : chromée, holographique, polychrome ou négative. Elle amplifie la puissance de la carte — la négative ne consomme aucune place." },
+        { "term": "Verrou des doublons", "icon": "🔒", "desc": "Une espèce ne se joue qu'à partir de plusieurs exemplaires : la première prise donne la carte, les suivantes donnent le droit de la mettre au travail." }
+      ]
+    },
+    {
+      "id": "progression",
+      "name": "La progression",
+      "icon": "✦",
+      "terms": [
+        { "term": "Jalon", "icon": "🏁", "desc": "Un objectif de long terme qui se déclenche tout seul et se réclame d'un tap. L'ensemble des jalons EST l'horizon de l'Âge 1." },
+        { "term": "Point d'Âge", "icon": "✦", "desc": "La mesure de ton avancement vers l'Âge 2 : chaque jalon réclamé en verse. L'Âge s'achève quand tous sont encaissés." },
+        { "term": "Âge", "icon": "🌌", "desc": "Un chapitre du jeu. L'Âge 1 est la cellule ; son ascension, préparée par le Centre de mutation, ouvrira l'Âge 2." }
+      ]
+    }
+  ]
+}

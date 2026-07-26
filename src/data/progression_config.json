@@ -1,0 +1,46 @@
+{
+  "$comment": "L'OUVERTURE PROGRESSIVE DES ONGLETS (26/07/2026, amelioration n6 du retour complet). Constat mesure : play/page.tsx declarait grid-cols-7 et rendait les sept onglets SANS LA MOINDRE CONDITION, avec deux badges deja allumes a la seconde zero (DERIVE affichait les 3 sorties gratuites, BASTION l'epee des la premiere vague planifiee a 48 h < lead_window 96 h). Le jeu attirait activement le nouveau joueur vers ses deux systemes les plus profonds, alors que le tutoriel en enseignait trois sur une vingtaine (15 %). Lecon Grow Castle : le prochain deblocage est toujours affiche (<< nouveau heros a la vague 30 >>) et chaque ouverture est un evenement. Ici : trois onglets au depart (BASE, HABITUDES, REGLAGES), les quatre autres s'ouvrent sur une CONDITION lisible, annoncee sur l'onglet verrouille lui-meme — la contrainte, le chiffre, la raison (convention bilanReasonText).",
+  "$comment_conditions": "POURQUOI CES CONDITIONS-LA. La Mare au premier organe : le premier chantier (scripte a 4 min, cf. economy_config -> tutorial) enseigne construire, la peche vient juste apres. Les Rapports au premier rapport : un journal vide n'apprend rien. Le Bastion a la premiere vague VECUE (waveCount >= 1, auto-resolue a ~48 h) : la vague raconte pourquoi une defense existe, et le garde-fou hasGarrison + la tourelle de depart (bastion_config -> starting) rendent la premiere bataille jouable. La Derive au premier Bilan valide : le Bilan est le rendez-vous qui donne les Percees, et les Percees sont la cle des antres de la carte — l'ordre d'apprentissage suit l'ordre des dependances du jeu. Les sauvegardes migrees remplissent ces conditions naturellement ; une partie neuve les ouvre en 2-3 jours.",
+  "tabs": [
+    {
+      "id": "mare",
+      "name": "La Mare",
+      "icon": "🐟",
+      "metric": "built_organs",
+      "target": 1,
+      "lock_hint": "S'ouvre à ton premier organe construit — {current}/{target}.",
+      "intro_title": "La Mare s'ouvre",
+      "intro": "Pêche des créatures et recense-les : chaque espèce peut travailler pour ta cellule — en défense au Bastion, en expédition, ou postée dans un organe. Un jeton se paie en ⚡, c'est-à-dire en habitudes réellement tenues."
+    },
+    {
+      "id": "reports",
+      "name": "Rapports",
+      "icon": "📜",
+      "metric": "reports_count",
+      "target": 1,
+      "lock_hint": "S'ouvre à ton premier compte rendu (chantier achevé, vague, expédition).",
+      "intro_title": "Le journal s'ouvre",
+      "intro": "Tout ce qui s'est passé pendant ton absence est consigné ici : chantiers aboutis, vagues repoussées, expéditions rentrées. Le badge te dit ce que tu n'as pas encore lu."
+    },
+    {
+      "id": "bastion",
+      "name": "Bastion",
+      "icon": "⚔️",
+      "metric": "waves_survived",
+      "target": 1,
+      "lock_hint": "S'ouvre à ta première vague de pathogènes ({current}/{target}) — la première arrive d'elle-même sous 48 h.",
+      "intro_title": "Le Bastion s'ouvre",
+      "intro": "Les pathogènes reviennent régulièrement : ici tu poses tes défenses et tu joues les batailles en direct. Ta réserve contient déjà une tourelle de départ — pose-la sur un emplacement avant de lancer quoi que ce soit."
+    },
+    {
+      "id": "derive",
+      "name": "La Dérive",
+      "icon": "🧭",
+      "metric": "percees_total",
+      "target": 1,
+      "lock_hint": "S'ouvre à ton premier Bilan du soir validé (dès 17 h, dans Habitudes).",
+      "intro_title": "La Dérive s'ouvre",
+      "intro": "La carte des eaux : des gisements qui produisent pour toi, des vestiges qui te renforcent, des antres gardés par des boss. Chaque foyer se prend par une sortie — tu en as trois gratuites par jour, et perdre ne coûte rien."
+    }
+  ]
+}

@@ -5,6 +5,7 @@
 
 import { useEffect } from "react";
 import { Panel, PixelButton } from "@/components/ui/Pixel";
+import { FIRST_BUILD_MINUTES } from "@/lib/game/economy";
 import { dayKey } from "@/lib/game/habits";
 import { useGame } from "@/lib/game/store";
 import { TUTORIAL_DONE } from "@/lib/game/types";
@@ -55,11 +56,16 @@ export function TutorialCoach() {
           )}
           {step === 2 && (
             <div className="space-y-2">
+              {/* La durée est ANNONCÉE, pas suggérée (amélioration n°1) : ton premier
+                  organe est scripté à quelques minutes — « reviens le voir aboutir »
+                  était une promesse qu'aucune première session ne pouvait encaisser. */}
               <p className="text-xs leading-relaxed text-cell-cyan">
-                Chantier lancé ! Son timer s&apos;écoule en{" "}
-                <span className="text-cell-lime">temps réel</span>, même quand le
-                jeu est fermé. Reviens le voir aboutir — ta cellule, elle,
-                n&apos;arrête jamais.
+                Chantier lancé ! Ton premier organe sera prêt dans{" "}
+                <span className="text-cell-lime">{FIRST_BUILD_MINUTES} minutes</span> —
+                reste, ça vaut le coup : ta membrane va muer sous tes yeux. Les
+                chantiers suivants prendront des heures, en{" "}
+                <span className="text-cell-lime">temps réel</span>, même quand le jeu
+                est fermé.
               </p>
               <div className="text-center">
                 <PixelButton

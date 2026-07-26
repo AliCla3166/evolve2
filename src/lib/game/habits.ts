@@ -180,7 +180,7 @@ export const HABITS: HabitDef[] = HABITS_CFG.bareme.habitudes.map((h) => ({
 /** Les piliers de la journée parfaite, dans l'ordre d'affichage. */
 export const PILIERS: ReadonlyArray<PilierDef> = HABITS_CFG.bareme.piliers;
 
-/** Énergie maximale théorique d'une journée : les 5 habitudes à fond.
+/** Énergie maximale théorique d'une journée : toutes les habitudes à fond.
  *  Dérivée du barème, jamais codée en dur — l'ancienne constante `95` figée
  *  dans HabitsPanel était FAUSSE (le maximum réel était 90), si bien que le
  *  compteur « journées parfaites » de la grille affichait toujours zéro et que
@@ -447,6 +447,7 @@ export function emptyDayEntry(): HabitDayEntry {
     mf: 0,
     alilou: 0,
     rituals: 0,
+    repas: 0,
     energy: 0,
     validatedCount: 0,
   };
@@ -468,16 +469,22 @@ export function habitEnergy(
       // automatiquement dès que la valeur est modifiée — plus de bouton
       // "Valider" séparé) : une journée jamais touchée ne rapporte rien.
       if (!entry.caloriesDone) return 0;
-      return entry.calories <= 0
-        ? (def.energyPerDay ?? 5)
-        : -Math.floor(entry.calories / (CALORIE_STEP || 1));
+      // NON-ATTRIBUTION, plus jamais de soustraction (26/07/2026, amélioration
+      // n°10) : un surplus ne rapporte pas le bonus, il ne reprend RIEN. L'ancien
+      // barème retirait jusqu'à −30 ⚡ sur le capital déjà accumulé — le seul
+      // mécanisme du jeu qui détruisait une ressource gagnée, et il frappait le
+      // geste le plus intime que le jeu demande (cf. habits_config.json).
+      return entry.calories <= 0 ? (def.energyPerDay ?? 5) : 0;
     }
     case "rate": {
       const raw = Math.floor(entry.steps / (def.per ?? 1)) * (def.energyPer ?? 0);
       return Math.min(raw, def.capEnergy ?? Infinity);
     }
     case "count": {
-      const count = Math.min(entry[def.id as "mf" | "alilou" | "rituals"], def.capItems ?? Infinity);
+      const count = Math.min(
+        entry[def.id as "mf" | "alilou" | "rituals" | "repas"] ?? 0,
+        def.capItems ?? Infinity,
+      );
       return count * (def.energyPer ?? 0);
     }
   }
@@ -490,7 +497,7 @@ export function habitValidated(
   calorieGoal: number,
 ): boolean {
   if (def.type === "calorie") return habitEnergy(def, entry, calorieGoal) > 0;
-  return entry[def.id as "steps" | "mf" | "alilou" | "rituals"] > 0;
+  return (entry[def.id as "steps" | "mf" | "alilou" | "rituals" | "repas"] ?? 0) > 0;
 }
 
 /* ---------- Les 4 piliers de la journée parfaite ----------

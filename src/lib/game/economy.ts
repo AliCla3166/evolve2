@@ -6,6 +6,7 @@ import rawConfig from "@/data/economy_config.json";
 import { freshBastionState } from "./bastion/config";
 import { cardPowerRec, fitInSlots, speciesAffinity } from "./cards";
 import { bonusValue, freshTerritoireState } from "./territoire";
+import { TUTORIAL_DONE } from "./types";
 import type { BuildingId, BuildTask, GameState, ResourceId } from "./types";
 
 /* ---------- Typage de la structure réelle du JSON ---------- */
@@ -106,6 +107,10 @@ export interface EconomyConfig {
     cost_growth_at_cap: number;
     /** En dessous, on ne propose plus de rachat (micro-achats sans intérêt). */
     min_step_minutes: number;
+  };
+  tutorial: {
+    /** Durée forcée du tout premier chantier d'une sauvegarde neuve (minutes). */
+    first_build_time_minutes: number;
   };
   postes: PosteConfig;
   buildings: Record<string, BuildingConfig>;
@@ -242,6 +247,44 @@ export function nextSlotUnlock(
 
 /** Réglages du rapport de retour (« pendant ton absence… »). */
 export const OFFLINE_REPORT = ECONOMY.offline_report;
+
+/* ---------- Le premier chantier scripté (amélioration n°1 du retour du 26/07) ----------
+   Le plancher réel avant le premier bâtiment terminé était de 1 h 23 min (chantier le plus
+   court 1,85 h, rachat plafonné à 25 %), pendant que le tutoriel promettait « Reviens le
+   voir aboutir ». Sur une sauvegarde NEUVE uniquement, le premier chantier lancé dure
+   first_build_time_minutes : le joueur voit sa première mue avant de fermer l'application.
+   Aucune durée générale ne change — la lenteur savoureuse reste un pilier. */
+
+/** Durée forcée du premier chantier d'une partie neuve (minutes, config). */
+export const FIRST_BUILD_MINUTES = ECONOMY.tutorial.first_build_time_minutes;
+
+/** Le prochain chantier lancé sera-t-il LE chantier scripté du tutoriel ?
+ *  Trois conditions, toutes nécessaires : le tutoriel n'est pas terminé (les
+ *  sauvegardes migrées l'ont d'office terminé — elles ne sont jamais concernées),
+ *  aucun organe n'a encore été bâti, et la file est vide. Dès que le premier
+ *  chantier tourne ou qu'un organe existe, la condition tombe pour toujours. */
+export function isScriptedFirstBuild(
+  state: Pick<GameState, "tutorialStep" | "buildings" | "buildQueue">,
+): boolean {
+  return (
+    state.tutorialStep < TUTORIAL_DONE &&
+    builtOrganCount(state.buildings) === 0 &&
+    state.buildQueue.length === 0
+  );
+}
+
+/** Durée effective d'un chantier pour CET état : la durée de config, sauf pour le
+ *  premier chantier d'une partie neuve, scripté à FIRST_BUILD_MINUTES. Utilisée par
+ *  le lancement (store.startUpgrade) ET par l'affichage (BuildingSheet) — un devis
+ *  qui annoncerait 1 h 51 pour un chantier qui durera 4 min serait un mensonge. */
+export function effectiveBuildTimeMs(
+  state: Pick<GameState, "tutorialStep" | "buildings" | "buildQueue">,
+  id: BuildingId,
+  level: number,
+): number {
+  if (isScriptedFirstBuild(state)) return FIRST_BUILD_MINUTES * 60_000;
+  return buildTimeMs(id, level);
+}
 
 /** Un slot accepte-t-il un chantier de `hours` heures ? (le principal accepte tout) */
 export function slotAcceptsHours(index: number, hours: number): boolean {
@@ -685,7 +728,7 @@ export function resourceName(res: ResourceId): string {
  *  une partie neuve se déclarait donc en v4 dans son export de sauvegarde et dans la sync
  *  cloud, alors que ses données étaient bien au format courant. Un seul point de vérité
  *  supprime la dérive : à chaque nouvelle migration, on incrémente cette constante. */
-export const SAVE_VERSION = 19;
+export const SAVE_VERSION = 20;
 
 export function freshGameState(now: number): GameState {
   return {
@@ -735,5 +778,8 @@ export function freshGameState(now: number): GameState {
     territoire: freshTerritoireState(now),
     bilan: { lastDay: null, percees: 0, perceesTotal: 0, perceesSpent: 0 },
     claimedMilestones: [],
+    // ----- Objectifs du jour & ouverture progressive (26/07) -----
+    dailyClaimed: { day: "", ids: [] },
+    tabIntroSeen: [],
   };
 }

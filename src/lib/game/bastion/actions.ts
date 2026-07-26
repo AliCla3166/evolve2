@@ -109,7 +109,14 @@ export function recruitBuilding(state: GameState): boolean {
   const [roll1, seed1] = rand(state.rngSeed);
   const [roll2, seed2] = rand(seed1);
   state.rngSeed = seed2;
-  const def = rollBuildingDef(roll1, roll2);
+  // La pitié (amélioration n°9) : mythique garanti au plus tard au N-ième tirage
+  // depuis le dernier (bastion_config.json -> recruit_pity). Le tirage d'index
+  // reste aléatoire : le mythique garanti n'est pas toujours le même bâtiment.
+  const pityDue =
+    (state.bastion.recruitsSinceMythic ?? 0) + 1 >= BASTION.recruit_pity.mythique_every;
+  const def = rollBuildingDef(roll1, roll2, pityDue ? "mythique" : undefined);
+  state.bastion.recruitsSinceMythic =
+    def.rarity === "mythique" ? 0 : (state.bastion.recruitsSinceMythic ?? 0) + 1;
   state.bastion.buildingReserve.push({ uid: state.bastion.nextBuildingUid++, defId: def.id });
   return true;
 }
