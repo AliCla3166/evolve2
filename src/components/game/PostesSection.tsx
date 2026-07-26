@@ -15,7 +15,17 @@
 "use client";
 
 import { useState } from "react";
-import { cardArt, cardLevel, cardPowerRec, speciesAffinity, speciesConfig } from "@/lib/game/cards";
+import {
+  cardArt,
+  cardLevel,
+  cardPowerRec,
+  fitInSlots,
+  isCardPlayable,
+  isFreeSlotCard,
+  slotsUsed,
+  speciesAffinity,
+  speciesConfig,
+} from "@/lib/game/cards";
 import {
   acceptsPostes,
   buildingPosteMult,
@@ -128,19 +138,33 @@ export function PostesSection({ id }: { id: BuildingId }) {
     if (bid === id || !list) continue;
     for (const sid of list) busy.add(sid);
   }
-  const libres = Object.keys(collection)
-    .filter((sid) => !busy.has(sid) && !crew.includes(sid) && speciesConfig(sid))
+  // Même verrou que sur les gisements : une espèce tenue à un seul exemplaire ne
+  // travaille pas encore (cf. cards.isCardPlayable). On la retire de la liste et on
+  // dit combien sont dans ce cas, plutôt que de laisser croire à une collection vide.
+  const candidates = Object.keys(collection).filter(
+    (sid) => !busy.has(sid) && !crew.includes(sid) && speciesConfig(sid),
+  );
+  const verrouillees = candidates.filter((sid) => !isCardPlayable(collection[sid])).length;
+  const jouables = candidates
+    .filter((sid) => isCardPlayable(collection[sid]))
     .sort(
       (a, b) =>
         workerBonus(view, b, res) - workerBonus(view, a, res) ||
         cardPowerRec(b, collection[b]) - cardPowerRec(a, collection[a]),
     );
+  /* Comme sur les gisements : on compte les PLACES, pas les têtes. Une négative
+     n'occupe aucune place (cards.slotCost), donc un organe au complet en accepte
+     encore — et posteBonus les paiera toutes (economy.posteBonus → fitInSlots). */
+  const used = slotsUsed(crew, collection);
+  const full = used >= slots;
+  const libres = full ? jouables.filter((sid) => isFreeSlotCard(collection[sid])) : jouables;
 
   return (
     <div className="space-y-1.5 border-t border-cell-cyan/15 pt-2">
       <div className="flex items-baseline justify-between text-[11px]">
         <span className="text-cell-cyan">
-          ⚙️ Postes de travail — {crew.length}/{slots}
+          ⚙️ Postes de travail — {used}/{slots}
+          {crew.length > used && ` (+${crew.length - used} sans place)`}
         </span>
         <span className={mult > 1 ? "text-cell-lime" : "text-cell-teal/50"}>
           rendement ×{mult.toFixed(2).replace(".", ",")}
@@ -155,31 +179,23 @@ export function PostesSection({ id }: { id: BuildingId }) {
         </div>
       )}
 
-      {/* Les places : une ouvrière au travail, ou une place vide qui attend */}
+      {/* Les places : d'abord TOUTES les ouvrières (une négative peut porter l'effectif
+          au-delà du nombre de places), puis les places libres qui attendent. */}
       <div className="flex flex-wrap gap-1.5">
-        {Array.from({ length: slots }, (_, i) => {
-          const sid = crew[i];
-          const entry = sid ? collection[sid] : undefined;
-          if (!sid || !entry) {
-            return (
-              <button
-                key={`vide-${i}`}
-                onClick={() => setPicking(true)}
-                aria-label="Poster une créature dans cet organe"
-                className="flex h-[38px] w-[38px] items-center justify-center rounded border border-dashed border-cell-cyan/30 text-sm text-cell-cyan/40 active:translate-y-px"
-              >
-                +
-              </button>
-            );
-          }
+        {crew.map((sid) => {
+          const entry = collection[sid];
+          if (!entry) return null;
           const sp = speciesConfig(sid);
+          const gratuite = isFreeSlotCard(entry);
           return (
             <button
               key={sid}
               onClick={() => togglePoste(id, sid)}
-              title={`${sp?.name ?? sid} — retirer du poste`}
+              title={`${sp?.name ?? sid}${gratuite ? " (n'occupe aucune place)" : ""} — retirer du poste`}
               aria-label={`Retirer ${sp?.name ?? sid} de cet organe`}
-              className="relative h-[38px] w-[38px] overflow-hidden rounded border border-cell-lime/50 active:translate-y-px"
+              className={`relative h-[38px] w-[38px] overflow-hidden rounded border active:translate-y-px ${
+                gratuite ? "border-cell-magenta/70" : "border-cell-lime/50"
+              }`}
             >
               <img
                 src={cardArt(sid)}
@@ -195,37 +211,56 @@ export function PostesSection({ id }: { id: BuildingId }) {
             </button>
           );
         })}
+        {Array.from({ length: Math.max(0, slots - used) }, (_, i) => (
+          <button
+            key={`vide-${i}`}
+            onClick={() => setPicking(true)}
+            aria-label="Poster une créature dans cet organe"
+            className="flex h-[38px] w-[38px] items-center justify-center rounded border border-dashed border-cell-cyan/30 text-sm text-cell-cyan/40 active:translate-y-px"
+          >
+            +
+          </button>
+        ))}
       </div>
 
       {/* L'ancienneté, une ligne par ouvrière — la seule chose ici qui bouge en direct */}
       {crew.length > 0 && (
         <div className="space-y-1 pt-0.5">
-          {crew.slice(0, slots).map((sid) => (
+          {fitInSlots(crew, collection, slots).map((sid) => (
             <WorkerRow key={sid} speciesId={sid} resource={res} />
           ))}
         </div>
       )}
 
-      {crew.length < slots && !picking && libres.length > 0 && (
+      {!picking && libres.length > 0 && (
         <button
           onClick={() => setPicking(true)}
           className="text-[10px] text-cell-cyan/70 underline underline-offset-2"
         >
-          Poster une créature ({libres.length} disponible{libres.length > 1 ? "s" : ""})
+          {full ? "Ajouter une ouvrière sans place" : "Poster une créature"} ({libres.length}{" "}
+          disponible{libres.length > 1 ? "s" : ""})
         </button>
       )}
-      {crew.length < slots && libres.length === 0 && (
+      {!full && libres.length === 0 && (
         <p className="text-[10px] text-cell-teal/50">
           Aucune créature libre — pêche à La Mare, ou libère une carte de la défense.
         </p>
       )}
-      {crew.length >= slots && (
+      {!full && verrouillees > 0 && (
         <p className="text-[10px] text-cell-teal/50">
-          Organe au complet. Améliore-le pour ouvrir une place de plus.
+          🔒 {verrouillees} espèce{verrouillees > 1 ? "s" : ""}{" "}
+          verrouillée{verrouillees > 1 ? "s" : ""} — il en faut une 2ᵉ prise pour avoir le
+          droit de la mettre au travail.
+        </p>
+      )}
+      {full && (
+        <p className="text-[10px] text-cell-teal/50">
+          Organe au complet. Améliore-le pour ouvrir une place de plus — ou poste une
+          créature négative, qui n&apos;occupe aucune place.
         </p>
       )}
 
-      {picking && crew.length < slots && (
+      {picking && libres.length > 0 && (
         <div className="max-h-44 space-y-1 overflow-y-auto rounded border border-cell-cyan/20 p-1.5">
           {libres.map((sid) => {
             const sp = speciesConfig(sid);

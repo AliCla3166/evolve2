@@ -56,6 +56,20 @@ export interface SpeciesConfig {
   hp: number;
 }
 
+/** Une ÉDITION : le deuxième axe de la carte, indépendant de la rareté.
+ *  (cf. mare_config.json -> $comment_editions.) */
+export interface EditionConfig {
+  id: string;
+  name: string;
+  /** Poids de tirage, indépendant de celui de la rareté. */
+  weight: number;
+  /** Multiplicateur de puissance, appliqué en plus de rareté × niveau. */
+  power_mult: number;
+  /** Vraie pour la négative : la carte n'occupe aucune place, nulle part. */
+  free_slot: boolean;
+  color: string;
+}
+
 /** Mise en scène d'une révélation, pour une rareté donnée (piste 7). */
 export interface RevealStepConfig {
   /** Durée TOTALE de la montée du halo avant l'apparition de la carte. */
@@ -86,6 +100,8 @@ export interface MareConfig {
   fragments_per_card: number;
   fragment_card_rarity_floor: number;
   rarities: RarityConfig[];
+  /** Ordre du tableau = ordre de prestige (standard en 0, négative en dernier). */
+  editions: EditionConfig[];
   reveal: RevealConfig;
   fishing: {
     bar_height: number;
@@ -103,6 +119,8 @@ export interface MareConfig {
   };
   level_thresholds: number[];
   level_power_bonus: number;
+  /** Niveau minimal pour avoir le DROIT de jouer une carte (cf. isCardPlayable). */
+  playable_min_level: number;
   assign_slots: { defense: number; expedition: number };
   /** Poids de dérivation de la puissance de RÉCOLTE (étape B) : aucune donnée
    *  nouvelle par espèce, la stat se calcule sur les trois puissances existantes. */
@@ -160,13 +178,138 @@ export function nextLevelAt(count: number): number | null {
   return null;
 }
 
+/* ---------- Le verrou des doublons (26/07) ----------
+
+   Une prise donne la CARTE, pas le droit de la jouer. Tant qu'on n'en tient pas
+   un deuxième exemplaire, l'espèce est une pièce de collection : on la voit, on
+   lit ses stats, mais on ne peut ni l'assigner (défense/expédition), ni la
+   poster sur un gisement, ni la poster dans un organe. Le raisonnement et le
+   coût mesuré sont dans mare_config.json -> $comment_verrou_doublons.
+
+   Le verrou ne se referme jamais : `count` ne décroît nulle part dans le moteur
+   (vérifié — la seule écriture est `prev.count + 1` dans addCatch), donc une
+   carte jouable le reste. C'est pour ça que les fonctions de puissance
+   ci-dessus n'ont pas à filtrer : les portes sont dans le store, à l'ajout. */
+
+/** Cette carte a-t-elle le droit d'être mise au travail ? */
+export function isCardPlayable(entry: CardEntry | undefined): boolean {
+  return !!entry && cardLevel(entry.count) >= MARE.playable_min_level;
+}
+
+/** Prises encore nécessaires pour déverrouiller la carte (0 si déjà jouable).
+ *  On affiche « encore 1 prise » plutôt qu'un bouton grisé sans explication. */
+export function catchesToPlayable(entry: CardEntry | undefined): number {
+  const need = MARE.level_thresholds[MARE.playable_min_level - 1] ?? 1;
+  return Math.max(0, need - (entry?.count ?? 0));
+}
+
+/* ---------- Les éditions (26/07 au soir) ----------
+
+   Deuxième axe, indépendant de la rareté : la rareté dit quelle bête est sortie de
+   l'eau, l'édition dit dans quel état la carte est tombée. C'est la « deuxième
+   route » vers une carte — celle de la chance, à côté de celle du travail (repêcher
+   la même espèce pour la monter en niveau). Voir mare_config.json ->
+   $comment_editions pour le modèle et les poids.
+
+   Rien à migrer : `editions` est optionnel sur CardEntry, et son absence a un sens
+   exact (« toutes les prises sont standard »), donc le défaut se CALCULE au lieu de
+   se réécrire dans la sauvegarde. */
+
+export const EDITIONS = MARE.editions;
+
+export function editionConfig(index: number): EditionConfig {
+  return MARE.editions[Math.min(MARE.editions.length - 1, Math.max(0, index))];
+}
+
+/** Répartition des prises d'une espèce par édition (index aligné sur MARE.editions). */
+export function editionCounts(entry: CardEntry | undefined): number[] {
+  const out = new Array<number>(MARE.editions.length).fill(0);
+  if (!entry) return out;
+  if (!entry.editions) {
+    out[0] = entry.count; // carte d'avant les éditions : tout est standard
+    return out;
+  }
+  for (let i = 0; i < out.length; i++) out[i] = entry.editions[i] ?? 0;
+  return out;
+}
+
+/** Multiplicateur d'édition : la MEILLEURE jamais obtenue. Une espèce cumule le
+ *  meilleur de chaque propriété — une prise ne peut jamais faire régresser une
+ *  carte, exactement comme `bestRarity` ne redescend jamais. */
+export function cardEditionMult(entry: CardEntry | undefined): number {
+  const counts = editionCounts(entry);
+  let best = 1;
+  for (let i = 0; i < counts.length; i++) {
+    if (counts[i] > 0) best = Math.max(best, MARE.editions[i].power_mult);
+  }
+  return best;
+}
+
+/** L'espèce détient-elle une négative ? Alors elle n'occupe aucune place —
+ *  ni en défense, ni en expédition, ni sur un gisement, ni dans un organe. */
+export function isFreeSlotCard(entry: CardEntry | undefined): boolean {
+  const counts = editionCounts(entry);
+  return MARE.editions.some((e, i) => e.free_slot && counts[i] > 0);
+}
+
+/** Édition la plus prestigieuse détenue (index dans MARE.editions), pour l'habillage. */
+export function bestEditionIndex(entry: CardEntry | undefined): number {
+  const counts = editionCounts(entry);
+  let best = 0;
+  for (let i = 0; i < counts.length; i++) if (counts[i] > 0) best = i;
+  return best;
+}
+
+/** Ce qu'une édition apporte, écrit à partir des NOMBRES et jamais à côté d'eux. */
+export function editionEffect(index: number): string {
+  const e = editionConfig(index);
+  if (e.free_slot) return "n'occupe aucune place";
+  const pct = Math.round((e.power_mult - 1) * 100);
+  return pct > 0 ? `+${pct} % de puissance` : "aucun bonus";
+}
+
+/** Combien de places une carte consomme réellement : 0 si elle est négative. */
+export function slotCost(entry: CardEntry | undefined): number {
+  return isFreeSlotCard(entry) ? 0 : 1;
+}
+
+/** Places consommées par une liste de cartes (les négatives ne comptent pas). */
+export function slotsUsed(
+  ids: string[],
+  collection: Record<string, CardEntry>,
+): number {
+  return ids.reduce((n, id) => n + slotCost(collection[id]), 0);
+}
+
+/** Les cartes d'une liste qui tiennent effectivement dans `slots` places.
+ *  Une négative est toujours retenue : elle ne consomme rien, donc elle ne peut
+ *  pas être celle qui déborde. */
+export function fitInSlots(
+  ids: string[],
+  collection: Record<string, CardEntry>,
+  slots: number,
+): string[] {
+  const out: string[] = [];
+  let used = 0;
+  for (const id of ids) {
+    const cost = slotCost(collection[id]);
+    if (cost > 0) {
+      if (used + cost > slots) continue;
+      used += cost;
+    }
+    out.push(id);
+  }
+  return out;
+}
+
 /* ---------- Puissance des cartes ---------- */
 
-/** Multiplicateur d'une carte : rareté × niveau. */
+/** Multiplicateur d'une carte : rareté × niveau × édition. */
 function cardMult(entry: CardEntry): number {
   return (
     rarityConfig(entry.bestRarity).power_mult *
-    (1 + MARE.level_power_bonus * (cardLevel(entry.count) - 1))
+    (1 + MARE.level_power_bonus * (cardLevel(entry.count) - 1)) *
+    cardEditionMult(entry)
   );
 }
 
@@ -233,7 +376,13 @@ export function crewBonus(
   state: Pick<GameState, "collection" | "territoire">,
   foyerId: string,
 ): number {
-  const ids = crewOf(state.territoire, foyerId).slice(0, crewSlots(state.territoire, foyerId));
+  /* `fitInSlots` plutôt que `.slice(0, n)` : le garde-fou compte les PLACES, donc
+     une négative posée sur le gisement ne pousse plus une collègue hors du compte. */
+  const ids = fitInSlots(
+    crewOf(state.territoire, foyerId),
+    state.collection,
+    crewSlots(state.territoire, foyerId),
+  );
   let sum = 0;
   for (const id of ids) {
     const entry = state.collection[id];
@@ -331,6 +480,24 @@ export function rollRarity(roll: number, luck: number, floor = 0): number {
   return Math.max(floor, MARE.rarities.length - 1);
 }
 
+/** Tirage d'ÉDITION, indépendant de celui de la rareté (une commune peut être
+ *  polychrome, une mythique peut être standard). La chance de tension y entre,
+ *  mais deux fois moins fort que sur la rareté (`1 + luck × i` au lieu de
+ *  `1 + luck × i × 2`) : l'édition doit rester un coup de chance — si bien pêcher
+ *  la garantissait, elle cesserait d'être la route parallèle à celle du travail.
+ *  Un tirage totalement sourd à la façon dont on pêche serait pourtant le seul du
+ *  jeu à ignorer le joueur, d'où le demi-poids plutôt que zéro. */
+export function rollEdition(roll: number, luck: number): number {
+  const weights = MARE.editions.map((e, i) => e.weight * (1 + luck * i));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  for (let i = 0; i < weights.length; i++) {
+    acc += weights[i];
+    if (roll * total <= acc) return i;
+  }
+  return 0;
+}
+
 /** Tirage d'espèce (uniforme sur les 12). */
 export function rollSpecies(roll: number): string {
   return SPECIES_IDS[Math.min(SPECIES_IDS.length - 1, Math.floor(roll * SPECIES_IDS.length))];
@@ -363,6 +530,8 @@ export function addCatch(
   state: GameState,
   speciesId: string,
   rarity: number,
+  /** Édition de CETTE prise (index dans MARE.editions, 0 = standard). */
+  edition: number,
   now: number,
   source: "peche" | "fragments",
   /** Sommet du halo pendant la charge (cf. rollRevealTease). Défaut : la rareté réelle. */
@@ -370,19 +539,27 @@ export function addCatch(
 ): void {
   const prev = state.collection[speciesId];
   const prevLevel = prev ? cardLevel(prev.count) : 0;
+  // Le compte par édition part de l'état matérialisé de la carte : une carte
+  // d'avant les éditions le voit calculé (tout en standard) plutôt que perdu.
+  const editions = editionCounts(prev);
+  const idx = Math.min(MARE.editions.length - 1, Math.max(0, edition));
+  editions[idx] += 1;
   const entry: CardEntry = prev
     ? {
         count: prev.count + 1,
         bestRarity: Math.max(prev.bestRarity, rarity),
         firstCaughtAt: prev.firstCaughtAt,
+        editions,
       }
-    : { count: 1, bestRarity: rarity, firstCaughtAt: now };
+    : { count: 1, bestRarity: rarity, firstCaughtAt: now, editions };
   state.collection = { ...state.collection, [speciesId]: entry };
   state.lastCatch = {
     speciesId,
     rarity,
+    edition: idx,
     isNew: !prev,
     newBestRarity: !!prev && rarity > prev.bestRarity,
+    newEdition: idx > 0 && editions[idx] === 1,
     level: cardLevel(entry.count),
     leveledUp: !!prev && cardLevel(entry.count) > prevLevel,
     source,

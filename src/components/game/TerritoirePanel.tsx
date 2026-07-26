@@ -31,6 +31,9 @@ import {
   creatureRecolteBonus,
   crewMultOf,
   foyerCrewMult,
+  isCardPlayable,
+  isFreeSlotCard,
+  slotsUsed,
   speciesConfig,
 } from "@/lib/game/cards";
 import {
@@ -279,45 +282,52 @@ function CrewSection({ foyer }: { foyer: FoyerDef }) {
     ...assignments.expedition,
     ...crewedSpecies(territoire),
   ]);
-  const libres = Object.keys(collection)
-    .filter((id) => !busy.has(id) && speciesConfig(id))
+  // Le verrou des doublons : une espèce tenue à un seul exemplaire est une pièce de
+  // collection, pas une ouvrière. On ne la propose pas — mais on compte celles qui
+  // sont dans ce cas, sinon une liste courte ressemble à un bug plutôt qu'à une règle.
+  const candidates = Object.keys(collection).filter((id) => !busy.has(id) && speciesConfig(id));
+  const verrouillees = candidates.filter((id) => !isCardPlayable(collection[id])).length;
+  const jouables = candidates
+    .filter((id) => isCardPlayable(collection[id]))
     .sort((a, b) => cardPowerRec(b, collection[b]) - cardPowerRec(a, collection[a]));
+  /* Le compte se fait en PLACES, pas en cartes : une négative n'en occupe aucune
+     (cards.slotCost), donc un gisement « au complet » accepte encore les négatives —
+     et l'équipage peut compter plus de têtes qu'il n'y a de postes ouverts. C'est la
+     même règle que celle appliquée par le store et par crewBonus ; l'écran ne fait
+     que la refléter au lieu de la redéfinir. */
+  const used = slotsUsed(crew, collection);
+  const full = used >= slots;
+  // Gisement plein : seules les créatures sans place restent proposables.
+  const libres = full ? jouables.filter((id) => isFreeSlotCard(collection[id])) : jouables;
 
   return (
     <div className="mt-2 space-y-1.5 border-t border-cell-cyan/15 pt-2">
       <div className="flex items-baseline justify-between text-[11px]">
         <span className="text-cell-cyan">
-          ⛏️ Équipage — {crew.length}/{slots} poste{slots > 1 ? "s" : ""}
+          ⛏️ Équipage — {used}/{slots} poste{slots > 1 ? "s" : ""}
+          {crew.length > used && ` (+${crew.length - used} sans place)`}
         </span>
         <span className={mult > 1 ? "text-cell-lime" : "text-cell-teal/50"}>
           rendement ×{mult.toFixed(2).replace(".", ",")}
         </span>
       </div>
 
-      {/* Les postes : une créature au travail, ou une place vide qui attend */}
+      {/* Les postes : d'abord TOUTES les créatures au travail (une négative peut
+          porter l'effectif au-delà du nombre de postes), puis les places qui restent. */}
       <div className="flex flex-wrap gap-1.5">
-        {Array.from({ length: slots }, (_, i) => {
-          const id = crew[i];
-          const entry = id ? collection[id] : undefined;
-          if (!id || !entry) {
-            return (
-              <button
-                key={`vide-${i}`}
-                onClick={() => setPicking(true)}
-                aria-label="Poster une créature à ce gisement"
-                className="flex h-[38px] w-[38px] items-center justify-center rounded border border-dashed border-cell-cyan/30 text-sm text-cell-cyan/40 active:translate-y-px"
-              >
-                +
-              </button>
-            );
-          }
+        {crew.map((id) => {
+          const entry = collection[id];
+          if (!entry) return null;
+          const gratuite = isFreeSlotCard(entry);
           return (
             <button
               key={id}
               onClick={() => toggle(foyer.id, id)}
-              title={`${speciesConfig(id)?.name} — retirer du gisement`}
+              title={`${speciesConfig(id)?.name}${gratuite ? " (n'occupe aucune place)" : ""} — retirer du gisement`}
               aria-label={`Retirer ${speciesConfig(id)?.name} du gisement`}
-              className="relative h-[38px] w-[38px] overflow-hidden rounded border border-cell-lime/50 active:translate-y-px"
+              className={`relative h-[38px] w-[38px] overflow-hidden rounded border active:translate-y-px ${
+                gratuite ? "border-cell-magenta/70" : "border-cell-lime/50"
+              }`}
             >
               <img
                 src={cardArt(id)}
@@ -333,28 +343,47 @@ function CrewSection({ foyer }: { foyer: FoyerDef }) {
             </button>
           );
         })}
+        {Array.from({ length: Math.max(0, slots - used) }, (_, i) => (
+          <button
+            key={`vide-${i}`}
+            onClick={() => setPicking(true)}
+            aria-label="Poster une créature à ce gisement"
+            className="flex h-[38px] w-[38px] items-center justify-center rounded border border-dashed border-cell-cyan/30 text-sm text-cell-cyan/40 active:translate-y-px"
+          >
+            +
+          </button>
+        ))}
       </div>
 
-      {crew.length < slots && !picking && libres.length > 0 && (
+      {!picking && libres.length > 0 && (
         <button
           onClick={() => setPicking(true)}
           className="text-[10px] text-cell-cyan/70 underline underline-offset-2"
         >
-          Poster une créature ({libres.length} disponible{libres.length > 1 ? "s" : ""})
+          {full ? "Ajouter une créature sans place" : "Poster une créature"} ({libres.length}{" "}
+          disponible{libres.length > 1 ? "s" : ""})
         </button>
       )}
-      {crew.length < slots && libres.length === 0 && (
+      {!full && libres.length === 0 && (
         <p className="text-[10px] text-cell-teal/50">
           Aucune créature libre — pêche à La Mare, ou libère une carte de la défense.
         </p>
       )}
-      {crew.length >= slots && (
+      {!full && verrouillees > 0 && (
         <p className="text-[10px] text-cell-teal/50">
-          Gisement au complet. Développe-le pour ouvrir un poste de plus.
+          🔒 {verrouillees} espèce{verrouillees > 1 ? "s" : ""}{" "}
+          verrouillée{verrouillees > 1 ? "s" : ""} — il en faut une 2ᵉ prise pour avoir le
+          droit de la mettre au travail.
+        </p>
+      )}
+      {full && (
+        <p className="text-[10px] text-cell-teal/50">
+          Gisement au complet. Développe-le pour ouvrir un poste de plus — ou pose une
+          créature négative, qui n&apos;occupe aucune place.
         </p>
       )}
 
-      {picking && crew.length < slots && (
+      {picking && libres.length > 0 && (
         <div className="max-h-44 space-y-1 overflow-y-auto rounded border border-cell-cyan/20 p-1.5">
           {libres.map((id) => {
             const sp = speciesConfig(id);

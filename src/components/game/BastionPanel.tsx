@@ -13,6 +13,7 @@ import {
   cardPowerAtk,
   cardPowerDef,
   rarityConfig,
+  slotsUsed,
   speciesConfig,
 } from "@/lib/game/cards";
 import { availableDefenseSpecies, ownedBuildingCount } from "@/lib/game/bastion/actions";
@@ -23,6 +24,7 @@ import {
   buildingIcon,
   buildingRarityColor,
   buildingsByCategory,
+  effectiveReserveCap,
   foundationsCost,
   foundationsMult,
   mortarSlotUnlockCost,
@@ -695,7 +697,14 @@ export function BastionPanel({
             <Panel className="space-y-2 p-2">
               <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">
                 <span>Garnison en réserve</span>
-                <span>{reserveSpecies.length}/{bastion.reserveCap}</span>
+                {/* Le plafond porte sur TOUTE la réserve (placées comprises) et se compte
+                    en PLACES : une négative n'en occupe aucune (cards.slotCost), donc le
+                    nombre de têtes peut dépasser le plafond sans que rien ne déborde. */}
+                <span>
+                  {slotsUsed(cardAssignments.defense, collection)}/{effectiveReserveCap(useGame.getState())}
+                  {" · "}
+                  {reserveSpecies.length} libre{reserveSpecies.length > 1 ? "s" : ""}
+                </span>
               </div>
               {reserveSpecies.length === 0 ? (
                 <p className="text-[11px] text-cell-teal/50">

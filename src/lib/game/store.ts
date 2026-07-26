@@ -67,11 +67,16 @@ import {
 } from "./habits";
 import {
   addCatch,
+  catchesToPlayable,
+  isCardPlayable,
   jetonMax,
   MARE,
+  rollEdition,
   rollRarity,
   rollRevealTease,
   rollSpecies,
+  slotCost,
+  slotsUsed,
   SPECIES_IDS,
 } from "./cards";
 import {
@@ -448,8 +453,13 @@ export const useGame = create<GameStore>()(
         const s = applyTick(gameSlice(get()), now);
         // Choix fixes (reproductibles) : une défense (barracks) et une assaut (mortier),
         // rareté Rare — aucune des deux ne double comme skin d'ennemi (cf. bastion_config.pathogens).
-        addCatch(s, "crustace", 2, now, "peche");
-        addCatch(s, "predateur", 2, now, "peche");
+        // On pêche jusqu'à ce que la carte soit JOUABLE, pas une seule fois : le
+        // verrou des doublons s'applique aussi à la triche, sinon le test place des
+        // cartes que le vrai jeu refuserait et ne teste plus rien.
+        for (const id of ["crustace", "predateur"]) {
+          do addCatch(s, id, 2, 0, now, "peche");
+          while (!isCardPlayable(s.collection[id]));
+        }
         const defense = [...new Set([...s.cardAssignments.defense, "crustace", "predateur"])].slice(
           0,
           effectiveReserveCap(s),
@@ -814,8 +824,12 @@ export const useGame = create<GameStore>()(
         // puis retombe) : elle est ainsi rejouable, comme la rareté et l'espèce.
         [roll, seed] = rand(seed);
         const teaseTo = rollRevealTease(roll, rarity);
+        // L'édition est le SECOND axe, tiré à part de la rareté : c'est ce qui
+        // permet à une commune de tomber polychrome (cf. mare_config -> $comment_editions).
+        [roll, seed] = rand(seed);
+        const edition = rollEdition(roll, luck);
         s.rngSeed = seed;
-        addCatch(s, species, rarity, now, "peche", teaseTo);
+        addCatch(s, species, rarity, edition, now, "peche", teaseTo);
         set(s);
       },
 
@@ -830,8 +844,12 @@ export const useGame = create<GameStore>()(
         const species = rollSpecies(roll);
         [roll, seed] = rand(seed);
         const teaseTo = rollRevealTease(roll, rarity);
+        // Fusion de fragments : même tirage d'édition qu'à la pêche, mais sans
+        // chance de tension (on ne ferre pas un fragment), donc luck = 0.
+        [roll, seed] = rand(seed);
+        const edition = rollEdition(roll, 0);
         s.rngSeed = seed;
-        addCatch(s, species, rarity, now, "fragments", teaseTo);
+        addCatch(s, species, rarity, edition, now, "fragments", teaseTo);
         set(s);
         return true;
       },
@@ -846,11 +864,18 @@ export const useGame = create<GameStore>()(
           expedition: state.cardAssignments.expedition.filter((id) => id !== speciesId),
         };
         if (!inSlot) {
+          // Le verrou des doublons : une seule prise donne la carte, pas le droit de la
+          // jouer. On ne referme jamais la porte derrière une carte déjà en poste — la
+          // vérification est à l'AJOUT, jamais au retrait (cf. cards.isCardPlayable).
+          if (!isCardPlayable(state.collection[speciesId])) return false;
           // "défense" alimente la réserve plaçable du Bastion-Défense jouable — son plafond est
           // désormais bastion.reserveCap (dynamique, achetable), pas la constante statique du JSON.
           const cap =
             slot === "defense" ? effectiveReserveCap(state) : MARE.assign_slots.expedition;
-          if (next[slot].length >= cap) return false; // slot plein
+          // On compte les PLACES, pas les cartes : une négative n'en occupe aucune
+          // (cf. cards.slotCost) et peut donc toujours entrer, même sur une liste pleine.
+          const cost = slotCost(state.collection[speciesId]);
+          if (slotsUsed(next[slot], state.collection) + cost > cap) return false; // slot plein
           next[slot] = [...next[slot], speciesId];
         }
         // Exclusivité : une créature en défense ou en expédition quitte son poste de
@@ -887,7 +912,13 @@ export const useGame = create<GameStore>()(
           return true;
         }
 
-        if (current.length >= crewSlots(state.territoire, foyerId)) return false; // gisement plein
+        if (!isCardPlayable(state.collection[speciesId])) return false; // verrou des doublons
+        // Places et non cartes : une négative ne consomme rien (cf. cards.slotCost).
+        if (
+          slotsUsed(current, state.collection) + slotCost(state.collection[speciesId]) >
+          crewSlots(state.territoire, foyerId)
+        )
+          return false; // gisement plein
         // Exclusivité, dans l'autre sens : poster une créature la retire de la défense,
         // des expéditions, de tout autre gisement et de tout organe de la base.
         const base = stripFromCrews(state.territoire, speciesId);
@@ -925,7 +956,10 @@ export const useGame = create<GameStore>()(
           });
           return true;
         }
-        if (current.length >= slots) return false; // toutes les places sont prises
+        if (!isCardPlayable(state.collection[speciesId])) return false; // verrou des doublons
+        // Places et non cartes : une négative ne consomme rien (cf. cards.slotCost).
+        if (slotsUsed(current, state.collection) + slotCost(state.collection[speciesId]) > slots)
+          return false; // toutes les places sont prises
 
         // Exclusivité : poster une créature la retire de la défense, des expéditions,
         // des équipages de gisement et de tout autre organe. Sans ça la même carte
@@ -1409,6 +1443,96 @@ export const useGame = create<GameStore>()(
         // écrite), le joueur ne perd donc aucun accès — il gagne seulement la suite.
         if (version < 16 || state.bastion.bestPeril === undefined) {
           state.bastion.bestPeril = 0;
+        }
+        // v16 -> v17 : le barème quotidien monte (×1,84) et descend dans
+        // habits_config.json. Une sauvegarde existante porte un historique payé à
+        // l'ANCIEN tarif. On le RÉÉVALUE au nouveau et on verse la différence.
+        //
+        // C'est le choix honnête, et il n'est pas gratuit à écrire — mais laisser
+        // le passé au vieux prix donnerait une grille à deux régimes, pâle avant
+        // la mise à jour et vive après, pour un effort réel identique. Or cette
+        // grille est la seule preuve que le jeu rend à Ali de ce qu'il a fait :
+        // elle n'a pas le droit de dévaluer rétroactivement trois mois de travail.
+        // Le recalcul repart des valeurs BRUTES de chaque saisie (pas, tâches,
+        // rituels), qui n'ont pas bougé d'un iota — aucune donnée n'est inventée.
+        // Le solde ne peut que monter : aucun taux n'a baissé (la pénalité de
+        // surplus calorique, elle, est restée exactement où elle était).
+        if (version < 17) {
+          let delta = 0;
+          for (const entry of Object.values(state.habits?.days ?? {})) {
+            const { energy, validatedCount } = evaluateEntry(entry, state.habits.calorieGoal);
+            delta += energy - entry.energy;
+            entry.energy = energy;
+            entry.validatedCount = validatedCount;
+          }
+          if (delta > 0) {
+            state.resources.energie = Math.min(
+              ENERGY_CAP,
+              (state.resources.energie ?? 0) + delta,
+            );
+          }
+        }
+        // v17 -> v18 : les deux postes de travail se comptent en HEURES, plus en
+        // tâches. Les champs `mf` et `alilou` d'une sauvegarde existante portent
+        // donc des nombres qui ne veulent plus dire ce qu'ils disent, et les
+        // relire tels quels reviendrait à décider qu'une tâche durait une heure —
+        // une donnée inventée, et à la baisse.
+        //
+        // La conversion est choisie pour ne JAMAIS dévaluer une journée déjà
+        // vécue, jamais l'inverse :
+        //   Magic Focus : 5 ⚡ la tâche -> 5 ⚡ l'heure, donc 1 tâche = 1 h. La
+        //     valeur est conservée à l'unité près, et l'ancien plafond de 10
+        //     tient dans le nouveau de 12 : aucune journée n'est rabotée.
+        //   Chantier    : 12 ⚡ la tâche -> 7 ⚡ l'heure, donc 1 tâche = 2 h
+        //     (14 ⚡). L'arrondi va vers le HAUT à dessein : une tâche de chantier
+        //     était un bloc lourd — il n'y en avait que 3 par jour au maximum —
+        //     et arrondir à 1 h aurait fait fondre le samedi d'Ali de 36 à 21 ⚡.
+        //     Le plafond de 3 tâches devient 6 h, sous le nouveau plafond de 8.
+        // Le recalcul qui suit repart des valeurs converties ; le solde ne peut
+        // que monter, comme en v17.
+        if (version < 18) {
+          let delta = 0;
+          for (const entry of Object.values(state.habits?.days ?? {})) {
+            entry.mf = clampHabitValue("mf", entry.mf ?? 0);
+            entry.alilou = clampHabitValue("alilou", (entry.alilou ?? 0) * 2);
+            const { energy, validatedCount } = evaluateEntry(entry, state.habits.calorieGoal);
+            delta += energy - entry.energy;
+            entry.energy = energy;
+            entry.validatedCount = validatedCount;
+          }
+          if (delta > 0) {
+            state.resources.energie = Math.min(
+              ENERGY_CAP,
+              (state.resources.energie ?? 0) + delta,
+            );
+          }
+        }
+        // v18 -> v19 : le verrou des doublons. Une espèce tenue à un seul
+        // exemplaire n'a plus le droit d'être mise au travail (cf.
+        // cards.isCardPlayable). Une sauvegarde existante contient forcément des
+        // créatures de niveau 1 déjà assignées, postées sur un gisement ou dans
+        // un organe : appliquer la règle telle quelle les mettrait toutes à la
+        // porte d'un coup — une perte sèche de rendement, décidée par une règle
+        // que le joueur n'a pas encore lue.
+        //
+        // On fait donc l'inverse du licenciement : toute créature DÉJÀ au travail
+        // se voit créditer la prise qui lui manque. Elle a fait ses preuves, elle
+        // est maîtrisée. Le verrou s'applique intégralement à tout le reste — et
+        // c'est le gros de la collection, puisque les places au travail se
+        // comptent sur les doigts d'une main tandis que les espèces sont 62.
+        if (version < 19) {
+          const employed = new Set<string>([
+            ...(state.cardAssignments?.defense ?? []),
+            ...(state.cardAssignments?.expedition ?? []),
+            ...Object.values(state.territoire?.foyers ?? {}).flatMap((f) => f.crew ?? []),
+            ...Object.values(state.postes ?? {}).flat(),
+          ]);
+          for (const speciesId of employed) {
+            const entry = state.collection?.[speciesId];
+            if (!entry) continue;
+            const missing = catchesToPlayable(entry);
+            if (missing > 0) entry.count += missing;
+          }
         }
         state.saveVersion = SAVE_VERSION;
         return state;

@@ -34,6 +34,8 @@ import {
   cardPowerAtk,
   cardPowerDef,
   cardPowerExp,
+  editionConfig,
+  editionEffect,
   MARE,
   rarityConfig,
   revealConfig,
@@ -206,6 +208,11 @@ export function CardReveal() {
 
   const done = stage.phase === "done";
   const haloRar = rarityConfig(stage.halo);
+  /* L'ÉDITION de cette prise-ci — pas la meilleure jamais obtenue. Une deuxième
+     holographique reste un événement de la partie même si la carte en détenait
+     déjà une ; c'est `newEdition` qui distingue les deux. */
+  const ed = editionConfig(lastCatch.edition);
+  const special = lastCatch.edition > 0;
   const finalCfg = revealConfig(rarity);
   // Le voile s'épaissit à mesure que le halo monte : le monde s'efface, il ne
   // reste que la carte qui arrive. Il ne redescend jamais sous l'opacité de
@@ -288,7 +295,16 @@ export function CardReveal() {
               {lastCatch.source === "fragments" ? "Fragments fusionnés !" : "Une prise !"}
             </span>
 
-            <div style={{ filter: `drop-shadow(0 0 24px ${rar.color}88)` }}>
+            {/* La lueur prend la couleur de l'ÉDITION quand il y en a une : c'est le
+                signal « elle n'est pas tombée comme les autres », visible avant même
+                d'avoir lu le moindre libellé. La rareté garde le cadre. */}
+            <div
+              style={{
+                filter: special
+                  ? `drop-shadow(0 0 30px ${ed.color}) drop-shadow(0 0 14px ${rar.color}88)`
+                  : `drop-shadow(0 0 24px ${rar.color}88)`,
+              }}
+            >
               <CardFrame rarity={rar.id as Rarity} scale={1.6}>
                 <img
                   src={cardArt(lastCatch.speciesId)}
@@ -308,6 +324,12 @@ export function CardReveal() {
               <div className="text-sm tracking-wide text-cell-cyan">{sp.name}</div>
               <div className="text-xs" style={{ color: rar.color }}>
                 {rar.name} · Nv {lastCatch.level}
+                {special && (
+                  <>
+                    {" · "}
+                    <span style={{ color: ed.color }}>{ed.name}</span>
+                  </>
+                )}
               </div>
               <div className="text-[10px] text-cell-teal/70">
                 ❤{cardHp(sp.id, entry)} PV · 🛡{cardPowerDef(sp.id, entry)} · 🧭{cardPowerExp(sp.id, entry)} · ⚔{cardPowerAtk(sp.id, entry)}
@@ -326,6 +348,18 @@ export function CardReveal() {
                 {lastCatch.newBestRarity && (
                   <span className="rounded-full border px-2 py-0.5 text-[10px]" style={{ borderColor: rar.color, color: rar.color }}>
                     ★ RARETÉ AMÉLIORÉE
+                  </span>
+                )}
+                {/* Le libellé d'effet est COMPOSÉ à partir des nombres (editionEffect),
+                    jamais recopié à la main : un poids qui change dans le JSON ne peut
+                    pas laisser derrière lui une promesse fausse à l'écran. */}
+                {special && (
+                  <span
+                    className="rounded-full border px-2 py-0.5 text-[10px]"
+                    style={{ borderColor: ed.color, color: ed.color }}
+                  >
+                    ◈ {lastCatch.newEdition ? "PREMIÈRE " : ""}
+                    {ed.name.toUpperCase()} — {editionEffect(lastCatch.edition)}
                   </span>
                 )}
               </div>

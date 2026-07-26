@@ -4,7 +4,7 @@
 
 import rawConfig from "@/data/economy_config.json";
 import { freshBastionState } from "./bastion/config";
-import { cardPowerRec, speciesAffinity } from "./cards";
+import { cardPowerRec, fitInSlots, speciesAffinity } from "./cards";
 import { bonusValue, freshTerritoireState } from "./territoire";
 import type { BuildingId, BuildTask, GameState, ResourceId } from "./types";
 
@@ -545,8 +545,11 @@ export function posteBonus(state: PosteStateView, id: BuildingId): number {
   const cap = posteSlots(id, state.buildings[id] ?? 0);
   let sum = 0;
   /* On ne compte que les places réellement ouvertes : rétrograder n'est pas possible
-     aujourd'hui, mais une sauvegarde bricolée ne doit pas pouvoir dépasser le plafond. */
-  for (const speciesId of crew.slice(0, cap)) sum += workerBonus(state, speciesId, res);
+     aujourd'hui, mais une sauvegarde bricolée ne doit pas pouvoir dépasser le plafond.
+     `fitInSlots` et non `.slice(0, cap)` : le plafond compte les PLACES, et une
+     ouvrière négative n'en occupe aucune (cf. cards.slotCost). */
+  for (const speciesId of fitInSlots(crew, state.collection, cap))
+    sum += workerBonus(state, speciesId, res);
   return sum;
 }
 
@@ -682,7 +685,7 @@ export function resourceName(res: ResourceId): string {
  *  une partie neuve se déclarait donc en v4 dans son export de sauvegarde et dans la sync
  *  cloud, alors que ses données étaient bien au format courant. Un seul point de vérité
  *  supprime la dérive : à chaque nouvelle migration, on incrémente cette constante. */
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 19;
 
 export function freshGameState(now: number): GameState {
   return {

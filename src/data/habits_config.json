@@ -8,25 +8,158 @@
     "$comment_correction": "EXCEPTION QUI COMPTE : corriger une journee DEJA tenue a l'heure (rectifier le nombre de pas d'hier) ne la marque jamais comme notee apres coup. Sans cette garde, une correction anodine ferait tomber une serie de trente jours pour une faute de frappe — cf. dejaTenuALHeure dans store.ts.",
     "$comment_pacing": "NEUTRE POUR LE CALIBRAGE 81-99 j : la fenetre ne cree aucune energie nouvelle, elle deplace seulement la DATE a laquelle une journee deja vecue peut etre saisie. Un joueur qui note ses sept jours d'un coup touche exactement ce qu'il aurait touche en les notant au jour le jour, moins les paliers de serie qu'il n'a pas tenus. Le simulateur n'a donc pas a etre repasse."
   },
+  "bareme": {
+    "$comment": "LE BAREME QUOTIDIEN (26/07/2026). Il vivait jusqu'ici en dur dans src/lib/game/habits.ts, au motif que c'etaient des « regles de saisie, pas de l'equilibrage ». C'etait faux : l'energie se reconvertit en heures de chantier (economy_config.json -> energy_boost), donc chaque point de ce tableau pese sur les 90 jours d'ascension. Il descend ici, sous la meme regle que tout le reste — un nombre d'equilibrage vit en JSON, avec la mesure qui le justifie.",
+    "$comment_hausse": "HAUSSE DEMANDEE PAR ALI (26/07) : « que les differentes taches rapportent plus de points d'energie par jour ». Ancien bareme : 5 + 15 + 30 + 15 + 25 = 90 au maximum absolu. Nouveau : 10 + 30 + 50 + 36 + 40 = 166, soit x1,84. Deux prix en energie ont ete recalibres en face, pas par reflexe mais parce que la mesure l'a impose (cf. $comment_pacing) : le jeton de peche suit l'unite a l'identique (30 -> 55, soit 33 % d'une journee parfaite avant comme apres), le rachat d'heures de chantier ne suit qu'a moitie (8 -> 12 energie/h, x1,50 pour un bareme x1,84) et la Boutique du Bastion ne bouge pas du tout (18/25/30). La hausse reelle de pouvoir d'achat est donc concentree la ou elle ne deforme pas l'ascension : de +28 a +64 % d'heures de chantier rachetees, x1,84 sur la Boutique du Bastion.",
+    "$comment_pacing": "POURQUOI LES PRIX ONT DU BOUGER (et pourquoi l'hypothese de depart etait fausse). On avait suppose que max_ratio_per_task = 0,25 — on ne rachete jamais plus du quart d'un chantier — bornait deja le rachat d'heures, et qu'on pouvait donc monter le bareme sans toucher a aucun prix. Le simulateur a dit non. Au tarif inchange, le rachat passait de 97,6 h a 489,5 h sur 90 jours chez l'assidu et l'ascension tombait a 70,3 j, treize jours sous la fenetre 81-99 j. Le vrai frein n'etait pas le plafond par chantier mais le SOLDE : le jeton de peche (jusqu'a 3/jour) absorbait presque toute la recette quotidienne, et le rachat ne vivait que du reliquat. Multiplier la recette par 1,84 sans retoucher ce cout fixe multipliait le reliquat par cinq. D'ou le jeton reindexe sur la nouvelle unite : il redevient le poste lourd qu'il etait, et la hausse reelle peut etre placee sur les postes qui, eux, ne pilotent pas le rythme.",
+    "$comment_mesure": "MESURE (simulate_full.py, 30 graines, calibrage final : bareme 166 + jeton 55 + energy_per_hour 12 + paliers de serie reindexes) — ascension « tout Nv5 » : assidu 82,2 j, regulier 86,9 j, dilettante 92,5 j. Les trois sont dans la fenetre 81-99 j. Reference avant la hausse (bareme 90, jeton 30, 8 energie/h) : 82,7 / 88,4 / 93,8 j — le rythme est donc tenu a moins d'un jour et demi pres sur les trois profils. Ce qui a change pour de bon, c'est le rachat d'heures de chantier : 160,0 h contre 97,6 h chez l'assidu (+64 %), 78,5 h contre 52,5 h chez le regulier (+50 %), 117,2 h contre 91,7 h chez le dilettante (+28 %). Les archetypes du simulateur ne portent plus une energie en dur (85/65/40) mais une FRACTION du maximum quotidien lue dans ce fichier meme (85/90, 65/90, 40/90) : relever le bareme ne peut plus laisser le simulateur mesurer un jeu qui n'existe plus.",
+    "$comment_ratio_alilou": "ALILOU passe de 5 a 12 ⚡ la tache, plafond inchange a 3 : c'est le poste le plus cher a la tache du jeu, volontairement. C'est le seul travail qu'Ali peut faire un samedi (Magic Focus est un outil de bureau), et depuis le passage aux piliers c'est lui qui doit pouvoir porter seul une journee parfaite de week-end — 116 ⚡ sans une seule tache Magic Focus.",
+    "habitudes": [
+      {
+        "id": "calories",
+        "icon": "🍽️",
+        "name": "Bilan calorique",
+        "desc": "Indique ton solde du jour (négatif = déficit). Déficit : +{energy_per_day} ⚡. Surplus : −1 ⚡ par 100 kcal.",
+        "pilier": "nutrition",
+        "type": "calorie",
+        "energy_per_day": 10
+      },
+      {
+        "id": "steps",
+        "icon": "🚶",
+        "name": "Pas quotidiens",
+        "desc": "+{energy_per} ⚡ par tranche de {per} pas (max {cap_energy} ⚡).",
+        "pilier": "mouvement",
+        "type": "rate",
+        "per": 1000,
+        "energy_per": 2,
+        "cap_energy": 30,
+        "step": 500,
+        "max": 30000,
+        "unit": "pas"
+      },
+      {
+        "id": "mf",
+        "icon": "💼",
+        "name": "Heures Magic Focus",
+        "desc": "+{energy_per} ⚡ par heure travaillée (max {cap_items} h/jour).",
+        "pilier": "travail",
+        "type": "count",
+        "energy_per": 5,
+        "cap_items": 12,
+        "unit": "heures",
+        "unit_short": "h"
+      },
+      {
+        "id": "alilou",
+        "icon": "🏗️",
+        "name": "Heures de chantier ALILOU",
+        "desc": "Bricolage, chantier, travail manuel. +{energy_per} ⚡ par heure (max {cap_items} h/jour). Le meilleur taux du jeu.",
+        "pilier": "travail",
+        "type": "count",
+        "energy_per": 7,
+        "cap_items": 8,
+        "unit": "heures",
+        "unit_short": "h"
+      },
+      {
+        "id": "rituals",
+        "icon": "🧘",
+        "name": "Rituels bien-être",
+        "desc": "Lire, méditer, marcher, se poser… +{energy_per} ⚡ par rituel (max {cap_items}/jour).",
+        "pilier": "soin",
+        "type": "count",
+        "energy_per": 8,
+        "cap_items": 5,
+        "unit": "rituels",
+        "unit_short": "rituels"
+      }
+    ],
+    "$comment_piliers": "LES PILIERS, ET POURQUOI ILS REMPLACENT « 5/5 » (26/07/2026, demande d'Ali). La journee parfaite exigeait les CINQ habitudes, donc obligatoirement des taches Magic Focus ET des taches de chantier ALILOU. Or Magic Focus est un outil de travail : le samedi et le dimanche, la journee parfaite etait litteralement impossible a atteindre, quoi qu'Ali fasse de sa journee. Une regle qu'on ne peut pas tenir deux jours sur sept n'est pas une exigence, c'est une punition de calendrier. Les deux postes de travail fusionnent donc en UN pilier « Travail » : l'un OU l'autre suffit. Un samedi de chantier vaut un mardi de bureau.",
+    "$comment_piliers_2": "Le pilier ne change RIEN au barème : les cinq habitudes rapportent toujours chacune leur energie, et faire les deux postes de travail rapporte toujours plus que d'en faire un seul (166 contre 116). Le pilier ne decide que d'une chose — ce que le jeu appelle une journee complete. On garde ainsi la recompense a l'effort supplementaire sans en faire une condition.",
+    "piliers": [
+      {
+        "id": "nutrition",
+        "name": "Nutrition",
+        "icon": "🍽️"
+      },
+      {
+        "id": "mouvement",
+        "name": "Mouvement",
+        "icon": "🚶"
+      },
+      {
+        "id": "travail",
+        "name": "Travail",
+        "icon": "🛠️"
+      },
+      {
+        "id": "soin",
+        "name": "Soin de soi",
+        "icon": "🧘"
+      }
+    ],
+    "$comment_horaire_2607": "LES DEUX POSTES DE TRAVAIL SE COMPTENT EN HEURES, PLUS EN TACHES (26/07/2026, demande d'Ali le soir meme : « c'est un nombre d'heures faites de travail de bricolage ou de travail la-dessus »). Chantier ALILOU : 7 energie l'heure, 8 h maximum. Magic Focus : 5 energie l'heure, 12 h maximum. POURQUOI C'EST MIEUX QU'UN COMPTE DE TACHES : une « tache » n'a pas de taille. Poser une etagere et refaire une piece comptaient pareil, si bien que le plafond de 3 taches punissait la seule journee qui merite d'etre recompensee — le samedi entier passe sur le chantier. Une heure, elle, a toujours la meme taille : le bareme cesse de dependre de la facon dont Ali decoupe son travail. LE TAUX DIT LA PENIBILITE, PAS LE PRESTIGE : 7 pour le travail physique contre 5 pour le travail de bureau. Une heure de chantier vaut 40 % de plus qu'une heure d'ecran, et c'est voulu — c'est le seul poste qu'Ali peut tenir un week-end, et c'est le plus dur. LES PLAFONDS NE SONT PAS DES OBJECTIFS, ce sont des garde-fous de saisie : 8 h de chantier, c'est une journee complete de travail manuel ; 12 h d'ecran, c'est deja une journee qu'on ne souhaite a personne. Au-dela, ce n'est plus une mesure, c'est une faute de frappe. MAXIMUM THEORIQUE : 10 + 30 + 60 + 56 + 40 = 196 energie/jour, contre 166 avant. Ce plafond n'est PAS un revenu — personne ne cumule 12 h d'ecran, 8 h de chantier, 30 000 pas et 5 rituels dans la meme journee — et c'est precisement pour ca que les archetypes de simulate_full.py ne se definissent plus comme une fraction de ce nombre (cf. son en-tete) mais comme des journees ecrites poste par poste.",
+    "$comment_journee_parfaite_min": "Journee parfaite MINIMALE : 10 (deficit) + 30 (pas plafonnes) + 56 (8 h de chantier, le moins cher des deux postes du pilier Travail) + 40 (5 rituels) = 136 energie. C'est le samedi d'Ali, parfait sans une seule heure de Magic Focus. PERFECT_DAY_ENERGY le derive, ne le recopie pas."
+  },
   "streak": {
     "$comment": "Paliers HEBDOMADAIRES. Avant la piste 6 il n'y en avait que trois (7 j / 30 j / 90 j) : entre le jour 8 et le jour 29 la regularite ne rapportait donc strictement rien, soit trois semaines de discipline sans le moindre accuse de reception. Un palier par semaine donne un rendez-vous tous les sept jours.",
     "tiers_comment_1": "MONOTONIE STRICTEMENT CROISSANTE : c'est une contrainte de design, pas une esthetique. Un palier retombe redevient gagnable (cf. settleStreakTiers) ; si la table decroissait, casser volontairement sa serie pour re-encaisser un gros premier palier serait rentable, soit exactement l'inverse de ce que doit recompenser un jeu de discipline. Avec une table qui monte (10 -> 42, x4,2), continuer domine toujours. L'ancienne table 7/30/90 pechait justement par la : 50 energie pour la premiere semaine, puis rien pendant trois semaines.",
-    "tiers_comment_2": "CALIBRAGE (ne pas gonfler ces valeurs sans repasser le simulateur). L'energie se reconvertit en heures de chantier via le rachat d'heures : la table pese donc directement sur les 90 jours d'ascension. Budget retenu : les douze paliers hebdomadaires valent ensemble 291 energie, soit environ trois journees parfaites (95) etalees sur trois mois ; le palier final en vaut deux a lui seul, il marque la fin de l'Age. Volontairement modeste : le rendez-vous hebdomadaire tire sa valeur de l'accuse de reception (badge du HUD, echelle des paliers, grille des 90 jours), pas d'une prime qui deplacerait le pacing.",
+    "tiers_comment_2": "CALIBRAGE (ne pas gonfler ces valeurs sans repasser le simulateur). L'energie se reconvertit en heures de chantier via le rachat d'heures : la table pese donc directement sur les 90 jours d'ascension. Budget retenu : les douze paliers hebdomadaires valent ensemble 535 energie, soit environ trois journees parfaites (166) etalees sur trois mois ; le palier final en vaut deux a lui seul, il marque la fin de l'Age. Volontairement modeste : le rendez-vous hebdomadaire tire sa valeur de l'accuse de reception (badge du HUD, echelle des paliers, grille des 90 jours), pas d'une prime qui deplacerait le pacing.",
     "tiers_comment_3": "MESURE (simulate_full.py, 60 graines, jour 'tout Nv5' par archetype). Sans aucune serie modelisee : 84,4 / 88,0 / 94,7. Avec l'ancienne table 7/30/90 : 84,5 / 87,6 / 93,6. Avec celle-ci : 83,2 / 88,3 / 94,2. Les trois archetypes restent dans la fenetre 81-99 j et l'ecart maximal est de 1,3 j : la cadence change completement, la duree non. Rejouer la comparaison avec 'python3 tools/economy/simulate_full.py --seeds 60 --streak legacy|config|none'.",
     "tiers": [
-      { "days": 7, "energy": 10 },
-      { "days": 14, "energy": 12 },
-      { "days": 21, "energy": 14 },
-      { "days": 28, "energy": 16 },
-      { "days": 35, "energy": 19 },
-      { "days": 42, "energy": 22 },
-      { "days": 49, "energy": 25 },
-      { "days": 56, "energy": 28 },
-      { "days": 63, "energy": 31 },
-      { "days": 70, "energy": 34 },
-      { "days": 77, "energy": 38 },
-      { "days": 84, "energy": 42 },
-      { "days": 90, "energy": 190 }
+      {
+        "days": 7,
+        "energy": 18
+      },
+      {
+        "days": 14,
+        "energy": 22
+      },
+      {
+        "days": 21,
+        "energy": 26
+      },
+      {
+        "days": 28,
+        "energy": 29
+      },
+      {
+        "days": 35,
+        "energy": 35
+      },
+      {
+        "days": 42,
+        "energy": 40
+      },
+      {
+        "days": 49,
+        "energy": 46
+      },
+      {
+        "days": 56,
+        "energy": 52
+      },
+      {
+        "days": 63,
+        "energy": 57
+      },
+      {
+        "days": 70,
+        "energy": 63
+      },
+      {
+        "days": 77,
+        "energy": 70
+      },
+      {
+        "days": 84,
+        "energy": 77
+      },
+      {
+        "days": 90,
+        "energy": 350
+      }
     ],
     "grace": {
       "$comment": "Le filet de securite. Dans un jeu de discipline, une serie cassee par oubli technique (saisie oubliee a 23 h 59 apres trois semaines) est la premiere cause d'abandon. Une seconde chance RARE et EXPLICITE renforce l'engagement au lieu de le diluer : un seul jour repare par mois calendaire, et seulement si l'oubli remonte a moins de max_age_days jours et ne concerne qu'une seule journee isolee. Un jour repare ne rapporte AUCUNE energie : il repare la chaine, il ne paie pas.",
@@ -34,7 +167,8 @@
       "max_age_days": 2
     },
     "history_days": 90,
-    "history_comment": "Nombre de cases de la grille facon calendrier de contributions dans le panneau Habitudes : c'est la duree de l'Age 1, donc la grille pleine EST la partie terminee."
+    "history_comment": "Nombre de cases de la grille facon calendrier de contributions dans le panneau Habitudes : c'est la duree de l'Age 1, donc la grille pleine EST la partie terminee.",
+    "tiers_comment_4": "REINDEXATION DU 26/07/2026. La table valait 291 energie sur douze semaines quand la journee parfaite en valait 90 ; elle vaut 535 maintenant qu'elle en vaut 166, et le palier final passe de 190 a 350. C'est le meme x1,84 que le bareme, et c'est le seul moyen de tenir la phrase ci-dessus : le budget de la table est defini EN JOURNEES PARFAITES (« environ trois »), pas en points. Laisser 291 aurait fait tomber douze semaines de regularite a moins de deux journees — le rendez-vous hebdomadaire se serait devalue tout seul, en silence, au moment precis ou on augmentait la recompense du quotidien."
   },
   "bilan": {
     "$comment": "LE BILAN DU SOIR (25/07/2026). L'energie des habitudes etait deja creditee en continu a la saisie — ca ne change pas (aucune regression sur la serie, le simulateur ou le rachat d'heures). Ce qui manquait, c'etait un RENDEZ-VOUS : un geste de fin de journee qui transforme une bonne journee reelle en un evenement de jeu. Valider le Bilan une fois par jour, apres min_hour, ouvre une PERCEE : la monnaie du spectaculaire.",

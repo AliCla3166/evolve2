@@ -40,9 +40,10 @@
   },
   "energy_boost": {
     "$comment": "L'energie achete du temps (24/07/2026, dette PLAN.md 5.4). L'energie vient des habitudes REELLES du joueur : elle doit avoir une prise directe sur le seul veritable frein du jeu, le timer de chantier. Regle : chaque tap rachete step_ratio de la duree TOTALE du chantier, dans la limite cumulee de max_ratio_per_task (jamais au-dela : la lenteur savoureuse est un pilier, un joueur discipline ne doit pas pouvoir compresser les 90 jours). Le cout est DEGRESSIF au sens du rendement : energy_per_hour de base, multiplie par 1 + cost_growth_at_cap * (part de l'enveloppe deja consommee) — les premieres heures rachetees sont bon marche, les dernieres coutent 60 % de plus. Calibrage : une journee d'habitudes parfaite (~90 energie) rachete environ 9 h sur un chantier de 40 h, soit tout le quota. min_step_minutes evite les micro-achats sans interet en fin de chantier. Mesure sur 90 jours (simulate_full.py, 12 graines) : 39 h rachetees pour 329 energie chez le joueur regulier, soit ~1,6 % du budget de chantier — l'accelerateur se sent a l'echelle d'une journee sans jamais deformer l'Age 1.",
+    "$comment_2607": "8 -> 12 le 26/07/2026 avec la hausse du bareme quotidien (90 -> 166 energie/jour). Le bareme monte de x1,84, ce prix de x1,50 SEULEMENT : c'est la ou on a place la hausse reelle de pouvoir d'achat. Mesure finale (simulate_full.py, 30 graines, apres reindexation des paliers de serie) : le rachat passe de 97,6 h a 160,0 h sur 90 jours chez l'assidu (+64 %), de 52,5 h a 78,5 h chez le regulier (+50 %), de 91,7 h a 117,2 h chez le dilettante (+28 %). Les chiffres intermediaires mesures avant cette reindexation (141,7 / 70,8 / 114,4 h) sont perimes : relever les paliers de serie a remis de l'energie dans le circuit, et donc dans le rachat. L'hypothese de depart etait que max_ratio_per_task (25 % d'un chantier) bornait deja le rachat et qu'on pouvait donc monter le bareme sans rien retoucher aux prix : la mesure l'a dementie. Au tarif de 8 avec le nouveau bareme, le rachat explosait a 489,5 h et l'ascension tombait a 70,3 j, tres loin sous la fenetre 81-99 j. Ce qui bornait le rachat, ce n'etait pas le plafond par chantier mais le solde d'energie lui-meme — le jeton de peche absorbait presque toute la recette quotidienne et le rachat ne vivait que du reliquat. Doubler la recette sans retoucher les prix multipliait ce reliquat par cinq.",
     "max_ratio_per_task": 0.25,
     "step_ratio": 0.05,
-    "energy_per_hour": 8,
+    "energy_per_hour": 12,
     "cost_growth_at_cap": 0.6,
     "min_step_minutes": 5
   },
@@ -898,40 +899,40 @@
       "all_archetypes_in_band": true,
       "by_archetype": {
         "assidu": {
-          "day_all3": 10.8,
-          "day_all5": 82.7,
+          "day_all3": 10.5,
+          "day_all5": 83.2,
           "runs_finished": "30/30",
-          "expedition_income_pct": 35.4,
-          "boost_hours_bought": 98.9,
-          "boost_energy_spent": 849,
-          "streak_max_days": 83.0,
-          "streak_energy_earned": 269,
+          "expedition_income_pct": 30.4,
+          "boost_hours_bought": 122.9,
+          "boost_energy_spent": 1583,
+          "streak_max_days": 83.4,
+          "streak_energy_earned": 511,
           "streak_breaks": 0.0,
           "grace_days_used": 0.0
         },
         "regulier": {
-          "day_all3": 10.4,
-          "day_all5": 88.4,
+          "day_all3": 10.5,
+          "day_all5": 87.2,
           "runs_finished": "30/30",
-          "expedition_income_pct": 21.0,
-          "boost_hours_bought": 54.7,
-          "boost_energy_spent": 455,
-          "streak_max_days": 45.4,
-          "streak_energy_earned": 150,
+          "expedition_income_pct": 15.4,
+          "boost_hours_bought": 53.6,
+          "boost_energy_spent": 663,
+          "streak_max_days": 40.0,
+          "streak_energy_earned": 247,
           "streak_breaks": 4.2,
           "grace_days_used": 2.7
         },
         "dilettante": {
-          "day_all3": 13.3,
-          "day_all5": 93.8,
+          "day_all3": 13.4,
+          "day_all5": 94.5,
           "runs_finished": "30/30",
-          "expedition_income_pct": 15.4,
-          "boost_hours_bought": 83.7,
-          "boost_energy_spent": 681,
-          "streak_max_days": 15.6,
-          "streak_energy_earned": 50,
-          "streak_breaks": 20.2,
-          "grace_days_used": 3.7
+          "expedition_income_pct": 12.5,
+          "boost_hours_bought": 87.0,
+          "boost_energy_spent": 1057,
+          "streak_max_days": 13.9,
+          "streak_energy_earned": 79,
+          "streak_breaks": 20.9,
+          "grace_days_used": 3.6
         }
       }
     }

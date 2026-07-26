@@ -89,7 +89,7 @@
       "target": 7,
       "age_points": 40,
       "reward": {
-        "energie": 60
+        "energie": 110
       }
     },
     {
@@ -197,7 +197,7 @@
       "target": 30,
       "age_points": 120,
       "reward": {
-        "energie": 200
+        "energie": 370
       }
     },
     {
@@ -270,7 +270,7 @@
       "target": 90,
       "age_points": 250,
       "reward": {
-        "energie": 500
+        "energie": 920
       }
     },
     {
@@ -285,5 +285,6 @@
         "vitalite": 500
       }
     }
-  ]
+  ],
+  "$comment_bareme_2607": "Les trois recompenses en energie des jalons de serie (serie_7, serie_30, serie_90) ont ete reindexees le 26/07/2026 quand le bareme quotidien est passe de 90 a 166 energie/jour : 60 -> 110, 200 -> 370, 500 -> 920, soit le meme x1,84. Les laisser telles quelles les aurait devaluees en silence — « sept jours d'affilee » valait deux tiers d'une journee parfaite, ca n'en aurait plus valu qu'un tiers. Ces jalons ne sont pas modelises par simulate_full.py et pesent 1400 energie sur les ~14000 gagnees en 90 jours : la reindexation ne deplace pas la fenetre 81-99 j."
 }

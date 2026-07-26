@@ -61,9 +61,11 @@ export interface HabitDayEntry {
   caloriesDone: boolean;
   /** Pas quotidiens. */
   steps: number;
-  /** Tâches Magic Focus terminées. */
+  /** Heures travaillées sur Magic Focus (des TÂCHES avant la v18 — la migration
+   *  convertit 1 tâche = 1 h, à valeur d'énergie constante). */
   mf: number;
-  /** Tâches du chantier ALILOU. */
+  /** Heures de chantier ALILOU / bricolage (des TÂCHES avant la v18 — la
+   *  migration convertit 1 tâche = 2 h, jamais moins que ce qu'elle valait). */
   alilou: number;
   /** Rituels bien-être. */
   rituals: number;
@@ -162,6 +164,12 @@ export interface CardEntry {
   /** Meilleure rareté attrapée (0..5). */
   bestRarity: number;
   firstCaughtAt: number;
+  /** Prises réparties par édition (index aligné sur mare_config.json -> editions).
+   *  OPTIONNEL À DESSEIN, et donc sans migration : son absence a un sens exact
+   *  — « les `count` prises sont toutes standard » — donc le défaut se calcule
+   *  (cards.editionCounts) au lieu de se réécrire dans toutes les sauvegardes.
+   *  Invariant : somme(editions) === count dès que le champ existe. */
+  editions?: number[];
 }
 
 /** Affectation des cartes : passerelle pêche → couche militaire. */
@@ -183,6 +191,11 @@ export type PosteAssignments = Partial<Record<BuildingId, string[]>>;
 export interface LastCatch {
   speciesId: string;
   rarity: number;
+  /** Édition de CETTE prise (index dans mare_config.json -> editions, 0 = standard). */
+  edition: number;
+  /** Première prise de l'espèce dans une édition spéciale : c'est l'événement que
+   *  la révélation met en scène, pas la simple possession. */
+  newEdition: boolean;
   isNew: boolean;
   newBestRarity: boolean;
   level: number;

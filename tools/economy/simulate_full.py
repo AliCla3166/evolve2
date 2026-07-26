@@ -40,12 +40,108 @@ UNITS = list(MIL["units"].keys())
 RAR = MARE["rarities"]
 
 # ---------------------------------------------------------------- archetypes
-ARCHETYPES = {
-    # energie/jour moyenne, heures de session, jetons max/jour, 1 oubli tous les N jours
-    "assidu":      {"energy": 85, "sessions": [8, 13, 18, 22], "jetons": 3, "miss_every": 0},
-    "regulier":    {"energy": 65, "sessions": [8, 20],          "jetons": 2, "miss_every": 12},
-    "dilettante":  {"energy": 40, "sessions": [20],             "jetons": 1, "miss_every": 4},
+# DEUX MODELES SUCCESSIFS ONT ETE FAUX ICI, ET LE SECOND ETAIT LE MIEN.
+#
+#   1. Energie/jour ECRITE EN DUR (85 / 65 / 40) pendant que le bareme vivait
+#      dans habits_config.json : relever le bareme faisait mesurer un jeu qui
+#      n'existait plus.
+#   2. Energie/jour = FRACTION du maximum quotidien (85/90, 65/90, 40/90). Ca
+#      reglait la divergence, mais ca accrochait le revenu a un plafond qui n'est
+#      pas un revenu. Le 26/07 au soir, passer les deux postes de travail aux
+#      heures a fait monter ce plafond de 166 a 196 -- dont 12 h d'ecran ET 8 h de
+#      chantier LE MEME JOUR, ce que personne ne fera jamais. Les trois archetypes
+#      se seraient donc enrichis de 18 % sans qu'une seule habitude ne change.
+#
+# Un plafond qui monte parce qu'on a elargi un garde-fou de saisie ne doit pas
+# enrichir le joueur simule. Une journee d'archetype s'ecrit donc POSTE PAR POSTE,
+# comme Ali la saisirait dans le panneau, et passe dans le VRAI bareme -- c'est la
+# seule ecriture qui reste vraie quand un plafond bouge.
+#
+# SEMAINE / WEEK-END, parce que c'est toute la demande d'Ali : Magic Focus est un
+# outil de bureau (0 h le samedi), le chantier prend le relais. La moyenne
+# hebdomadaire est exacte et non approchee : sous les plafonds, l'energie est
+# lineaire en heures.
+#
+# CALAGE : les proportions entre les trois profils sont celles que la calibration
+# precedente avait validees (assidu 100 %, regulier ~76 %, dilettante ~47 %). Ce
+# qui bouge, c'est le NIVEAU : 134,6 / 102,0 / 62,6 energie par jour contre
+# 157 / 120 / 74 sous le modele en fraction, soit -14 a -19 %. Cet ecart n'est pas
+# un choix d'equilibrage, c'est la mesure de ce que le modele en fraction
+# surestimait. Il se rattrape sur les PRIX (demande d'Ali : « chaque action ne
+# doit pas gagner plus de points, mais la peche coute un peu moins cher »), pas en
+# gonflant le revenu.
+PROFILS = {
+    # Le disciplinE : deficit tenu, 15 000 pas, une grosse journee de bureau en
+    # semaine avec une heure de chantier le soir, et le samedi entier au chantier.
+    "assidu": {
+        "semaine": {"calories": -300, "caloriesDone": True, "steps": 15000, "mf": 8, "alilou": 2, "rituals": 5},
+        "weekend": {"calories": -300, "caloriesDone": True, "steps": 15000, "mf": 0, "alilou": 8, "rituals": 5},
+    },
+    # Le regulier : suit son bilan, marche correctement, travaille sans exces.
+    "regulier": {
+        "semaine": {"calories": -300, "caloriesDone": True, "steps": 10000, "mf": 7, "alilou": 1, "rituals": 4},
+        "weekend": {"calories": -300, "caloriesDone": True, "steps": 10000, "mf": 0, "alilou": 5, "rituals": 4},
+    },
+    # Le dilettante : ne suit son bilan qu'en semaine, marche peu, quelques heures.
+    "dilettante": {
+        "semaine": {"calories": -200, "caloriesDone": True, "steps": 7000, "mf": 4, "alilou": 0, "rituals": 3},
+        "weekend": {"calories": 0, "caloriesDone": False, "steps": 6000, "mf": 0, "alilou": 3, "rituals": 2},
+    },
 }
+
+CALORIE_STEP = 100  # meme constante que habits.ts
+
+def day_energy(entry):
+    """Energie d'une journee saisie, meme calcul que evaluateEntry() dans habits.ts.
+    Les plafonds sont appliques poste par poste : une saisie au-dela d'un plafond
+    ne rapporte rien de plus, exactement comme dans le jeu."""
+    total = 0
+    for h in HAB["bareme"]["habitudes"]:
+        if h["type"] == "calorie":
+            if not entry.get("caloriesDone"):
+                continue
+            kcal = entry.get("calories", 0)
+            total += h.get("energy_per_day", 0) if kcal <= 0 else -(kcal // CALORIE_STEP)
+        elif h["type"] == "rate":
+            raw = (entry.get(h["id"], 0) // h.get("per", 1)) * h.get("energy_per", 0)
+            total += min(raw, h.get("cap_energy", raw))
+        else:
+            total += min(entry.get(h["id"], 0), h.get("cap_items", 0)) * h.get("energy_per", 0)
+    return total
+
+def max_day_energy():
+    """Maximum quotidien absolu, meme calcul que MAX_DAY_ENERGY dans habits.ts.
+    Sert de repere d'affichage -- PLUS de source de revenu (cf. ci-dessus)."""
+    total = 0
+    for h in HAB["bareme"]["habitudes"]:
+        if h["type"] == "calorie":
+            total += h.get("energy_per_day", 0)
+        elif h["type"] == "rate":
+            total += h.get("cap_energy", 0)
+        else:
+            total += h.get("cap_items", 0) * h.get("energy_per", 0)
+    return total
+
+MAX_DAY_ENERGY = max_day_energy()
+
+# Garde-fou : un poste renomme ou supprime dans le bareme doit faire ECHOUER le
+# simulateur, pas le faire mesurer une journee amputee en silence.
+_IDS = {h["id"] for h in HAB["bareme"]["habitudes"]}
+for _nom, _p in PROFILS.items():
+    for _jour, _e in _p.items():
+        _inconnus = set(_e) - _IDS - {"caloriesDone"}
+        if _inconnus:
+            raise SystemExit(f"profil {_nom}/{_jour} : poste(s) inconnu(s) du bareme {sorted(_inconnus)}")
+
+ARCHETYPES = {
+    # heures de session, jetons max/jour, 1 oubli tous les N jours
+    "assidu":      {"sessions": [8, 13, 18, 22], "jetons": 3, "miss_every": 0},
+    "regulier":    {"sessions": [8, 20],          "jetons": 2, "miss_every": 12},
+    "dilettante":  {"sessions": [20],             "jetons": 1, "miss_every": 4},
+}
+for _nom, _a in ARCHETYPES.items():
+    _p = PROFILS[_nom]
+    _a["energy"] = (5 * day_energy(_p["semaine"]) + 2 * day_energy(_p["weekend"])) / 7
 # "miss_every" = un jour sans AUCUNE habitude validee, tous les N jours en moyenne
 # (0 = jamais). C'est ce qui casse la serie. Il ne retire PAS l'energie du jour :
 # arch["energy"] est deja une MOYENNE qui inclut les mauvais jours -- la deduire
@@ -196,15 +292,70 @@ def wave_power(day):
 def card_level(count):
     return max(1, sum(1 for t in MARE["level_thresholds"] if count >= t))
 
+EDITIONS = MARE["editions"]
+
+def roll_edition(rng, luck):
+    """Miroir exact de cards.rollEdition : demi-poids de la chance par rapport a la
+    rarete (1 + luck*i, pas 1 + luck*i*2), l'edition doit rester un coup de chance."""
+    weights = [e["weight"] * (1 + luck * i) for i, e in enumerate(EDITIONS)]
+    return rng.choices(range(len(EDITIONS)), weights=weights)[0]
+
+def new_entry():
+    return {"count": 0, "best": 0, "editions": [0] * len(EDITIONS)}
+
+def add_catch(collection, sid, rar, ed):
+    """Une prise : le compteur monte, la MEILLEURE rarete et la MEILLEURE edition
+    restent acquises. Une prise ne peut jamais faire regresser une carte."""
+    e = collection.setdefault(sid, new_entry())
+    e["count"] += 1
+    e["best"] = max(e["best"], rar)
+    e["editions"][ed] += 1
+    return e
+
+def card_edition_mult(entry):
+    """Miroir de cards.cardEditionMult : le meilleur power_mult jamais obtenu."""
+    return max([1.0] + [EDITIONS[i]["power_mult"]
+                        for i, n in enumerate(entry["editions"]) if n > 0])
+
+def slot_cost(entry):
+    """Miroir de cards.slotCost : une negative n'occupe aucune place."""
+    return 0 if any(EDITIONS[i]["free_slot"] and n > 0
+                    for i, n in enumerate(entry["editions"])) else 1
+
+def fit_in_slots(ids, collection, slots):
+    """Miroir de cards.fitInSlots : on compte les PLACES, les gratuites passent toujours."""
+    out, used = [], 0
+    for sid in ids:
+        c = slot_cost(collection[sid])
+        if c > 0:
+            if used + c > slots:
+                continue
+            used += c
+        out.append(sid)
+    return out
+
 def card_mult(entry):
-    return RAR[entry["best"]]["power_mult"] * (1 + MARE["level_power_bonus"] * (card_level(entry["count"]) - 1))
+    return (RAR[entry["best"]]["power_mult"]
+            * (1 + MARE["level_power_bonus"] * (card_level(entry["count"]) - 1))
+            * card_edition_mult(entry))
+
+def is_playable(entry):
+    """Verrou des doublons (26/07) : une espece tenue a un seul exemplaire entre dans
+    la collection mais n'a pas le droit d'etre mise au travail. Meme regle et meme
+    donnee que cards.isCardPlayable / mare_config.playable_min_level — si le JSON
+    remet le verrou a 1, le simulateur le suit sans qu'on ait rien a retoucher ici."""
+    return card_level(entry["count"]) >= MARE["playable_min_level"]
 
 def cards_bonus(collection, species_by_id, role_key, top_n):
-    powers = sorted(
-        (sp[role_key] * card_mult(e) for sid, e in collection.items() for sp in [species_by_id[sid]]),
-        reverse=True,
+    """Les `top_n` meilleures cartes ASSIGNABLES — en places, pas en tetes : une
+    negative n'occupe aucune place (cf. fit_in_slots), donc elle s'ajoute par-dessus
+    le plafond au lieu d'en chasser une autre."""
+    ranked = sorted(
+        (sid for sid, e in collection.items() if is_playable(e)),
+        key=lambda sid: -species_by_id[sid][role_key] * card_mult(collection[sid]),
     )
-    return sum(powers[:top_n])
+    return sum(species_by_id[sid][role_key] * card_mult(collection[sid])
+               for sid in fit_in_slots(ranked, collection, top_n))
 
 # ---------------------------------------------------------------- simulation
 def simulate(archetype, seed, max_days=150, verbose=False):
@@ -226,7 +377,8 @@ def simulate(archetype, seed, max_days=150, verbose=False):
     next_wave_h = MIL["pathogens"]["first_attack_delay_h"]
     next_event_h = rng.uniform(*MIL["events"]["interval_h"])
     income = {"production": 0.0, "expeditions": 0.0, "evenements": 0.0}
-    stats = {"waves": 0, "waves_won": 0, "catches": 0, "mythiques": 0, "exp_sent": 0, "exp_ok": 0,
+    stats = {"waves": 0, "waves_won": 0, "catches": 0, "mythiques": 0, "editions": 0,
+             "exp_sent": 0, "exp_ok": 0,
              "day_all3": None, "day_all5": None, "boost_h": 0.0, "boost_energy": 0.0,
              "streak_energy": 0.0, "streak_max": 0, "streak_breaks": 0, "grace_used": 0}
 
@@ -267,7 +419,8 @@ def simulate(archetype, seed, max_days=150, verbose=False):
             return 1.0
         res = POSTE_RESOURCE.get(b)
         cap = poste_slots(b, levels.get(b, 0))
-        return poste_mult(sum(worker_bonus(sid, res) for sid in crew[:cap]))
+        return poste_mult(sum(worker_bonus(sid, res)
+                              for sid in fit_in_slots(crew, collection, cap)))
 
     def reassign_postes():
         """Glouton : chaque organe prend, pour ses places ouvertes, les especes
@@ -283,10 +436,18 @@ def simulate(archetype, seed, max_days=150, verbose=False):
             if cap <= 0:
                 continue
             res = POSTE_RESOURCE.get(b)
-            ranked = sorted(
-                (sid for sid in collection if sid not in taken),
-                key=lambda sid: -worker_bonus(sid, res),
-            )[:cap]
+            ranked = fit_in_slots(
+                sorted(
+                    # Le verrou des doublons s'applique aussi aux postes : une espece
+                    # pechee une seule fois n'a pas encore le droit de travailler.
+                    (sid for sid in collection
+                     if sid not in taken and is_playable(collection[sid])),
+                    key=lambda sid: -worker_bonus(sid, res),
+                ),
+                # Places et non tetes : une ouvriere negative s'ajoute sans consommer
+                # de place, donc l'organe peut en compter plus que `cap`.
+                collection, cap,
+            )
             if ranked:
                 postes[b] = ranked
                 taken.update(ranked)
@@ -297,7 +458,7 @@ def simulate(archetype, seed, max_days=150, verbose=False):
             gain = poste_xp_per_hour(lvl) * hours
             if gain <= 0:
                 continue
-            for sid in crew[:poste_slots(b, lvl)]:
+            for sid in fit_in_slots(crew, collection, poste_slots(b, lvl)):
                 faune_xp[sid] = faune_xp.get(sid, 0.0) + gain
 
     def deployed():
@@ -391,10 +552,13 @@ def simulate(archetype, seed, max_days=150, verbose=False):
         if rng.random() < MARE["fishing"]["quality_luck"][min(q, 3)]:
             rar = min(len(RAR) - 1, rar + 1)
         sid = rng.choice(list(species_by_id))
-        e = collection.setdefault(sid, {"count": 0, "best": 0})
-        e["count"] += 1
-        e["best"] = max(e["best"], rar)
+        # L'edition est le second axe, tiree a part de la rarete : la chance de tension
+        # y entre a demi-poids (cf. roll_edition et cards.rollEdition).
+        ed = roll_edition(rng, MARE["fishing"]["quality_luck"][min(q, 3)])
+        add_catch(collection, sid, rar, ed)
         stats["catches"] += 1
+        if ed > 0:
+            stats["editions"] += 1
         if rar == 5:
             stats["mythiques"] += 1
 
@@ -586,9 +750,12 @@ def simulate(archetype, seed, max_days=150, verbose=False):
                 rar = max(MARE["fragment_card_rarity_floor"],
                           rng.choices(range(len(RAR)), weights=[r["weight"] for r in RAR])[0])
                 sid = rng.choice(list(species_by_id))
-                e = collection.setdefault(sid, {"count": 0, "best": 0})
-                e["count"] += 1
-                e["best"] = max(e["best"], rar)
+                # Fusion de fragments : meme tirage d'edition, sans chance de tension
+                # (on ne ferre pas un fragment) — miroir de store.fuseFragments.
+                ed = roll_edition(rng, 0)
+                add_catch(collection, sid, rar, ed)
+                if ed > 0:
+                    stats["editions"] += 1
 
         # ---- jalons
         if stats["day_all3"] is None and all(levels[b] >= 3 for b in DESIGNED):
@@ -606,6 +773,11 @@ def simulate(archetype, seed, max_days=150, verbose=False):
         "share_evt": income["evenements"] / total_income,
         "waves": stats["waves"], "waves_won": stats["waves_won"],
         "catches": stats["catches"], "mythiques": stats["mythiques"],
+        "editions": stats["editions"],
+        # Combien d'especes detiennent au moins une edition speciale, et combien une
+        # negative : c'est ce qui dit si la "deuxieme route" existe vraiment en partie.
+        "species_ed": sum(1 for e in collection.values() if any(e["editions"][1:])),
+        "species_neg": sum(1 for e in collection.values() if slot_cost(e) == 0),
         "species": len(collection),
         "exp_sent": stats["exp_sent"],
         "boost_h": stats["boost_h"], "boost_energy": stats["boost_energy"],
@@ -652,6 +824,7 @@ def main():
         print(f"  tout Nv3 : j{avg('day_all3'):6.1f}   tout Nv5 : j{avg('day_all5'):6.1f}   (finis avant j150 : {finished}/{len(runs)})")
         print(f"  part revenu expeditions {avg('share_exp')*100:5.1f} %   evenements {avg('share_evt')*100:4.1f} %")
         print(f"  vagues {avg('waves'):4.1f} dont repoussees {avg('waves_won'):4.1f}   peches {avg('catches'):5.1f}   mythiques {avg('mythiques'):4.2f}   especes {avg('species'):4.1f}   expeditions {avg('exp_sent'):5.1f}")
+        print(f"  editions speciales {avg('editions'):5.1f} prises   {avg('species_ed'):4.1f} especes en tiennent une   dont {avg('species_neg'):4.2f} negative(s)")
         print(f"  rachat d'heures : {avg('boost_h'):6.1f} h pour {avg('boost_energy'):7.0f} energie")
         print(f"  serie : max {avg('streak_max'):5.1f} j   paliers {avg('streak_energy'):6.0f} energie   "
               f"ruptures {avg('streak_breaks'):4.1f}   graces {avg('grace_used'):4.1f}")

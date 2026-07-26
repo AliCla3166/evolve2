@@ -40,12 +40,18 @@ import {
   habitValidated,
   HABITS,
   HISTORY_DAYS,
+  isPerfectDay,
+  MAX_DAY_ENERGY,
   nextStreakTier,
+  PILIERS,
+  pilierHabits,
+  pilierValidated,
   repairableDay,
   SAISIE_WINDOW_DAYS,
   STREAK_GRACE,
   STREAK_TIERS,
   TOTAL_STREAK_ENERGY,
+  validatedPiliers,
   weekdayIndex,
   type BilanOptionDef,
   type HabitDef,
@@ -54,8 +60,12 @@ import { useGame } from "@/lib/game/store";
 import type { HabitDayEntry, HabitsState } from "@/lib/game/types";
 import { vibrate } from "@/lib/prefs";
 
-/** Énergie d'une journée parfaite (5/5) — dérivée du barème, jamais codée en dur. */
-const PERFECT_DAY_ENERGY = 95;
+/** Paliers de teinte de la grille, en FRACTION du maximum quotidien. Le dégradé
+ *  suit donc le barème : le relever ne laisse pas la grille bloquée sur des
+ *  seuils d'une autre échelle. (C'est exactement ce qui s'était produit avec
+ *  l'ancienne constante `PERFECT_DAY_ENERGY = 95`, restée figée au-dessus du
+ *  maximum réel de 90 : la case dorée ne pouvait plus jamais s'allumer.) */
+const TINT_STEPS = [0.18, 0.36, 0.66];
 
 function MiniBtn({
   children,
@@ -154,8 +164,12 @@ function HabitRow({
     controls = (
       <div className="flex items-center gap-2">
         <MiniBtn onClick={() => patch({ [id]: entry[id] - 1 })}>−</MiniBtn>
+        {/* L'unité est affichée, pas sous-entendue : « 6 / 12 » ne dit pas si on
+            compte des heures ou des tâches, et c'est exactement ce qui a changé
+            sur les deux postes de travail le 26/07. */}
         <span className="min-w-14 text-center text-xs text-white">
           {entry[id]} / {def.capItems}
+          {def.unitShort ? <span className="text-cell-teal/60"> {def.unitShort}</span> : null}
         </span>
         <MiniBtn
           disabled={entry[id] >= (def.capItems ?? Infinity)}
@@ -193,6 +207,48 @@ function HabitRow({
       </div>
       <p className="mb-2 text-[10px] leading-4 text-cell-teal/60">{def.desc}</p>
       {controls}
+    </div>
+  );
+}
+
+/* ---------- La rangée des piliers ----------
+   La règle de la journée parfaite a changé : ce ne sont plus les cinq habitudes,
+   ce sont les quatre PILIERS. Cette rangée est le seul endroit où le joueur
+   l'apprend — et surtout où il apprend que le pilier Travail se contente de
+   Magic Focus OU du chantier. Sans elle, un samedi validé aurait l'air d'un bug.
+   Le sous-titre liste donc les habitudes du pilier, séparées par « ou », et non
+   par « et » : c'est la phrase entière du changement, en trois mots. */
+
+function PiliersRow({ entry, calorieGoal }: { entry: HabitDayEntry; calorieGoal: number }) {
+  return (
+    <div className="mb-2 grid grid-cols-4 gap-1">
+      {PILIERS.map((p) => {
+        const ok = pilierValidated(p.id, entry, calorieGoal);
+        const defs = pilierHabits(p.id);
+        return (
+          <div
+            key={p.id}
+            title={`${p.name} — ${defs.map((d) => d.name).join(" ou ")}`}
+            className={`flex flex-col items-center gap-0.5 rounded-lg border px-1 py-1.5 text-center transition ${
+              ok
+                ? "border-cell-lime/50 bg-cell-lime/10"
+                : "border-cell-cyan/15 bg-abyss/40"
+            }`}
+          >
+            <span className={`text-sm ${ok ? "" : "opacity-40"}`}>{p.icon}</span>
+            <span
+              className={`text-[9px] leading-3 ${ok ? "text-cell-lime" : "text-cell-teal/50"}`}
+            >
+              {p.name}
+            </span>
+            {defs.length > 1 && (
+              <span className="text-[8px] leading-3 text-cell-teal/45">
+                {defs.map((d) => d.icon).join(" ou ")}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -241,7 +297,7 @@ function DayStrip({
           : validated && isLate
             ? "notée après coup"
             : validated
-              ? `${day?.validatedCount}/${HABITS.length} validées · ${day?.energy} ⚡`
+              ? `${day ? validatedPiliers(day, habits.calorieGoal) : 0}/${PILIERS.length} piliers · ${day?.energy} ⚡`
               : "rien de saisi";
         return (
           <button
@@ -284,6 +340,7 @@ function cellStyle(
   validated: number,
   grace: boolean,
   late = false,
+  perfect = false,
 ): React.CSSProperties {
   if (grace) {
     return { background: "rgba(255, 84, 214, 0.45)", boxShadow: "inset 0 0 0 1px rgba(255,84,214,0.8)" };
@@ -292,11 +349,14 @@ function cellStyle(
     return { background: "rgba(251, 191, 36, 0.38)", boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.7)" };
   }
   if (validated <= 0) return { background: "rgba(109, 246, 255, 0.06)" };
-  if (energy >= PERFECT_DAY_ENERGY) {
+  // La case dorée se lit sur les PILIERS, pas sur un seuil d'énergie : un samedi
+  // de chantier (116 ⚡, sans Magic Focus) est une journée complète au même titre
+  // qu'un mardi de bureau. Un seuil chiffré aurait forcément exclu l'un des deux.
+  if (perfect) {
     return { background: "var(--lime)", boxShadow: "0 0 6px rgba(166,255,61,0.7)" };
   }
-  if (energy >= 60) return { background: "rgba(166, 255, 61, 0.72)" };
-  if (energy >= 30) return { background: "rgba(166, 255, 61, 0.45)" };
+  if (energy >= MAX_DAY_ENERGY * TINT_STEPS[2]) return { background: "rgba(166, 255, 61, 0.72)" };
+  if (energy >= MAX_DAY_ENERGY * TINT_STEPS[1]) return { background: "rgba(166, 255, 61, 0.45)" };
   return { background: "rgba(166, 255, 61, 0.22)" };
 }
 
@@ -317,10 +377,11 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
     const isGrace = grace.has(k);
     const isLate = Boolean(day?.late);
     const isToday = k === todayKey;
+    const isPerfect = day ? isPerfectDay(day, habits.calorieGoal) : false;
     const label = isGrace
       ? `${k} — jour rattrapé (grâce)`
       : validated > 0
-        ? `${k} — ${validated}/${HABITS.length} validées · ${energy} ⚡${isLate ? " · noté après coup" : ""}`
+        ? `${k} — ${day ? validatedPiliers(day, habits.calorieGoal) : 0}/${PILIERS.length} piliers · ${energy} ⚡${isPerfect ? " · journée parfaite" : ""}${isLate ? " · noté après coup" : ""}`
         : `${k} — rien de saisi`;
     cells.push(
       <div
@@ -328,13 +389,13 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
         title={label}
         aria-label={label}
         className={`h-3 w-3 rounded-[2px] ${isToday ? "ring-1 ring-cell-cyan" : ""}`}
-        style={cellStyle(energy, validated, isGrace, isLate)}
+        style={cellStyle(energy, validated, isGrace, isLate, isPerfect)}
       />,
     );
   }
 
   const all = Object.values(habits.days);
-  const perfect = all.filter((d) => d.energy >= PERFECT_DAY_ENERGY).length;
+  const perfect = all.filter((d) => isPerfectDay(d, habits.calorieGoal)).length;
   // « Tenus » = ce que la série compte réellement : saisi le jour même. Les
   // journées notées après coup ont leur propre compteur plutôt que d'être
   // fondues dans le premier — la grille ne doit jamais surestimer la constance.
@@ -360,14 +421,18 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
       </div>
       <div className="flex flex-wrap items-center gap-2 text-[9px] text-cell-teal/50">
         <span>Moins</span>
-        {[0, 20, 45, 75, PERFECT_DAY_ENERGY].map((e) => (
+        {TINT_STEPS.map((f) => (
           <span
-            key={e}
+            key={f}
             className="h-2.5 w-2.5 rounded-[2px]"
-            style={cellStyle(e, e > 0 ? 1 : 0, false)}
+            style={cellStyle(MAX_DAY_ENERGY * f, 1, false)}
           />
         ))}
-        <span>Plus</span>
+        <span
+          className="h-2.5 w-2.5 rounded-[2px]"
+          style={cellStyle(MAX_DAY_ENERGY, 1, false, false, true)}
+        />
+        <span>Parfaite</span>
         <span className="ml-2 flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-[2px]" style={cellStyle(0, 0, true)} />
           rattrapé
@@ -654,9 +719,11 @@ export function HabitsPanel({
   const graceLeft = graceAvailable(habits, key);
   const repairIsLate = Boolean(repairable && habits.days[repairable]?.late);
 
-  // Célébration de la journée parfaite (5/5). Aucun état persisté : on compare
-  // simplement au compte précédent — le but est de marquer le geste au moment
-  // où il est fait, pas de tenir une comptabilité de plus.
+  // Célébration de la journée parfaite : les 4 PILIERS, pas les 5 habitudes.
+  // Aucun état persisté : on compare simplement au compte précédent — le but est
+  // de marquer le geste au moment où il est fait, pas de tenir une comptabilité
+  // de plus.
+  const piliersOk = validatedPiliers(entry, habits.calorieGoal);
   const [burst, setBurst] = useState(false);
   const prevValidated = useRef<number | null>(null);
   const prevKey = useRef(editing);
@@ -667,8 +734,8 @@ export function HabitsPanel({
       prevValidated.current = null;
     }
     const before = prevValidated.current;
-    prevValidated.current = entry.validatedCount;
-    if (before !== null && before < HABITS.length && entry.validatedCount >= HABITS.length) {
+    prevValidated.current = piliersOk;
+    if (before !== null && before < PILIERS.length && piliersOk >= PILIERS.length) {
       setBurst(true);
       if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
         navigator.vibrate([18, 45, 18, 45, 90]);
@@ -677,7 +744,7 @@ export function HabitsPanel({
       // le repère de victoire plutôt qu'une simple collecte.
       playCue("victory");
     }
-  }, [editing, entry.validatedCount]);
+  }, [editing, piliersOk]);
 
   useEffect(() => {
     if (!burst) return;
@@ -704,7 +771,7 @@ export function HabitsPanel({
             <p className="text-[11px] text-cell-teal/60">
               {editing} —{" "}
               {isToday ? "modifiable jusqu'à minuit" : "journée notée après coup"} ·{" "}
-              {entry.validatedCount}/{HABITS.length} validées
+              {piliersOk}/{PILIERS.length} piliers
             </p>
           </div>
           <button
@@ -812,7 +879,7 @@ export function HabitsPanel({
           </p>
 
           {/* L'avertissement arrive AVANT la saisie, jamais après : découvrir que
-              son 🔥 30 est resté à 30 une fois les cinq habitudes cochées serait
+              son 🔥 30 est resté à 30 une fois les quatre piliers validés serait
               la pire des surprises. */}
           {!isToday && (
             <div className="mb-2 rounded-lg border border-amber-400/40 bg-amber-400/5 p-2">
@@ -836,9 +903,10 @@ export function HabitsPanel({
               {entry.energy} ⚡ {isToday ? "aujourd'hui" : "ce jour-là"}
             </span>
             <span className="text-[10px] text-cell-teal/60">
-              journée parfaite = {PERFECT_DAY_ENERGY} ⚡ ({HABITS.length}/{HABITS.length})
+              journée parfaite = les {PILIERS.length} piliers
             </span>
           </div>
+          <PiliersRow entry={entry} calorieGoal={habits.calorieGoal} />
           <div className="space-y-2">
             {HABITS.map((def) => (
               <HabitRow
@@ -863,7 +931,7 @@ export function HabitsPanel({
             <span className="text-5xl">🌟</span>
             <p className="text-sm uppercase tracking-[0.25em] text-cell-lime">Journée parfaite</p>
             <p className="text-[11px] leading-4 text-cell-teal/80">
-              {HABITS.length}/{HABITS.length} habitudes · {entry.energy} ⚡
+              {PILIERS.length}/{PILIERS.length} piliers · {entry.energy} ⚡
               <br />
               {isToday ? "La mue du jour est complète." : `La journée du ${editing} est complète.`}
             </p>

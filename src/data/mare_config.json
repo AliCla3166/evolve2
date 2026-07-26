@@ -1,7 +1,9 @@
 {
   "$comment": "Tuning v2 de la Mare & des cartes (Phase 6, refonte pêche 24/07 + extension collection 24/07) — mini-jeu façon Stardew Valley : une barre canne à pêche montée par pression maintenue et qui retombe seule (gravité), à garder alignée sur un poisson qui se déplace de façon erratique (vitesse/fréquence de changement de cap dépendent de la rareté). 62 espèces : les 12 historiques + 8 réutilisant des portraits PixelLab déjà générés en Phase 1 (jamais câblés en espèce) ont leur art ; les 42 autres référencent un `portrait` dont le PNG est en attente de génération PixelLab (cf. tools/gen_species_portraits.py + tools/portrait_jobs.json), affiché avec un repli neutre tant qu'il n'existe pas sur disque. `hp` (PV) sur chaque espèce est un stat de collection scalé par cardHp (même multiplicateur rareté × niveau que les 3 stats de puissance) ; purement informatif pour l'instant, ne modifie aucune formule de combat existante. À recalibrer en Phase 7. Aucune valeur en dur dans le code.",
   "jetons": {
-    "cost_energie": 30,
+    "$comment": "30 -> 55 le 26/07/2026, en meme temps que le bareme quotidien passait de 90 a 166 energie/jour (habits_config.json > bareme). Ce n'est PAS une hausse de prix : c'est le meme prix dans la nouvelle unite (55/166 = 33 %, contre 30/90 = 33 %). Le jeton est le poste de depense le plus lourd de la journee (jusqu'a 3/jour) : le laisser a 30 aurait libere tout le surplus vers le rachat d'heures de chantier et fait tomber l'ascension a 79,8 j, hors de la fenetre 81-99 j (mesure simulate_full.py, 30 graines). La hausse reelle de pouvoir d'achat a ete placee ailleurs, la ou elle ne deforme pas le rythme : rachat d'heures (energy_per_hour 8 -> 12, soit x1,5 pour un bareme x1,84) et Boutique du Bastion (prix inchanges, donc x1,84 en reel).",
+    "$comment_baisse_2607_soir": "55 -> 48 le 26/07/2026 au soir (-13 %), et cette fois c'est une VRAIE baisse de prix, pas une reindexation. Demande explicite : « il ne faut pas que chaque action gagne plus de points, mais peut-etre que la peche coute un peu moins cher ». C'est la bonne facon de rendre du pouvoir d'achat : monter les gains deforme la valeur d'une journee vecue (une heure de chantier vaudrait soudain plus qu'hier), baisser un prix ne touche qu'a l'arbitrage. La place a ete faite par le verrou des doublons (cf. $comment_verrou_doublons) : le verrou rendait 2,6 j a l'assidu (82,0 -> 84,6 j), la baisse en reprend 1,2 (84,6 -> 83,4 j). Sweep mesure a 12 graines : 55 -> 84,6 j / 48 -> 83,5 j / 44 -> 81,4 j / 40 -> 81,3 j chez l'assidu ; 44 et 40 collent au plancher de 81 j, donc refuses malgre la fenetre techniquement respectee — une marge de 0,4 j ne survit pas a un changement de graines. Mesure finale retenue (simulate_full.py, 30 graines) : 83,4 / 88,5 / 94,7 j. Effet secondaire mesure et voulu : la reserve de peche du simulateur valant cout + 80, baisser le cout libere aussi le rachat d'heures (90,2 -> 123,3 h chez l'assidu).",
+    "cost_energie": 48,
     "max_stock": 20
   },
   "fragments_per_card": 8,
@@ -72,6 +74,49 @@
       "drain_mult": 1.4,
       "color": "#ff8bd0",
       "power_mult": 4.5
+    }
+  ],
+  "$comment_editions": "LES EDITIONS (26/07/2026 au soir) — un deuxieme axe, ORTHOGONAL a la rarete. La rarete dit QUELLE bete on a sortie de l'eau ; l'edition dit dans quel etat la carte est tombee. Une commune peut etre polychrome, une mythique peut etre standard, et les deux tirages sont independants. Modele : les editions de Balatro (foil / holographique / polychrome / negative). Le but est de donner DEUX routes vers la meme carte, comme demande : la route du travail (repecher la meme espece, monter son niveau) et la route de la chance (tomber dessus dans une edition qui donne un bonus). La deuxieme ne remplace pas la premiere, elle la double. Poids : ~9 % des prises sortent en edition speciale, et la negative reste une loterie a 0,4 % (~0,7 negative sur les 180 prises d'un assidu en 90 jours). Le multiplicateur d'edition entre dans cardMult au meme titre que la rarete et le niveau. La NEGATIVE ne donne aucune puissance : elle n'occupe AUCUNE place — ni en defense, ni en expedition, ni sur un gisement, ni dans un organe. C'est le 'coute zero' de Balatro transpose au seul cout qui existe ici : la place. Une espece garde le MEILLEUR de chacune des proprietes qu'elle a jamais tenues (meilleur power_mult ET negative si elle a une negative), donc une nouvelle prise ne peut jamais faire regresser une carte — meme doctrine que bestRarity. Les descriptions ne sont pas ecrites ici : l'ecran les compose a partir de power_mult et free_slot, un texte ne peut donc pas contredire le nombre. MESURE (simulate_full.py, 30 graines, editions et negative branchees dans le simulateur) : 83,2 / 87,2 / 94,5 j sur la metrique 'tout Nv5', contre 83,4 / 88,5 / 94,7 j sans les editions — l'axe ne deplace donc PAS l'horizon (-0,2 a -1,3 j, dans le bruit des graines), ce qui est exactement ce qu'on cherchait : ajouter du desir, pas du rendement. Explication du non-effet : une edition tombe sur une espece TIREE AU HASARD parmi 62, donc presque jamais sur l'une des 6 cartes assignees qui portent le bonus ; sur 90 jours un assidu voit 25,3 prises speciales pour 21,1 especes concernees et 1,37 negative. Le vrai gain de la negative n'est pas la puissance (power_mult 1,0) mais la PLACE : ~1,3 place gratuite en fin de partie, soit une 7e carte assignee au lieu de 6. C'est le seul endroit ou l'axe touche l'equilibrage, et il est borne par la loterie a 0,4 %.",
+  "editions": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "weight": 1000,
+      "power_mult": 1.0,
+      "free_slot": false,
+      "color": "#7fd7c4"
+    },
+    {
+      "id": "chromee",
+      "name": "Chromée",
+      "weight": 60,
+      "power_mult": 1.15,
+      "free_slot": false,
+      "color": "#d8e9f5"
+    },
+    {
+      "id": "holographique",
+      "name": "Holographique",
+      "weight": 25,
+      "power_mult": 1.35,
+      "free_slot": false,
+      "color": "#6df6ff"
+    },
+    {
+      "id": "polychrome",
+      "name": "Polychrome",
+      "weight": 10,
+      "power_mult": 1.6,
+      "free_slot": false,
+      "color": "#ff9ee8"
+    },
+    {
+      "id": "negative",
+      "name": "Négative",
+      "weight": 4,
+      "power_mult": 1.0,
+      "free_slot": true,
+      "color": "#b98bff"
     }
   ],
   "reveal": {
@@ -204,6 +249,8 @@
     11
   ],
   "level_power_bonus": 0.2,
+  "$comment_verrou_doublons": "VERROU DES DOUBLONS (26/07/2026). Une espece pechee une seule fois entre dans la collection mais reste INJOUABLE : on ne peut ni l'assigner en defense/expedition, ni la poster sur un gisement, ni la poster dans un organe tant qu'on n'en tient pas une deuxieme prise (niveau 2 = level_thresholds[1] = 2). Pourquoi : jusqu'ici la premiere prise d'une espece partait au travail dans la seconde, donc les 6 places d'assignation et les postes se remplissaient en une poignee de sorties de peche et la collection cessait d'etre un objectif des la premiere semaine. Le verrou remet une distance entre CONNAITRE une espece et la MAITRISER : c'est la meme piece, il en faut deux. Cout mesure : les especes sont tirees uniformement parmi 62, donc apres 20 prises on ne tient en moyenne que 2,5 especes jouables (coupon collector, 62 x (1 - q^k - k p q^(k-1)) avec p = 1/62). C'est la contrepartie assumee de la baisse du prix du jeton (cf. jetons.$comment) : la peche coute moins cher, mais une prise vaut moins tout de suite. Le niveau est le SEUL verrou, et il ne se referme jamais : `count` ne decroit nulle part dans le moteur, une carte jouable le reste.",
+  "playable_min_level": 2,
   "assign_slots": {
     "defense": 3,
     "expedition": 3

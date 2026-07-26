@@ -1,18 +1,28 @@
 /* Habitudes réelles -> Points d'énergie.
-   Barème repris du prototype v1 (bloc HABITS de index.html) : ce sont des règles
-   de gameplay "habitudes", pas du tuning économique (le JSON d'économie ne les
-   couvre pas — l'énergie y est déclarée kind: "externe_habitude").
 
-   Règles v1 conservées (retouchées sur demande utilisateur pour le bilan
-  calorique — plus simple à saisir) :
-   - Bilan calorique   : une seule valeur signée (négatif = déficit, positif =
-     surplus), au clavier ou par crans de 100 kcal. Négatif ou nul => +5 ⚡.
-     Positif => -1 ⚡ par tranche de 100 kcal de surplus.
-   - Pas quotidiens    : +1 ⚡ par tranche de 1000 pas, plafonné à 15 ⚡.
-   - Magic Focus       : +3 ⚡ par tâche, max 10 tâches/jour.
-   - Chantier ALILOU   : +5 ⚡ par tâche, max 3/jour.
-   - Rituels bien-être : +5 ⚡ par rituel, max 5/jour.
-   Journée parfaite = 5/5 habitudes validées => max 10+15+30+15+25 = 95 ⚡/jour.
+   LE BARÈME N'EST PLUS ICI. Il vit dans src/data/habits_config.json -> bareme,
+   sous la même règle que tout le reste de l'équilibrage : un nombre qui pèse sur
+   les 90 jours d'ascension vit en JSON, avec la mesure qui le justifie. Ce
+   fichier n'en garde que la LECTURE et les règles de saisie (bornes de champ,
+   fenêtre rétroactive, série). L'argument d'origine — « ce sont des règles de
+   gameplay, pas du tuning » — ne tenait pas : l'énergie se reconvertit en heures
+   de chantier via economy_config.json -> energy_boost.
+
+   JOURNÉE PARFAITE = LES 4 PILIERS, PAS LES 5 HABITUDES (26/07/2026).
+   Nutrition · Mouvement · Travail · Soin de soi. Le pilier « Travail » accepte
+   indifféremment une heure de Magic Focus OU une heure de chantier ALILOU —
+   l'une suffit. Avant, la journée parfaite exigeait les deux, donc elle était
+   impossible le samedi et le dimanche, Magic Focus étant un outil de bureau.
+   Le barème, lui, ne change pas : faire les deux postes rapporte toujours plus
+   (196 ⚡ contre 136). Le pilier ne décide que de ce qui compte comme une
+   journée complète, pas de ce qu'elle rapporte.
+
+   LES DEUX POSTES DE TRAVAIL SE COMPTENT EN HEURES (26/07/2026 au soir). Une
+   « tâche » n'a pas de taille : poser une étagère et refaire une pièce comptaient
+   pareil, et le plafond de 3 tâches punissait la seule journée qui mérite d'être
+   récompensée — le samedi entier passé sur le chantier. Une heure a toujours la
+   même taille. Le taux dit la pénibilité, pas le prestige : 7 ⚡ l'heure de
+   chantier contre 5 ⚡ l'heure d'écran.
 
    Saisie : une entrée par jour calendaire (clé YYYY-MM-DD en timezone locale),
    éditable pendant une FENÊTRE GLISSANTE de SAISIE_WINDOW_DAYS jours, aujourd'hui
@@ -25,13 +35,19 @@
 import rawHabitsConfig from "@/data/habits_config.json";
 import type { HabitDayEntry, HabitId, HabitsState } from "./types";
 
-/* ---------- Définition des 5 habitudes ---------- */
+/* ---------- Définition des 5 habitudes (lue du JSON) ---------- */
+
+/** Identifiant d'un pilier de la journée parfaite. Deux habitudes peuvent
+ *  partager le même — c'est tout le mécanisme : `mf` et `alilou` portent
+ *  toutes deux « travail », donc l'une OU l'autre valide le pilier. */
+export type PilierId = string;
 
 export interface HabitDef {
   id: HabitId;
   icon: string;
   name: string;
   desc: string;
+  pilier: PilierId;
   type: "calorie" | "rate" | "count";
   /** calorie : énergie du jour si validée. */
   energyPerDay?: number;
@@ -44,67 +60,30 @@ export interface HabitDef {
   /** count : nb max d'items par jour. */
   capItems?: number;
   unit?: string;
+  /** Unité affichée à côté du compteur (« h », « rituels »). Vide = rien à dire.
+   *  Sans elle, « 6 / 12 » ne dit pas si on compte des heures ou des tâches —
+   *  or c'est exactement ce qui a changé le 26/07. */
+  unitShort?: string;
 }
 
-export const HABITS: HabitDef[] = [
-  {
-    id: "calories",
-    icon: "🍽️",
-    name: "Bilan calorique",
-    desc: "Indique ton solde du jour (négatif = déficit). Déficit : +5 ⚡. Surplus : −1 ⚡ par 100 kcal.",
-    type: "calorie",
-    energyPerDay: 5,
-  },
-  {
-    id: "steps",
-    icon: "🚶",
-    name: "Pas quotidiens",
-    desc: "+1 ⚡ par tranche de 1000 pas (max 15 ⚡).",
-    type: "rate",
-    per: 1000,
-    energyPer: 1,
-    capEnergy: 15,
-    step: 500,
-    max: 30000,
-    unit: "pas",
-  },
-  {
-    id: "mf",
-    icon: "💼",
-    name: "Tâches Magic Focus",
-    desc: "+3 ⚡ par tâche terminée (max 10/jour).",
-    type: "count",
-    energyPer: 3,
-    capItems: 10,
-    unit: "tâches",
-  },
-  {
-    id: "alilou",
-    icon: "🏗️",
-    name: "Chantier ALILOU",
-    desc: "+5 ⚡ par tâche de chantier (max 3/jour). Grosse valeur.",
-    type: "count",
-    energyPer: 5,
-    capItems: 3,
-    unit: "tâches",
-  },
-  {
-    id: "rituals",
-    icon: "🧘",
-    name: "Rituels bien-être",
-    desc: "Lire, méditer, marcher, se poser… +5 ⚡ par rituel (max 5/jour).",
-    type: "count",
-    energyPer: 5,
-    capItems: 5,
-    unit: "rituels",
-  },
-];
+export interface PilierDef {
+  id: PilierId;
+  name: string;
+  icon: string;
+}
 
-/* ---------- Constantes énergie & streaks ---------- */
-
-/** Cap élevé de la ressource énergie : ~3 mois de journées parfaites (95 ⚡ × 90 j ≈ 8550).
- *  L'énergie n'est pas soumise au stockage cellulaire du JSON (kind externe_habitude). */
-export const ENERGY_CAP = 9999;
+/** Remplit les accolades d'un libellé avec les PROPRES champs de l'objet décrit.
+ *  Régler `energy_per` à 12 dans le JSON réécrit la phrase tout seul : aucun
+ *  composant n'a à recomposer « +12 ⚡ par tâche » de son côté, et le texte ne
+ *  peut donc pas mentir sur le barème. Une accolade sans champ correspondant est
+ *  laissée telle quelle — bruyante à l'écran, donc repérée à la première
+ *  ouverture du panneau plutôt que silencieusement effacée. */
+function fillTemplate(tpl: string, fields: Record<string, unknown>): string {
+  return tpl.replace(/\{(\w+)\}/g, (whole, key: string) => {
+    const v = fields[key];
+    return v === undefined ? whole : String(v);
+  });
+}
 
 /* ---------- Série : paliers hebdomadaires, grâce, historique ----------
    Tout le tuning vit dans src/data/habits_config.json — c'est la MÊME table que
@@ -136,8 +115,29 @@ export interface BilanOptionDef {
   production_hours?: number;
 }
 
+/** Une habitude telle qu'elle est écrite dans le JSON : snake_case, et les
+ *  libellés portent encore leurs accolades. `habitDefs()` en fait des `HabitDef`. */
+interface RawHabit {
+  id: HabitId;
+  icon: string;
+  name: string;
+  desc: string;
+  pilier: PilierId;
+  type: "calorie" | "rate" | "count";
+  energy_per_day?: number;
+  per?: number;
+  energy_per?: number;
+  cap_energy?: number;
+  step?: number;
+  max?: number;
+  cap_items?: number;
+  unit?: string;
+  unit_short?: string;
+}
+
 interface HabitsConfig {
   saisie: { window_days: number };
+  bareme: { habitudes: RawHabit[]; piliers: PilierDef[] };
   streak: {
     tiers: StreakTier[];
     grace: { per_month: number; max_age_days: number };
@@ -155,6 +155,61 @@ interface HabitsConfig {
 }
 
 export const HABITS_CFG = rawHabitsConfig as unknown as HabitsConfig;
+
+/** Les 5 habitudes, dérivées du JSON. Le libellé est composé ici une fois pour
+ *  toutes à partir des chiffres du barème : changer `energy_per` suffit à
+ *  corriger la phrase affichée dans le panneau. */
+export const HABITS: HabitDef[] = HABITS_CFG.bareme.habitudes.map((h) => ({
+  id: h.id,
+  icon: h.icon,
+  name: h.name,
+  desc: fillTemplate(h.desc, h as unknown as Record<string, unknown>),
+  pilier: h.pilier,
+  type: h.type,
+  energyPerDay: h.energy_per_day,
+  per: h.per,
+  energyPer: h.energy_per,
+  capEnergy: h.cap_energy,
+  step: h.step,
+  max: h.max,
+  capItems: h.cap_items,
+  unit: h.unit,
+  unitShort: h.unit_short,
+}));
+
+/** Les piliers de la journée parfaite, dans l'ordre d'affichage. */
+export const PILIERS: ReadonlyArray<PilierDef> = HABITS_CFG.bareme.piliers;
+
+/** Énergie maximale théorique d'une journée : les 5 habitudes à fond.
+ *  Dérivée du barème, jamais codée en dur — l'ancienne constante `95` figée
+ *  dans HabitsPanel était FAUSSE (le maximum réel était 90), si bien que le
+ *  compteur « journées parfaites » de la grille affichait toujours zéro et que
+ *  la case dorée ne pouvait pas s'allumer. */
+export const MAX_DAY_ENERGY = HABITS.reduce((sum, def) => {
+  if (def.type === "calorie") return sum + (def.energyPerDay ?? 0);
+  if (def.type === "rate") return sum + (def.capEnergy ?? 0);
+  return sum + (def.capItems ?? 0) * (def.energyPer ?? 0);
+}, 0);
+
+/** Énergie d'une journée parfaite MINIMALE : les 4 piliers validés, en ne
+ *  gardant à chaque fois que l'habitude la MOINS chère du pilier, à fond.
+ *  C'est le week-end d'Ali : parfait sans une seule tâche Magic Focus. Sert de
+ *  repère d'affichage — le seuil doré, lui, se lit sur les piliers, pas ici. */
+export const PERFECT_DAY_ENERGY = PILIERS.reduce((sum, p) => {
+  const defs = HABITS.filter((h) => h.pilier === p.id);
+  const maxima = defs.map((def) =>
+    def.type === "calorie"
+      ? (def.energyPerDay ?? 0)
+      : def.type === "rate"
+        ? (def.capEnergy ?? 0)
+        : (def.capItems ?? 0) * (def.energyPer ?? 0),
+  );
+  return sum + (maxima.length ? Math.min(...maxima) : 0);
+}, 0);
+
+/** Cap élevé de la ressource énergie : plusieurs mois de journées pleines.
+ *  L'énergie n'est pas soumise au stockage cellulaire du JSON (kind externe_habitude). */
+export const ENERGY_CAP = 9999;
 
 /** Paliers de série (jours consécutifs avec ≥1 habitude validée) → bonus d'énergie.
  *  Un palier par semaine : la régularité doit accuser réception chaque semaine,
@@ -189,11 +244,7 @@ export function bilanOptionDef(id: string): BilanOptionDef | undefined {
  *  Une accolade sans champ correspondant est laissée telle quelle — bruyante à l'écran,
  *  donc repérée à la première ouverture du panneau plutôt que silencieusement effacée. */
 export function bilanOptionDesc(opt: BilanOptionDef): string {
-  const fields = opt as unknown as Record<string, unknown>;
-  return opt.desc.replace(/\{(\w+)\}/g, (whole, key: string) => {
-    const v = fields[key];
-    return v === undefined ? whole : String(v);
-  });
+  return fillTemplate(opt.desc, opt as unknown as Record<string, unknown>);
 }
 
 /** Énergie totale que vaut une série parfaite de 90 jours (affiché dans l'UI). */
@@ -440,6 +491,37 @@ export function habitValidated(
 ): boolean {
   if (def.type === "calorie") return habitEnergy(def, entry, calorieGoal) > 0;
   return entry[def.id as "steps" | "mf" | "alilou" | "rituals"] > 0;
+}
+
+/* ---------- Les 4 piliers de la journée parfaite ----------
+   Un pilier est validé dès qu'UNE de ses habitudes l'est. « Travail » en porte
+   deux (Magic Focus et Chantier ALILOU) : c'est tout le mécanisme, et c'est ce
+   qui rend une journée de week-end parfaite sans outil de bureau. */
+
+/** Les habitudes rattachées à un pilier, dans l'ordre du barème. */
+export function pilierHabits(pilier: PilierId): HabitDef[] {
+  return HABITS.filter((h) => h.pilier === pilier);
+}
+
+/** Ce pilier est-il validé pour cette saisie ? Une habitude suffit. */
+export function pilierValidated(
+  pilier: PilierId,
+  entry: HabitDayEntry,
+  calorieGoal: number,
+): boolean {
+  return pilierHabits(pilier).some((def) => habitValidated(def, entry, calorieGoal));
+}
+
+/** Nombre de piliers validés (0 à PILIERS.length). */
+export function validatedPiliers(entry: HabitDayEntry, calorieGoal: number): number {
+  return PILIERS.filter((p) => pilierValidated(p.id, entry, calorieGoal)).length;
+}
+
+/** LA journée parfaite : les quatre piliers, quelles que soient les habitudes
+ *  qui les portent. Se recalcule intégralement depuis les valeurs brutes de la
+ *  saisie, donc l'historique déjà enregistré répond juste sans migration. */
+export function isPerfectDay(entry: HabitDayEntry, calorieGoal: number): boolean {
+  return validatedPiliers(entry, calorieGoal) === PILIERS.length;
 }
 
 /** Énergie totale + nb d'habitudes validées d'une saisie. */

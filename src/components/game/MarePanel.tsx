@@ -16,11 +16,19 @@ import {
   cardPowerRec,
   cardsDefenseBonus,
   cardsExpeditionExpBonus,
+  catchesToPlayable,
   creatureRecolteBonus,
+  bestEditionIndex,
+  editionConfig,
+  editionCounts,
+  editionEffect,
+  isCardPlayable,
+  isFreeSlotCard,
   jetonMax,
   MARE,
   nextLevelAt,
   rarityConfig,
+  slotsUsed,
 } from "@/lib/game/cards";
 import { effectiveReserveCap } from "@/lib/game/bastion/config";
 import {
@@ -483,17 +491,35 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 </span>
               ))}
             </p>
+            {/* Le second axe, annoncé à l'endroit où l'on pêche : la rareté dit QUELLE
+                bête sort de l'eau, l'édition dans quel état la carte tombe. Les effets
+                sont composés depuis les nombres du JSON (editionEffect) — aucun libellé
+                ne peut donc promettre autre chose que ce que le moteur applique. */}
+            <p className="text-center text-[10px] leading-relaxed text-cell-teal/50">
+              Édition : {MARE.editions.slice(1).map((e, i) => (
+                <span key={e.id} style={{ color: e.color }}>
+                  {e.name.toLowerCase()} ({editionEffect(i + 1)}){" "}
+                </span>
+              ))}
+            </p>
           </>
         ) : (
           <>
             {/* Bonus d'assignation */}
             <p className="text-center text-[11px] text-cell-teal/70">
               Cartes assignées : 🛡️ +{fmtInt(defBonus)} défense · 🧭 +{fmtInt(expBonus)} exploration
-              {" "}({assignments.defense.length}/{defenseCap} · {assignments.expedition.length}/{MARE.assign_slots.expedition})
+              {/* On affiche les PLACES occupées, pas le nombre de cartes : une négative
+                  n'en occupe aucune, donc « 6/6 » avec sept cartes posées est le compte
+                  juste, et c'est exactement celui que le store applique (cards.slotsUsed). */}
+              {" "}({slotsUsed(assignments.defense, collection)}/{defenseCap} · {slotsUsed(assignments.expedition, collection)}/{MARE.assign_slots.expedition})
             </p>
             <p className="text-center text-[10px] text-cell-teal/50">
               🛡️ Défense : bonus passif de la cellule ET réserve plaçable du Bastion-Défense jouable
               (plafond achetable dans sa Boutique).
+            </p>
+            <p className="text-center text-[10px] text-cell-teal/50">
+              🔒 Une prise donne la carte, pas le droit de la jouer : il faut une 2ᵉ prise de la
+              même espèce pour l&apos;assigner ou la mettre au travail.
             </p>
             {/* Les {" "} ne sont pas décoratifs : le compilateur de cette version mange
                 l'espace écrit entre un pluriel ternaire et le texte qui le suit quand
@@ -532,21 +558,44 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 const inExp = assignments.expedition.includes(sp.id);
                 const posteA = foyerOfCrewSpecies(territoire, sp.id);
                 const posteB = buildingOfPostedSpecies({ postes }, sp.id);
+                // Le verrou des doublons : la première prise donne la carte, la
+                // deuxième donne le droit de la jouer (cf. cards.isCardPlayable).
+                const playable = isCardPlayable(entry);
+                const missing = catchesToPlayable(entry);
+                /* L'ÉDITION : deuxième axe, orthogonal à la rareté. La carte porte la
+                   plus prestigieuse jamais obtenue, et l'infobulle détaille les prises
+                   par édition — c'est là que se lisent les deux routes vers une carte,
+                   celle du travail (les doublons) et celle de la chance. */
+                const edIdx = bestEditionIndex(entry);
+                const ed = editionConfig(edIdx);
+                const edCounts = editionCounts(entry);
+                const edTitle = MARE.editions
+                  .map((e, i) => (edCounts[i] > 0 ? `${e.name} × ${edCounts[i]}` : null))
+                  .filter(Boolean)
+                  .join(" · ");
                 return (
                   <div key={sp.id} className="flex flex-col items-center gap-1">
-                    <CardFrame rarity={rar.id as Rarity}>
-                      <img
-                        src={cardArt(sp.id)}
-                        alt={sp.name}
-                        className="pixelated h-full w-full object-contain"
-                        draggable={false}
-                        onError={(e) => {
-                          // Portrait pas encore généré (nouvelle espèce en attente de PixelLab) — repli neutre.
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = "/assets/ui/age01_cell_ui_card_slot_v001.png";
-                        }}
-                      />
-                    </CardFrame>
+                    <div
+                      style={
+                        edIdx > 0
+                          ? { filter: `drop-shadow(0 0 8px ${ed.color})` }
+                          : undefined
+                      }
+                    >
+                      <CardFrame rarity={rar.id as Rarity}>
+                        <img
+                          src={cardArt(sp.id)}
+                          alt={sp.name}
+                          className="pixelated h-full w-full object-contain"
+                          draggable={false}
+                          onError={(e) => {
+                            // Portrait pas encore généré (nouvelle espèce en attente de PixelLab) — repli neutre.
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = "/assets/ui/age01_cell_ui_card_slot_v001.png";
+                          }}
+                        />
+                      </CardFrame>
+                    </div>
                     {/* Lisibilite de la grille (piste 7) + cibles tactiles (piste 10) :
                         le nom passe a 11 px, les PV rejoignent la ligne de stats — on tombe
                         de 5 lignes de texte tassees a 4 — et les deux boutons d'assignation
@@ -556,7 +605,21 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                       {rar.name} · Nv {level}
                       {next !== null && <span className="text-cell-teal/50"> ({entry.count}/{next})</span>}
                     </span>
-                    <span className="text-[9px] text-cell-teal/60">{ROLE_LABEL[sp.role]}</span>
+                    {edIdx > 0 && (
+                      <span
+                        className="text-center text-[9px] leading-tight"
+                        style={{ color: ed.color }}
+                        title={edTitle}
+                      >
+                        ◈ {ed.name} · {editionEffect(edIdx)}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-cell-teal/60">
+                      {ROLE_LABEL[sp.role]}
+                      {isFreeSlotCard(entry) && (
+                        <span className="text-cell-teal/50"> · sans place</span>
+                      )}
+                    </span>
                     <div className="flex flex-wrap items-center justify-center gap-x-1.5 text-[10px] leading-tight">
                       <span className="text-cell-magenta/80">❤{cardHp(sp.id, entry)}</span>
                       <span className="text-cell-teal/70">🛡{cardPowerDef(sp.id, entry)}</span>
@@ -585,6 +648,14 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                         %
                       </span>
                     )}
+                    {!playable ? (
+                      <div
+                        className="tap-h mt-0.5 flex w-full items-center justify-center rounded border border-cell-teal/20 text-[10px] text-cell-teal/50"
+                        title="Une prise donne la carte, pas le droit de la jouer : il en faut une deuxième."
+                      >
+                        🔒 encore {missing} prise{missing > 1 ? "s" : ""}
+                      </div>
+                    ) : (
                     <div className="mt-0.5 flex w-full gap-1">
                       <button
                         onClick={() => toggleCardAssign(sp.id, "defense")}
@@ -609,6 +680,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                         🧭
                       </button>
                     </div>
+                    )}
                   </div>
                 );
               })}
