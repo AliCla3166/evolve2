@@ -51,14 +51,26 @@ export interface BuildTask {
 /** Identifiants des 6 habitudes réelles. `repas` (26/07/2026) est la seconde porte du
  *  pilier Nutrition : sans elle, un jour de surplus calorique rendait la journée
  *  parfaite mathématiquement impossible (cf. habits_config.json, $comment de `repas`). */
-export type HabitId = "calories" | "steps" | "mf" | "alilou" | "rituals" | "repas";
+export type HabitId =
+  | "calories"
+  | "steps"
+  | "mf"
+  | "alilou"
+  | "rituals"
+  | "repas"
+  | "devisDemande"
+  | "devisSigne";
 
 /** Saisie d'une journée calendaire (clé YYYY-MM-DD locale). Éditable pendant la
  *  fenêtre de saisie glissante — aujourd'hui et les jours précédents jusqu'à
  *  SAISIE_WINDOW_DAYS (cf. habits_config.json -> saisie). */
 export interface HabitDayEntry {
-  /** Bilan calorique du jour, en kcal (signé — négatif = déficit, positif = surplus). */
-  calories: number;
+  /** Kcal DÉPENSÉS ce jour (saisie brute, 28/07/2026). Remplace l'ancien solde
+   *  signé unique : Ali veut noter les deux côtés séparément, pas un delta. */
+  caloriesBurned: number;
+  /** Kcal MANGÉS ce jour (saisie brute, 28/07/2026). L'écart mangé − dépensé
+   *  EST le solde que portait l'ancien champ `calories` — cf. migration v21. */
+  caloriesEaten: number;
   /** true dès que le bilan calorique du jour a été saisi (posé automatiquement). */
   caloriesDone: boolean;
   /** Pas quotidiens. */
@@ -74,6 +86,13 @@ export interface HabitDayEntry {
   /** Repas maison (seconde habitude du pilier Nutrition, 26/07/2026). Les
    *  sauvegardes < v20 n'ont pas le champ : la migration le pose à 0. */
   repas: number;
+  /** Demandes de devis reçues ce jour (28/07/2026). Pilier `business`,
+   *  volontairement hors des 4 piliers de la journée parfaite — cf.
+   *  habits_config.json -> bareme.$comment_pilier_business. */
+  devisDemande: number;
+  /** Devis signés ce jour (28/07/2026). Même pilier hors-piliers que
+   *  `devisDemande`. */
+  devisSigne: number;
   /** Énergie déjà créditée pour ce jour (recalculée à chaque édition du jour même). */
   energy: number;
   /** Nombre d'habitudes validées (>=1 valide la journée pour le streak). */

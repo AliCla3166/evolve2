@@ -27,9 +27,7 @@ import {
   BILAN,
   BILAN_OPTIONS,
   bilanOptionDesc,
-  CALORIE_DELTA_MAX,
-  CALORIE_DELTA_MIN,
-  CALORIE_STEP,
+  CALORIE_INPUT_MAX,
   canEditDay,
   currentStreakTier,
   dayKey,
@@ -114,35 +112,56 @@ function HabitRow({
 
   let controls: React.ReactNode = null;
   if (def.type === "calorie") {
+    // Deux saisies brutes (28/07/2026) : dépensé et mangé, plus de solde signé
+    // unique. L'écart (mangé − dépensé) et son palier sont recalculés ici
+    // uniquement pour l'affichage — habitEnergy() fait exactement le même calcul
+    // côté moteur (cf. habits.ts), donc le texte ne peut pas mentir sur le gain.
+    const diff = entry.caloriesEaten - entry.caloriesBurned;
+    const palier = !entry.caloriesDone
+      ? null
+      : diff <= 0
+        ? "déficit"
+        : diff <= (def.surplusLimitKcal ?? Infinity)
+          ? "surplus contenu"
+          : "surplus excessif";
     controls = (
-      <div className="flex flex-wrap items-center gap-2">
-        <MiniBtn
-          onClick={() =>
-            patch({ calories: Math.max(CALORIE_DELTA_MIN, entry.calories - CALORIE_STEP) })
-          }
-        >
-          −
-        </MiniBtn>
-        <input
-          type="number"
-          step={CALORIE_STEP}
-          min={CALORIE_DELTA_MIN}
-          max={CALORIE_DELTA_MAX}
-          value={entry.caloriesDone ? entry.calories : ""}
-          placeholder="0"
-          onChange={(e) => patch({ calories: Number(e.target.value) || 0 })}
-          className="w-24 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-center text-xs text-white outline-none focus:border-cell-cyan"
-        />
-        <MiniBtn
-          onClick={() =>
-            patch({ calories: Math.min(CALORIE_DELTA_MAX, entry.calories + CALORIE_STEP) })
-          }
-        >
-          +
-        </MiniBtn>
-        <span className="text-[10px] text-cell-teal/60">
-          kcal {entry.caloriesDone && entry.calories > 0 ? "(surplus)" : entry.caloriesDone ? "(déficit)" : ""}
-        </span>
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-14 shrink-0 text-[10px] text-cell-teal/60">Dépensé</span>
+          <input
+            type="number"
+            step={100}
+            min={0}
+            max={CALORIE_INPUT_MAX}
+            value={entry.caloriesDone ? entry.caloriesBurned : ""}
+            placeholder="0"
+            onChange={(e) => patch({ caloriesBurned: Number(e.target.value) || 0 })}
+            className="w-24 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-center text-xs text-white outline-none focus:border-cell-cyan"
+          />
+          <span className="text-[10px] text-cell-teal/60">kcal</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-14 shrink-0 text-[10px] text-cell-teal/60">Mangé</span>
+          <input
+            type="number"
+            step={100}
+            min={0}
+            max={CALORIE_INPUT_MAX}
+            value={entry.caloriesDone ? entry.caloriesEaten : ""}
+            placeholder="0"
+            onChange={(e) => patch({ caloriesEaten: Number(e.target.value) || 0 })}
+            className="w-24 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-center text-xs text-white outline-none focus:border-cell-cyan"
+          />
+          <span className="text-[10px] text-cell-teal/60">kcal</span>
+        </div>
+        {palier && (
+          <p
+            className={`text-[10px] ${palier === "surplus excessif" ? "text-red-400" : "text-cell-teal/60"}`}
+          >
+            Écart {diff > 0 ? "+" : ""}
+            {diff} kcal ({palier})
+          </p>
+        )}
       </div>
     );
   } else if (def.type === "rate") {
@@ -160,7 +179,7 @@ function HabitRow({
       </div>
     );
   } else {
-    const id = def.id as "mf" | "alilou" | "rituals" | "repas";
+    const id = def.id as "mf" | "alilou" | "rituals" | "repas" | "devisDemande" | "devisSigne";
     controls = (
       <div className="flex items-center gap-2">
         <MiniBtn onClick={() => patch({ [id]: entry[id] - 1 })}>−</MiniBtn>

@@ -134,7 +134,19 @@ export type { SaveSlot } from "./slot";
 
 /** Champs éditables d'une saisie du jour (le reste est recalculé). */
 export type HabitPatch = Partial<
-  Pick<HabitDayEntry, "calories" | "caloriesDone" | "steps" | "mf" | "alilou" | "rituals" | "repas">
+  Pick<
+    HabitDayEntry,
+    | "caloriesEaten"
+    | "caloriesBurned"
+    | "caloriesDone"
+    | "steps"
+    | "mf"
+    | "alilou"
+    | "rituals"
+    | "repas"
+    | "devisDemande"
+    | "devisSigne"
+  >
 >;
 
 interface GameActions {
@@ -639,10 +651,16 @@ export const useGame = create<GameStore>()(
         const prev = habits.days[key] ?? emptyDayEntry();
 
         const entry: HabitDayEntry = { ...prev };
-        if (patch.calories !== undefined) {
-          entry.calories = clampHabitValue("calories", patch.calories);
-          // Saisir une valeur suffit désormais à "valider" la journée calorique
-          // du jour (plus de bouton dédié) — cf. redesign HabitsPanel.
+        // Bilan calorique (28/07/2026) : deux saisies brutes séparées (mangé,
+        // dépensé) remplacent l'ancien solde signé unique — cf. habits_config.json
+        // -> bareme.$comment_2807. Chacune "valide" la journée calorique du jour
+        // dès qu'elle est touchée, comme avant.
+        if (patch.caloriesEaten !== undefined) {
+          entry.caloriesEaten = clampHabitValue("calories", patch.caloriesEaten);
+          entry.caloriesDone = true;
+        }
+        if (patch.caloriesBurned !== undefined) {
+          entry.caloriesBurned = clampHabitValue("calories", patch.caloriesBurned);
           entry.caloriesDone = true;
         }
         if (patch.caloriesDone !== undefined) entry.caloriesDone = patch.caloriesDone;
@@ -651,6 +669,12 @@ export const useGame = create<GameStore>()(
         if (patch.alilou !== undefined) entry.alilou = clampHabitValue("alilou", patch.alilou);
         if (patch.rituals !== undefined) entry.rituals = clampHabitValue("rituals", patch.rituals);
         if (patch.repas !== undefined) entry.repas = clampHabitValue("repas", patch.repas);
+        if (patch.devisDemande !== undefined) {
+          entry.devisDemande = clampHabitValue("devisDemande", patch.devisDemande);
+        }
+        if (patch.devisSigne !== undefined) {
+          entry.devisSigne = clampHabitValue("devisSigne", patch.devisSigne);
+        }
 
         const { energy, validatedCount } = evaluateEntry(entry, habits.calorieGoal);
         entry.energy = energy;
@@ -1340,6 +1364,26 @@ export const useGame = create<GameStore>()(
       // vagues/événements se planifient d'eux-mêmes au premier tick (champs à 0).
       migrate: (persisted, version) => {
         const state = persisted as GameState;
+        // ----- Bilan calorique (28/07/2026, v20 -> v21) : DOIT s'exécuter avant
+        // tout autre bloc, quel que soit `version`. Les blocs v16->17, v17->18 et
+        // v19->20 ci-dessous appellent tous evaluateEntry() avec le code ACTUEL
+        // de ce fichier — celui qui lit désormais caloriesEaten/caloriesBurned,
+        // plus l'ancien champ signé `calories`. Une sauvegarde ancienne qui
+        // traverse toute la chaîne en un seul appel de migrate() calculerait donc
+        // NaN dans ces blocs si la conversion n'était pas faite en premier (cf.
+        // JOURNAL.md, piège « un harnais qui lit une clé supprimée ne plante pas,
+        // il mesure NaN »). Garde idempotente sur le CHAMP, pas sur `version` :
+        // une sauvegarde déjà convertie ne perd rien à repasser ici. L'écart
+        // mangé − dépensé reconstruit EXACTEMENT l'ancien solde signé — aucune
+        // donnée n'est inventée, seule la répartition entre les deux côtés est
+        // arbitraire (l'autre côté posé à 0).
+        for (const entry of Object.values(state.habits?.days ?? {})) {
+          if (entry.caloriesEaten === undefined) {
+            const legacy = (entry as unknown as { calories?: number }).calories ?? 0;
+            entry.caloriesEaten = legacy > 0 ? legacy : 0;
+            entry.caloriesBurned = legacy < 0 ? -legacy : 0;
+          }
+        }
         if (version < 2 || state.tutorialStep === undefined) {
           state.tutorialStep = TUTORIAL_DONE;
         }
@@ -1641,6 +1685,40 @@ export const useGame = create<GameStore>()(
             b.buildingReserve = [{ uid: b.nextBuildingUid, defId: BASTION.starting.building }];
             b.nextBuildingUid += 1;
           }
+        }
+        // v20 -> v21 : le bilan calorique passe à deux saisies brutes (mangé,
+        // dépensé) et gagne un troisième palier — un surplus qui dépasse
+        // surplus_limit_kcal (2100) RETIRE désormais 25 ⚡ (28/07/2026, demande
+        // d'Ali, mot pour mot : « si je depasse, je perds 25 points d'energie »).
+        //
+        // Les champs caloriesEaten/caloriesBurned ont DÉJÀ été backfillés en tout
+        // début de migrate() (cf. plus haut) : ce bloc-ci ne fait que la
+        // réévaluation officielle et le versement du delta, comme en v17/v18/v20.
+        //
+        // DIFFÉRENCE IMPORTANTE avec ces trois précédents : le delta n'est PAS
+        // garanti positif ici. Une vieille journée dont l'écart reconstruit
+        // dépasse 2100 kcal passe de 0 ⚡ (non-attribution du 26/07) à -25 ⚡ —
+        // c'est la PREMIÈRE migration du jeu qui peut retirer de l'énergie déjà
+        // gagnée. Ce n'est pas un accident : Ali a redonné le chiffre exact en
+        // toutes lettres le 28/07, ça réouvre délibérément la décision verrouillée
+        // du 26/07 (« l'énergie ne peut plus jamais reculer ») pour ce seul poste.
+        // La doctrine du projet reste tenue par ailleurs : l'historique est
+        // réévalué au tarif ACTUEL, jamais laissé au tarif d'avant — y compris
+        // quand le tarif actuel est plus dur. Flooré à 0, jamais négatif.
+        if (version < 21) {
+          let delta = 0;
+          for (const entry of Object.values(state.habits?.days ?? {})) {
+            if (entry.devisDemande === undefined) entry.devisDemande = 0;
+            if (entry.devisSigne === undefined) entry.devisSigne = 0;
+            const { energy, validatedCount } = evaluateEntry(entry, state.habits.calorieGoal);
+            delta += energy - entry.energy;
+            entry.energy = energy;
+            entry.validatedCount = validatedCount;
+          }
+          state.resources.energie = Math.min(
+            ENERGY_CAP,
+            Math.max(0, (state.resources.energie ?? 0) + delta),
+          );
         }
         state.saveVersion = SAVE_VERSION;
         return state;

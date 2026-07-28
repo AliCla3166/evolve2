@@ -49,8 +49,13 @@ export interface HabitDef {
   desc: string;
   pilier: PilierId;
   type: "calorie" | "rate" | "count";
-  /** calorie : énergie du jour si validée. */
-  energyPerDay?: number;
+  /** calorie (28/07/2026) : deux saisies brutes (mangé, dépensé) remplacent
+   *  l'ancien solde signé unique — voir habitEnergy() pour la formule à trois
+   *  paliers (déficit / surplus contenu / surplus au-delà de surplusLimitKcal). */
+  energyDeficit?: number;
+  energySurplusOk?: number;
+  surplusLimitKcal?: number;
+  energySurplusPenalty?: number;
   /** rate : taille de tranche, énergie par tranche, plafond d'énergie. */
   per?: number;
   energyPer?: number;
@@ -124,7 +129,10 @@ interface RawHabit {
   desc: string;
   pilier: PilierId;
   type: "calorie" | "rate" | "count";
-  energy_per_day?: number;
+  energy_deficit?: number;
+  energy_surplus_ok?: number;
+  surplus_limit_kcal?: number;
+  energy_surplus_penalty?: number;
   per?: number;
   energy_per?: number;
   cap_energy?: number;
@@ -166,7 +174,10 @@ export const HABITS: HabitDef[] = HABITS_CFG.bareme.habitudes.map((h) => ({
   desc: fillTemplate(h.desc, h as unknown as Record<string, unknown>),
   pilier: h.pilier,
   type: h.type,
-  energyPerDay: h.energy_per_day,
+  energyDeficit: h.energy_deficit,
+  energySurplusOk: h.energy_surplus_ok,
+  surplusLimitKcal: h.surplus_limit_kcal,
+  energySurplusPenalty: h.energy_surplus_penalty,
   per: h.per,
   energyPer: h.energy_per,
   capEnergy: h.cap_energy,
@@ -180,13 +191,23 @@ export const HABITS: HabitDef[] = HABITS_CFG.bareme.habitudes.map((h) => ({
 /** Les piliers de la journée parfaite, dans l'ordre d'affichage. */
 export const PILIERS: ReadonlyArray<PilierDef> = HABITS_CFG.bareme.piliers;
 
+/** Énergie MAXIMALE que peut rapporter une habitude "calorie" un jour donné
+ *  (28/07/2026 : la formule a trois paliers — déficit, surplus contenu, surplus
+ *  au-delà de `surplusLimitKcal` — et seuls les deux premiers sont positifs).
+ *  Le déficit est aujourd'hui le palier le plus généreux (20 contre 10), mais
+ *  cette fonction ne suppose rien sur l'ordre : elle prend le plus grand des
+ *  deux gains possibles, jamais la pénalité. */
+function calorieMaxEnergy(def: HabitDef): number {
+  return Math.max(def.energyDeficit ?? 0, def.energySurplusOk ?? 0);
+}
+
 /** Énergie maximale théorique d'une journée : toutes les habitudes à fond.
  *  Dérivée du barème, jamais codée en dur — l'ancienne constante `95` figée
  *  dans HabitsPanel était FAUSSE (le maximum réel était 90), si bien que le
  *  compteur « journées parfaites » de la grille affichait toujours zéro et que
  *  la case dorée ne pouvait pas s'allumer. */
 export const MAX_DAY_ENERGY = HABITS.reduce((sum, def) => {
-  if (def.type === "calorie") return sum + (def.energyPerDay ?? 0);
+  if (def.type === "calorie") return sum + calorieMaxEnergy(def);
   if (def.type === "rate") return sum + (def.capEnergy ?? 0);
   return sum + (def.capItems ?? 0) * (def.energyPer ?? 0);
 }, 0);
@@ -194,12 +215,17 @@ export const MAX_DAY_ENERGY = HABITS.reduce((sum, def) => {
 /** Énergie d'une journée parfaite MINIMALE : les 4 piliers validés, en ne
  *  gardant à chaque fois que l'habitude la MOINS chère du pilier, à fond.
  *  C'est le week-end d'Ali : parfait sans une seule tâche Magic Focus. Sert de
- *  repère d'affichage — le seuil doré, lui, se lit sur les piliers, pas ici. */
+ *  repère d'affichage — le seuil doré, lui, se lit sur les piliers, pas ici.
+ *
+ *  Ne porte QUE sur `PILIERS` (les 4 piliers officiels) : `devisDemande` et
+ *  `devisSigne` portent un `pilier` ("business") qui n'y figure pas — cf.
+ *  habits_config.json -> bareme.$comment_pilier_business — donc ils ne
+ *  peuvent pas faire baisser ce minimum. */
 export const PERFECT_DAY_ENERGY = PILIERS.reduce((sum, p) => {
   const defs = HABITS.filter((h) => h.pilier === p.id);
   const maxima = defs.map((def) =>
     def.type === "calorie"
-      ? (def.energyPerDay ?? 0)
+      ? calorieMaxEnergy(def)
       : def.type === "rate"
         ? (def.capEnergy ?? 0)
         : (def.capItems ?? 0) * (def.energyPer ?? 0),
@@ -262,16 +288,16 @@ export function currentStreakTier(streak: number): StreakTier | null {
   return best;
 }
 
-/** Bornes de saisie (mêmes ordres de grandeur que le prototype v1). */
+/** Bornes de saisie (mêmes ordres de grandeur que le prototype v1). Depuis le
+ *  28/07/2026, `CALORIE_INPUT_MAX` borne CHACUNE des deux saisies brutes
+ *  (mangé, dépensé) : au-delà, ce n'est plus une mesure mais une faute de
+ *  frappe — même doctrine que les plafonds d'heures de travail. L'ancien solde
+ *  signé unique (±3000, par crans de 100) a disparu avec lui : deux saisies
+ *  positives remplacent un delta, il n'y a donc plus de pas ni de signe à
+ *  gérer côté saisie, seulement côté calcul (cf. habitEnergy). */
 export const CALORIE_INPUT_MAX = 6000;
 export const CALORIE_GOAL_MIN = 800;
 export const CALORIE_GOAL_MAX = 6000;
-
-/** Bilan calorique (retouche lisibilité) : une seule valeur signée en kcal,
- *  saisie au clavier ou par crans — négatif = déficit, positif = surplus. */
-export const CALORIE_DELTA_MIN = -3000;
-export const CALORIE_DELTA_MAX = 3000;
-export const CALORIE_STEP = 100;
 
 /* ---------- Clés de jour calendaire (timezone locale) ---------- */
 
@@ -441,13 +467,16 @@ export function settleStreakTiers(
 
 export function emptyDayEntry(): HabitDayEntry {
   return {
-    calories: 0,
+    caloriesBurned: 0,
+    caloriesEaten: 0,
     caloriesDone: false,
     steps: 0,
     mf: 0,
     alilou: 0,
     rituals: 0,
     repas: 0,
+    devisDemande: 0,
+    devisSigne: 0,
     energy: 0,
     validatedCount: 0,
   };
@@ -466,15 +495,22 @@ export function habitEnergy(
   switch (def.type) {
     case "calorie": {
       // caloriesDone sert désormais de flag "saisi aujourd'hui" (posé
-      // automatiquement dès que la valeur est modifiée — plus de bouton
-      // "Valider" séparé) : une journée jamais touchée ne rapporte rien.
+      // automatiquement dès que l'une des deux valeurs est modifiée — plus de
+      // bouton "Valider" séparé) : une journée jamais touchée ne rapporte rien.
       if (!entry.caloriesDone) return 0;
-      // NON-ATTRIBUTION, plus jamais de soustraction (26/07/2026, amélioration
-      // n°10) : un surplus ne rapporte pas le bonus, il ne reprend RIEN. L'ancien
-      // barème retirait jusqu'à −30 ⚡ sur le capital déjà accumulé — le seul
-      // mécanisme du jeu qui détruisait une ressource gagnée, et il frappait le
-      // geste le plus intime que le jeu demande (cf. habits_config.json).
-      return entry.calories <= 0 ? (def.energyPerDay ?? 5) : 0;
+      // TROIS PALIERS (28/07/2026, demande d'Ali — remplace la non-attribution
+      // du 26/07, cf. habits_config.json -> bareme.$comment_2807/$comment_reversal).
+      // L'écart = mangé − dépensé. <= 0 : dépensé >= mangé, déficit (ou égalité,
+      // choix technique documenté dans le $comment JSON faute de règle explicite
+      // pour ce cas exact). > 0 et <= surplusLimitKcal : surplus contenu. Au-delà :
+      // seule exception du jeu où de l'énergie DÉJÀ GAGNÉE est reprise.
+      // Garde défensive (?? 0) : `adoptSave` (sync cloud) fusionne un état
+      // importé sans repasser par la chaîne de migrations de `store.ts`. Un
+      // ancien blob n'ayant pas ces deux champs ne doit jamais produire NaN.
+      const diff = (entry.caloriesEaten ?? 0) - (entry.caloriesBurned ?? 0);
+      if (diff <= 0) return def.energyDeficit ?? 0;
+      if (diff <= (def.surplusLimitKcal ?? Infinity)) return def.energySurplusOk ?? 0;
+      return -(def.energySurplusPenalty ?? 0);
     }
     case "rate": {
       const raw = Math.floor(entry.steps / (def.per ?? 1)) * (def.energyPer ?? 0);
@@ -482,7 +518,7 @@ export function habitEnergy(
     }
     case "count": {
       const count = Math.min(
-        entry[def.id as "mf" | "alilou" | "rituals" | "repas"] ?? 0,
+        entry[def.id as "mf" | "alilou" | "rituals" | "repas" | "devisDemande" | "devisSigne"] ?? 0,
         def.capItems ?? Infinity,
       );
       return count * (def.energyPer ?? 0);
@@ -490,14 +526,21 @@ export function habitEnergy(
   }
 }
 
-/** Une habitude est "validée" si elle rapporte au moins un point (ou est cochée). */
+/** Une habitude est "validée" si elle rapporte au moins un point (ou est cochée).
+ *  Un jour de PÉNALITÉ calorique (énergie négative) n'est donc PAS validé — le
+ *  pilier Nutrition reste ouvert ce jour-là par `repas`, seule l'habitude
+ *  calorique elle-même ne compte pas comme tenue. */
 export function habitValidated(
   def: HabitDef,
   entry: HabitDayEntry,
   calorieGoal: number,
 ): boolean {
   if (def.type === "calorie") return habitEnergy(def, entry, calorieGoal) > 0;
-  return (entry[def.id as "steps" | "mf" | "alilou" | "rituals" | "repas"] ?? 0) > 0;
+  return (
+    (entry[
+      def.id as "steps" | "mf" | "alilou" | "rituals" | "repas" | "devisDemande" | "devisSigne"
+    ] ?? 0) > 0
+  );
 }
 
 /* ---------- Les 4 piliers de la journée parfaite ----------
@@ -548,9 +591,12 @@ export function evaluateEntry(
 /** Clamp une valeur d'habitude dans ses bornes de saisie. */
 export function clampHabitValue(id: HabitId, value: number): number {
   const def = HABITS.find((h) => h.id === id)!;
-  // Bilan calorique : seul type qui accepte une valeur négative (déficit).
+  // Bilan calorique (28/07/2026) : deux saisies brutes non négatives (mangé,
+  // dépensé) partagent les mêmes bornes — appelée une fois par côté depuis
+  // updateHabitDay. Un kcal négatif n'existe pas ; au-delà de CALORIE_INPUT_MAX
+  // ce n'est plus une mesure mais une faute de frappe.
   if (def.type === "calorie") {
-    return Math.min(CALORIE_DELTA_MAX, Math.max(CALORIE_DELTA_MIN, Math.round(value)));
+    return Math.min(CALORIE_INPUT_MAX, Math.max(0, Math.round(value)));
   }
   const v = Math.max(0, Math.round(value));
   if (def.type === "rate") return Math.min(v, def.max ?? v);

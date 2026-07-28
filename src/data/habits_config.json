@@ -19,11 +19,42 @@
         "id": "calories",
         "icon": "🍽️",
         "name": "Bilan calorique",
-        "desc": "Indique ton solde du jour (négatif = déficit). Déficit : +{energy_per_day} ⚡. Surplus : 0 ⚡ — rien n'est retiré.",
+        "desc": "Indique combien tu as dépensé et mangé aujourd'hui. Plus dépensé que mangé : +{energy_deficit} ⚡. Plus mangé, écart ≤ {surplus_limit_kcal} kcal : +{energy_surplus_ok} ⚡. Écart > {surplus_limit_kcal} kcal : -{energy_surplus_penalty} ⚡.",
         "pilier": "nutrition",
         "type": "calorie",
-        "energy_per_day": 10,
-        "$comment_surplus": "FIN DE LA SOUSTRACTION (26/07/2026, amelioration n10 du retour complet). Avant : un surplus retirait 1 energie par 100 kcal, jusqu'a -30, PRELEVES SUR LE CAPITAL deja accumule — le seul mecanisme du jeu qui detruisait une ressource deja gagnee, et il frappait le geste le plus intime que le jeu demande. Un jeu de sante qui retire des points parce qu'on a trop mange enseigne exactement le mauvais rapport a la nourriture. Desormais : un surplus ne rapporte pas le bonus, il ne reprend rien (non-attribution). La difference est mathematiquement mince (la punition plafonnait a 22 % d'une journee parfaite) et psychologiquement enorme. NEUTRE AU CALIBRAGE : aucun archetype de simulate_full.py ne modelise de journee en surplus (verifie dans PROFILS), la mesure 81-99 j ne bouge donc pas d'un centieme. La migration v20 reevalue l'historique au nouveau tarif — le solde ne peut que monter, comme en v17 et v18."
+        "energy_deficit": 20,
+        "energy_surplus_ok": 10,
+        "surplus_limit_kcal": 2100,
+        "energy_surplus_penalty": 25,
+        "$comment_2807": "DEUX SAISIES REMPLACENT LE SOLDE UNIQUE, ET LA PENALITE REVIENT (28/07/2026, demande d'Ali, mot pour mot : « pour les calories, j'aimerais que j'aie a noter chaque jour : combien j'en ai depense et combien j'en ai mange [...] si j'en ai plus depense que mange j'ai 20 points, si j'ai plus consomme que depense, tant que j'ai une difference qui ne depasse pas les 2100kcal, c'est bon j'ai 10 points d'energie. Si je depasse, je perds 25 points d'energie »). Le solde signe unique (deficit = negatif) est remplace par deux entrees brutes non negatives (mange, depense) : le moteur derive l'ecart = mange - depense, EXACTEMENT la meme grandeur que l'ancien champ signe (rien n'est invente, seule la source de la saisie change). Deficit ou egalite (ecart <= 0) : 20 (etait 10). Surplus contenu (0 < ecart <= 2100) : 10 (etait 0, cf. non-attribution du 26/07). Surplus au-dela de 2100 kcal : -25.",
+        "$comment_reversal": "CECI REOUVRE EXPLICITEMENT LA DECISION VERROUILLEE DU 26/07/2026 (« aucune progression ne se termine [...] l'energie ne peut plus jamais reculer »). Ali a redonne le chiffre exact (-25) en toutes lettres le 28/07 : ce n'est pas une regression accidentelle, c'est une nouvelle regle explicite qui REMPLACE l'ancienne pour ce seul poste. Le reste du jeu (aucune autre habitude, aucun jalon, aucune reconquete) ne perd toujours jamais d'energie deja gagnee — la penalite calorique est desormais la SEULE exception, et elle est volontaire. La migration v21 reevalue l'historique sous la nouvelle regle (comme v17/v18/v20 avant elle) : une vieille journee en surplus > 2100 kcal peut donc, pour la premiere fois, RETIRER de l'energie au solde total. C'est coherent avec la doctrine du projet (l'historique est reevalue, jamais laisse au tarif d'avant) mais c'est un changement de sens par rapport a tout ce qui a precede — signale a Ali en meme temps que cette livraison.",
+        "$comment_pacing_2807": "IMPACT MESURE SUR LE CALIBRAGE : le deficit passe de 10 a 20 energie/jour, +10/jour sur les trois archetypes (aucun ne modelise de surplus dans PROFILS, donc ni le palier 10 ni la penalite -25 ne sont exerces par le simulateur). Revalide par `simulate_full.py --seeds 30 --write` le 28/07/2026 : voir le resultat dans economy_config.json -> pacing_validation.multi_system_validation."
+      },
+      {
+        "id": "devisDemande",
+        "icon": "📄",
+        "name": "Demande de devis",
+        "desc": "Un client demande un devis. +{energy_per} ⚡ par demande (max {cap_items}/jour).",
+        "pilier": "business",
+        "type": "count",
+        "energy_per": 5,
+        "cap_items": 5,
+        "unit": "demandes",
+        "unit_short": "devis",
+        "$comment": "AJOUT DU 28/07/2026, demande d'Ali : « un element qui fait gagner des points [...] Demande de devis avec un max de 5/jour qui apporte 5 points ». Pilier `business`, VOLONTAIREMENT hors de la liste `piliers` (cf. $comment_pilier_business ci-dessous) : rapporte de l'energie et tient la serie comme n'importe quelle autre habitude validee, mais ne fait pas partie des 4 piliers requis pour la journee parfaite."
+      },
+      {
+        "id": "devisSigne",
+        "icon": "✍️",
+        "name": "Devis signé",
+        "desc": "Un devis est signé. +{energy_per} ⚡ par devis signé (max {cap_items}/jour).",
+        "pilier": "business",
+        "type": "count",
+        "energy_per": 10,
+        "cap_items": 5,
+        "unit": "signatures",
+        "unit_short": "devis",
+        "$comment": "AJOUT DU 28/07/2026, demande d'Ali : « une autre ligne : Devis signe qui apporte 10 points d'energie ». Aucun plafond n'a ete precise par Ali ; 5/jour est repris PAR SYMETRIE avec `devisDemande` (on ne signe jamais plus de devis qu'on n'en demande dans la meme journee) et sert de garde-fou de saisie, pas d'objectif — decision technique tranchee et documentee ici plutot que posee en question, conformement a la maniere de travailler avec Ali (cf. 04_HISTORIQUE_ET_DECISIONS.md)."
       },
       {
         "id": "repas",
@@ -113,8 +144,9 @@
         "icon": "🧘"
       }
     ],
+    "$comment_pilier_business": "POURQUOI `devisDemande` ET `devisSigne` NE SONT PAS DANS CETTE LISTE (28/07/2026). Leur champ `pilier` vaut `business`, un identifiant qui n'apparait PAS ici : c'est deliberement. Les rattacher au pilier `travail` existant aurait fait chuter son minimum de 56 (8 h de chantier) a 25 (5 demandes de devis), rendant la journee parfaite atteignable par un peu d'administratif au lieu d'une heure de travail reel — un effet de bord qu'Ali n'a pas demande. Elles restent donc de simples habitudes qui rapportent de l'energie et tiennent la serie (comme le reste), sans peser sur les 4 piliers ni sur PERFECT_DAY_ENERGY. `pilierHabits`/`pilierValidated` ne les voient jamais car ils n'iterent que sur CETTE liste, jamais sur les valeurs de `pilier` rencontrees dans les habitudes.",
     "$comment_horaire_2607": "LES DEUX POSTES DE TRAVAIL SE COMPTENT EN HEURES, PLUS EN TACHES (26/07/2026, demande d'Ali le soir meme : « c'est un nombre d'heures faites de travail de bricolage ou de travail la-dessus »). Chantier ALILOU : 7 energie l'heure, 8 h maximum. Magic Focus : 5 energie l'heure, 12 h maximum. POURQUOI C'EST MIEUX QU'UN COMPTE DE TACHES : une « tache » n'a pas de taille. Poser une etagere et refaire une piece comptaient pareil, si bien que le plafond de 3 taches punissait la seule journee qui merite d'etre recompensee — le samedi entier passe sur le chantier. Une heure, elle, a toujours la meme taille : le bareme cesse de dependre de la facon dont Ali decoupe son travail. LE TAUX DIT LA PENIBILITE, PAS LE PRESTIGE : 7 pour le travail physique contre 5 pour le travail de bureau. Une heure de chantier vaut 40 % de plus qu'une heure d'ecran, et c'est voulu — c'est le seul poste qu'Ali peut tenir un week-end, et c'est le plus dur. LES PLAFONDS NE SONT PAS DES OBJECTIFS, ce sont des garde-fous de saisie : 8 h de chantier, c'est une journee complete de travail manuel ; 12 h d'ecran, c'est deja une journee qu'on ne souhaite a personne. Au-dela, ce n'est plus une mesure, c'est une faute de frappe. MAXIMUM THEORIQUE : 10 + 30 + 60 + 56 + 40 = 196 energie/jour, contre 166 avant. Ce plafond n'est PAS un revenu — personne ne cumule 12 h d'ecran, 8 h de chantier, 30 000 pas et 5 rituels dans la meme journee — et c'est precisement pour ca que les archetypes de simulate_full.py ne se definissent plus comme une fraction de ce nombre (cf. son en-tete) mais comme des journees ecrites poste par poste.",
-    "$comment_journee_parfaite_min": "Journee parfaite MINIMALE : 10 (deficit) + 30 (pas plafonnes) + 56 (8 h de chantier, le moins cher des deux postes du pilier Travail) + 40 (5 rituels) = 136 energie. C'est le samedi d'Ali, parfait sans une seule heure de Magic Focus. PERFECT_DAY_ENERGY le derive, ne le recopie pas."
+    "$comment_journee_parfaite_min": "Journee parfaite MINIMALE : 12 (3 repas maison, devenu moins cher que le bilan calorique depuis que le deficit vaut 20 — cf. $comment_2807 sur `calories`) + 30 (pas plafonnes) + 56 (8 h de chantier, le moins cher des deux postes du pilier Travail) + 40 (5 rituels) = 138 energie (etait 136 avant le 28/07/2026, +2 uniquement parce que le minimum du pilier Nutrition a change de poste porteur, pas parce qu'il a ete gonfle). PERFECT_DAY_ENERGY le derive, ne le recopie pas."
   },
   "streak": {
     "$comment": "Paliers HEBDOMADAIRES. Avant la piste 6 il n'y en avait que trois (7 j / 30 j / 90 j) : entre le jour 8 et le jour 29 la regularite ne rapportait donc strictement rien, soit trois semaines de discipline sans le moindre accuse de reception. Un palier par semaine donne un rendez-vous tous les sept jours.",

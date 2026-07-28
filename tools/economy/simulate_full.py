@@ -100,11 +100,23 @@ def day_energy(entry):
         if h["type"] == "calorie":
             if not entry.get("caloriesDone"):
                 continue
+            # TROIS PALIERS (28/07/2026, demande d'Ali) -- remplace la
+            # non-attribution du 26/07. Le PROFIL garde une seule valeur signee
+            # "calories" (deficit = negatif) : c'est EXACTEMENT l'ecart
+            # mange - depense que lit habitEnergy() dans habits.ts, la
+            # representation ne change pas, seule la formule s'enrichit d'un
+            # troisieme palier. Aucun PROFIL ne modelise de surplus (verifie dans
+            # PROFILS), donc ni le palier "surplus contenu" ni la penalite ne
+            # sont exerces par le simulateur -- seul le deficit (10 -> 20) bouge
+            # reellement la mesure. Revalide par --seeds 30 --write le 28/07/2026.
             kcal = entry.get("calories", 0)
-            # NON-ATTRIBUTION (26/07/2026, amelioration n10) : un surplus ne rapporte
-            # rien mais ne retire plus rien — meme regle que habitEnergy() dans
-            # habits.ts. Aucun archetype ne modelise de surplus, la mesure ne bouge pas.
-            total += h.get("energy_per_day", 0) if kcal <= 0 else 0
+            limit = h.get("surplus_limit_kcal", float("inf"))
+            if kcal <= 0:
+                total += h.get("energy_deficit", 0)
+            elif kcal <= limit:
+                total += h.get("energy_surplus_ok", 0)
+            else:
+                total -= h.get("energy_surplus_penalty", 0)
         elif h["type"] == "rate":
             raw = (entry.get(h["id"], 0) // h.get("per", 1)) * h.get("energy_per", 0)
             total += min(raw, h.get("cap_energy", raw))
@@ -118,7 +130,7 @@ def max_day_energy():
     total = 0
     for h in HAB["bareme"]["habitudes"]:
         if h["type"] == "calorie":
-            total += h.get("energy_per_day", 0)
+            total += max(h.get("energy_deficit", 0), h.get("energy_surplus_ok", 0))
         elif h["type"] == "rate":
             total += h.get("cap_energy", 0)
         else:

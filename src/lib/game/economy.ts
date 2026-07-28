@@ -728,7 +728,7 @@ export function resourceName(res: ResourceId): string {
  *  une partie neuve se déclarait donc en v4 dans son export de sauvegarde et dans la sync
  *  cloud, alors que ses données étaient bien au format courant. Un seul point de vérité
  *  supprime la dérive : à chaque nouvelle migration, on incrémente cette constante. */
-export const SAVE_VERSION = 20;
+export const SAVE_VERSION = 21;
 
 export function freshGameState(now: number): GameState {
   return {
