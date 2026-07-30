@@ -4,6 +4,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import Link from "next/link";
 import { useEffect } from "react";
 import { PixelButton } from "@/components/ui/Pixel";
 import { CloudStatus } from "@/components/game/CloudStatus";
@@ -104,6 +105,22 @@ export default function Home() {
           </PixelButton>
           <span className="text-[11px] text-cell-teal/50">
             Première vie : tu choisiras ton organisme.
+          </span>
+        </div>
+      )}
+
+      {/* Le second mode de l'application : Walachie (30/07/2026). Sauvegarde et
+          onglet totalement séparés — seul le pont des habitudes les relie. */}
+      {hasHydrated && (
+        <div className="flex flex-col items-center gap-1">
+          <Link
+            href="/walachie"
+            className="rounded-lg border border-[#b98cff]/50 bg-[#150b26]/80 px-8 py-2.5 text-xs tracking-widest text-[#b98cff] shadow-[0_0_18px_rgba(185,140,255,0.25)]"
+          >
+            ✦ WALACHIE
+          </Link>
+          <span className="text-[10px] text-[#b98cff]/60">
+            L&apos;autre monde : une exoplanète à faire évoluer, du magma au divin.
           </span>
         </div>
       )}

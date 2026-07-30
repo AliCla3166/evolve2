@@ -1,0 +1,842 @@
+{
+  "$comment": "GENERE par tools/walachie/gen_config.py — ne pas editer a la main. Mode Walachie : clicker d'evolution inspire de Cell to Singularity, univers exoplanete Walachie.",
+  "click": {
+    "base": 1.0,
+    "prod_share": 0.05,
+    "$comment": "pulsation = base + prod_share x prod/s : le clic reste ~5%% de l'idle a tout stade"
+  },
+  "offline": {
+    "cap_hours": 10.0,
+    "$comment": "plafond hors ligne, extensible via meta_offline"
+  },
+  "prestige": {
+    "eclat_div": 1.1e+16,
+    "eclat_pow": 0.55,
+    "cycle_prod_bonus": 0.25,
+    "min_eclats": 3,
+    "$comment": "eclats = max(min, floor((seve totale du cycle / div)^pow)) ; premiere Renaissance ~5 eclats (simule)"
+  },
+  "events": {
+    "interval_min_s": 1500,
+    "interval_max_s": 4200,
+    "retour_gift_min": 15,
+    "$comment": "un moment spontane toutes les 25-70 min de jeu ouvert ; cadeau de retour = 15 min de prod si un evenement a ete manque hors ligne. Le hasard AJOUTE, jamais ne retire.",
+    "pool": [
+      {
+        "id": "pluie_spores",
+        "nom": "Pluie de spores",
+        "desc": "Des spores fécondes tombent des nuages : la sève coule à flots.",
+        "effet": "prod_mult",
+        "valeur": 2.0,
+        "duree_s": 600,
+        "poids": 30
+      },
+      {
+        "id": "chant_monde",
+        "nom": "Chant du monde",
+        "desc": "Les Voiles chantent à l'unisson : Walachie vibre.",
+        "effet": "prod_mult",
+        "valeur": 3.0,
+        "duree_s": 240,
+        "poids": 15
+      },
+      {
+        "id": "aurore",
+        "nom": "Aurore fluorescente",
+        "desc": "Le ciel s'embrase : chaque pulsation résonne cinq fois plus fort.",
+        "effet": "click_mult",
+        "valeur": 5.0,
+        "duree_s": 300,
+        "poids": 25
+      },
+      {
+        "id": "migration",
+        "nom": "Grande migration",
+        "desc": "Un troupeau traverse tes terres et laisse la plaine plus riche.",
+        "effet": "instant_min",
+        "valeur": 20.0,
+        "duree_s": 0,
+        "poids": 25
+      },
+      {
+        "id": "meteore",
+        "nom": "Météore de vie",
+        "desc": "Une pierre tombée d'ailleurs, gorgée de sève inconnue.",
+        "effet": "instant_min",
+        "valeur": 45.0,
+        "duree_s": 0,
+        "poids": 5
+      }
+    ]
+  },
+  "habit_bonus": {
+    "bilan_prod_mult": 1.5,
+    "streak_prod_per_day": 0.02,
+    "streak_prod_cap": 0.6,
+    "perfect_click_mult": 3.0,
+    "$comment": "pont avec le jeu principal : Bilan du soir valide aujourd'hui -> prod x1.5 jusqu'a minuit ; serie -> +2%%/jour de prod plafonne a +60%% ; journee qui tient la serie -> pulsation x3. Lecture seule de la sauvegarde EVOLVE, rien n'est retire si les habitudes manquent."
+  },
+  "meta": [
+    {
+      "id": "meta_prod",
+      "nom": "Mémoire du vivant",
+      "desc": "La sève coule {pct} plus vite, pour toujours.",
+      "effet": "prod_mult",
+      "valeur": 0.25,
+      "cost_base": 1,
+      "cost_ratio": 2.0,
+      "$comment": "cout en Eclats = cost_base x 2^niveau, sans dernier niveau"
+    },
+    {
+      "id": "meta_click",
+      "nom": "Écho de la pulsation",
+      "desc": "Chaque pulsation rapporte {pct} de plus, pour toujours.",
+      "effet": "click_mult",
+      "valeur": 0.5,
+      "cost_base": 1,
+      "cost_ratio": 2.0,
+      "$comment": "cout en Eclats = cost_base x 2^niveau, sans dernier niveau"
+    },
+    {
+      "id": "meta_offline",
+      "nom": "Rêve profond",
+      "desc": "Le monde produit {h} h de plus en ton absence.",
+      "effet": "offline_h",
+      "valeur": 2.0,
+      "cost_base": 2,
+      "cost_ratio": 2.0,
+      "$comment": "cout en Eclats = cost_base x 2^niveau, sans dernier niveau"
+    },
+    {
+      "id": "meta_events",
+      "nom": "Monde bavard",
+      "desc": "Les moments spontanés surviennent {pct} plus souvent.",
+      "effet": "event_speed",
+      "valeur": 0.1,
+      "cost_base": 2,
+      "cost_ratio": 2.0,
+      "$comment": "cout en Eclats = cost_base x 2^niveau, sans dernier niveau"
+    },
+    {
+      "id": "meta_depart",
+      "nom": "Graine ancestrale",
+      "desc": "Chaque cycle commence avec une réserve de sève.",
+      "effet": "start_seve",
+      "valeur": 10.0,
+      "cost_base": 1,
+      "cost_ratio": 2.0,
+      "$comment": "cout en Eclats = cost_base x 2^niveau, sans dernier niveau"
+    }
+  ],
+  "scene": {
+    "world_w": 1280,
+    "world_h": 960,
+    "max_sprites_par_noeud": 8,
+    "$comment": "l'ecosysteme affiche jusqu'a 8 individus par noeud possede — au-dela le nombre est ecrit, pas dessine"
+  },
+  "shiny": {
+    "seuil": 100,
+    "multiplicateur": 2.0,
+    "$comment": "toutes les 100 unites d'un meme noeud possede, une creature brillante apparait dans l'ecosysteme (distincte des ameliorations meta, qui ne se valident qu'une fois) ; cliquee, elle explose en paillettes et multiplie la seve en stock par 2.0 — un gros boost ponctuel a declencher au bon moment, jamais automatique."
+  },
+  "tail": {
+    "growth": 19.952623149688797,
+    "decor": "decor_galactique",
+    "icone": "ere_toile",
+    "sprite": "toile_vivante",
+    "cost_ratio": 1.15,
+    "nom_pattern": "Au-delà — Amas {k}",
+    "$comment": "au-dela de la derniere ere reelle (toile_galactique), chaque amas suivant coute x20.0 le precedent et reutilise son decor/sprite — genere a la volee cote TS (src/lib/game/walachie/config.ts), jamais ecrit ici : aucune fin ne s'ecrit en JSON."
+  },
+  "eras": [
+    {
+      "id": "protoplanete",
+      "nom": "Protoplanète",
+      "icone": "ere_protoplanete",
+      "desc": "Un disque de poussière s'effondre. Walachie n'est encore qu'une braise.",
+      "decor": "decor_espace",
+      "unlock_cost": 0.0,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~420s"
+    },
+    {
+      "id": "ocean",
+      "nom": "Océan de Sève",
+      "icone": "ere_ocean",
+      "desc": "Les geysers crachent une sève émeraude. Le monde apprend à couler.",
+      "decor": "decor_primordial",
+      "unlock_cost": 407.03,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~609s"
+    },
+    {
+      "id": "protovie",
+      "nom": "Proto-vie",
+      "icone": "ere_protovie",
+      "desc": "Dans la sève, des membranes se referment sur elles-mêmes. Quelque chose insiste.",
+      "decor": "decor_primordial",
+      "unlock_cost": 8121.39,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~883s"
+    },
+    {
+      "id": "flore",
+      "nom": "Flore Radiante",
+      "icone": "ere_flore",
+      "desc": "La lumière devient nourriture. Les eaux s'allument la nuit.",
+      "decor": "decor_eaux",
+      "unlock_cost": 162042.96,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~1280s"
+    },
+    {
+      "id": "faune",
+      "nom": "Faune Rampante",
+      "icone": "ere_faune",
+      "desc": "Les premières bêtes rampent entre les récifs lumineux.",
+      "decor": "decor_eaux",
+      "unlock_cost": 3233182.11,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~1856s"
+    },
+    {
+      "id": "errants",
+      "nom": "Grands Errants",
+      "icone": "ere_errants",
+      "desc": "Des colosses paisibles portent des forêts entières sur leur dos, sur la terre ferme.",
+      "decor": "decor_rivage",
+      "unlock_cost": 64510464.27,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~2692s"
+    },
+    {
+      "id": "predateurs",
+      "nom": "Prédateurs à Mâchoire",
+      "icone": "ere_predateurs",
+      "desc": "La mâchoire apparaît. Fine, rapide, terrifiante — et nécessaire.",
+      "decor": "decor_rivage",
+      "unlock_cost": 1287152982.74,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~3903s"
+    },
+    {
+      "id": "eveil",
+      "nom": "L'Éveil",
+      "icone": "ere_eveil",
+      "desc": "Derrière les yeux d'un prédateur, une étincelle se demande pourquoi.",
+      "decor": "decor_tribal",
+      "unlock_cost": 25682078400.6,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~5660s"
+    },
+    {
+      "id": "tribus",
+      "nom": "Tribus Walachiennes",
+      "icone": "ere_tribus",
+      "desc": "Les Walachiens chantent autour des totems d'os fluorescent.",
+      "decor": "decor_village",
+      "unlock_cost": 512424832027.95,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~8207s"
+    },
+    {
+      "id": "civilisation",
+      "nom": "Civilisation Fluorescente",
+      "icone": "ere_civilisation",
+      "desc": "Des cités-jardins qui protègent la nature au lieu de la dévorer.",
+      "decor": "decor_cite",
+      "unlock_cost": 10224219565996.36,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~11900s"
+    },
+    {
+      "id": "sentinelles",
+      "nom": "Les Sentinelles",
+      "icone": "ere_sentinelles",
+      "desc": "Gardiens de la vie, ils veillent depuis l'orbite sur toute la planète.",
+      "decor": "decor_orbite",
+      "unlock_cost": 204000000000000.1,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~17255s"
+    },
+    {
+      "id": "ascension",
+      "nom": "Ascension",
+      "icone": "ere_ascension",
+      "desc": "Le Panthéon s'ouvre. La conscience de Walachie touche au divin — une marche, pas une fin.",
+      "decor": "decor_portail",
+      "unlock_cost": 4070335122536517.0,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~25020s"
+    },
+    {
+      "id": "essaimage",
+      "nom": "Essaimage Interplanétaire",
+      "icone": "ere_essaimage",
+      "desc": "Des nefs-semences quittent Walachie pour ensemencer les mondes voisins du système.",
+      "decor": "decor_systeme",
+      "unlock_cost": 8.121386279291349e+16,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~36279s"
+    },
+    {
+      "id": "choeur_stellaire",
+      "nom": "Chœur Stellaire",
+      "icone": "ere_choeur",
+      "desc": "Un réseau de Sentinelles veille désormais entre les étoiles de la constellation.",
+      "decor": "decor_stellaire",
+      "unlock_cost": 1.6204295988375357e+18,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~52605s"
+    },
+    {
+      "id": "toile_galactique",
+      "nom": "Toile Galactique",
+      "icone": "ere_toile",
+      "desc": "La galaxie entière porte la mémoire de Walachie, bras spiral après bras spiral.",
+      "decor": "decor_galactique",
+      "unlock_cost": 3.233182112620674e+19,
+      "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~76278s"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "poussiere",
+      "ere": "protoplanete",
+      "nom": "Poussière d'accrétion",
+      "sprite": null,
+      "desc": "Chaque grain qui tombe réchauffe le cœur du monde.",
+      "comportement": "orne",
+      "base_cost": 12.0,
+      "cost_ratio": 1.15,
+      "base_prod": 0.0286,
+      "$comment": "payback initial 420s ; cout x1.15 par achat"
+    },
+    {
+      "id": "geyser",
+      "ere": "protoplanete",
+      "nom": "Geysers de sève",
+      "sprite": null,
+      "desc": "Les entrailles de Walachie remontent à la surface.",
+      "comportement": "orne",
+      "base_cost": 50.4,
+      "cost_ratio": 1.15,
+      "base_prod": 0.12,
+      "$comment": "payback initial 420s ; cout x1.15 par achat"
+    },
+    {
+      "id": "cristaux",
+      "ere": "protoplanete",
+      "nom": "Cristaux germinaux",
+      "sprite": null,
+      "desc": "Des réseaux minéraux qui copient leur propre forme.",
+      "comportement": "orne",
+      "base_cost": 211.68,
+      "cost_ratio": 1.15,
+      "base_prod": 0.504,
+      "$comment": "payback initial 420s ; cout x1.15 par achat"
+    },
+    {
+      "id": "sporule",
+      "ere": "ocean",
+      "nom": "Sporules dérivantes",
+      "sprite": "faune_sporule",
+      "desc": "Des cloches translucides portées par les courants de sève.",
+      "comportement": "proie",
+      "base_cost": 239.43,
+      "cost_ratio": 1.15,
+      "base_prod": 0.3932,
+      "$comment": "payback initial 609s ; cout x1.15 par achat"
+    },
+    {
+      "id": "filament",
+      "ere": "ocean",
+      "nom": "Filaments réplicateurs",
+      "sprite": null,
+      "desc": "Les premières chaînes qui se recopient sans se lasser.",
+      "comportement": "orne",
+      "base_cost": 1005.61,
+      "cost_ratio": 1.15,
+      "base_prod": 1.6513,
+      "$comment": "payback initial 609s ; cout x1.15 par achat"
+    },
+    {
+      "id": "mousse",
+      "ere": "ocean",
+      "nom": "Mousse radiante",
+      "sprite": "flore_spores",
+      "desc": "Un tapis vivant qui respire au bord des geysers.",
+      "comportement": "orne",
+      "base_cost": 4223.57,
+      "cost_ratio": 1.15,
+      "base_prod": 6.9353,
+      "$comment": "payback initial 609s ; cout x1.15 par achat"
+    },
+    {
+      "id": "protocellule",
+      "ere": "protovie",
+      "nom": "Proto-cellules",
+      "sprite": null,
+      "desc": "Une membrane, un dedans, un dehors : la première frontière.",
+      "comportement": "orne",
+      "base_cost": 4777.29,
+      "cost_ratio": 1.15,
+      "base_prod": 5.41,
+      "$comment": "payback initial 883s ; cout x1.15 par achat"
+    },
+    {
+      "id": "colonie",
+      "ere": "protovie",
+      "nom": "Colonies symbiotiques",
+      "sprite": null,
+      "desc": "Seules elles survivent, ensemble elles inventent.",
+      "comportement": "orne",
+      "base_cost": 20064.6,
+      "cost_ratio": 1.15,
+      "base_prod": 22.7219,
+      "$comment": "payback initial 883s ; cout x1.15 par achat"
+    },
+    {
+      "id": "archee",
+      "ere": "protovie",
+      "nom": "Archées des abysses",
+      "sprite": null,
+      "desc": "La vie qui prospère là où tout devrait mourir.",
+      "comportement": "orne",
+      "base_cost": 84271.33,
+      "cost_ratio": 1.15,
+      "base_prod": 95.4321,
+      "$comment": "payback initial 883s ; cout x1.15 par achat"
+    },
+    {
+      "id": "helice",
+      "ere": "flore",
+      "nom": "Hélices photophages",
+      "sprite": "flore_helice",
+      "desc": "Des spirales qui boivent la lumière des deux soleils.",
+      "comportement": "orne",
+      "base_cost": 95319.39,
+      "cost_ratio": 1.15,
+      "base_prod": 74.4437,
+      "$comment": "payback initial 1280s ; cout x1.15 par achat"
+    },
+    {
+      "id": "lanterne",
+      "ere": "flore",
+      "nom": "Lanternes de nuit",
+      "sprite": "flore_lanterne",
+      "desc": "Elles fleurissent quand tout s'éteint.",
+      "comportement": "orne",
+      "base_cost": 400341.43,
+      "cost_ratio": 1.15,
+      "base_prod": 312.6635,
+      "$comment": "payback initial 1280s ; cout x1.15 par achat"
+    },
+    {
+      "id": "voile",
+      "ere": "flore",
+      "nom": "Voiles chantants",
+      "sprite": "flore_voile",
+      "desc": "Des membranes dressées qui chantent avec le vent.",
+      "comportement": "orne",
+      "base_cost": 1681434.01,
+      "cost_ratio": 1.15,
+      "base_prod": 1313.1869,
+      "$comment": "payback initial 1280s ; cout x1.15 par achat"
+    },
+    {
+      "id": "arbrelum",
+      "ere": "flore",
+      "nom": "Arbres-lumière",
+      "sprite": "flore_arbrelum",
+      "desc": "Les cathédrales végétales de Walachie.",
+      "comportement": "orne",
+      "base_cost": 7062022.83,
+      "cost_ratio": 1.15,
+      "base_prod": 5515.3848,
+      "$comment": "payback initial 1280s ; cout x1.15 par achat"
+    },
+    {
+      "id": "rampant",
+      "ere": "faune",
+      "nom": "Rampants segmentés",
+      "sprite": "faune_rampant",
+      "desc": "Les premiers pas — enfin, les premières reptations.",
+      "comportement": "proie",
+      "base_cost": 1901871.83,
+      "cost_ratio": 1.15,
+      "base_prod": 1024.3773,
+      "$comment": "payback initial 1856s ; cout x1.15 par achat"
+    },
+    {
+      "id": "brouteur",
+      "ere": "faune",
+      "nom": "Brouteurs cuirassés",
+      "sprite": "faune_brouteur",
+      "desc": "Six pattes, un dos blindé, un appétit d'ogre.",
+      "comportement": "proie",
+      "base_cost": 7987861.69,
+      "cost_ratio": 1.15,
+      "base_prod": 4302.3847,
+      "$comment": "payback initial 1856s ; cout x1.15 par achat"
+    },
+    {
+      "id": "meduse",
+      "ere": "faune",
+      "nom": "Méduses d'air",
+      "sprite": "faune_meduse",
+      "desc": "Elles flottent entre les arbres comme des pensées lentes.",
+      "comportement": "proie",
+      "base_cost": 33549019.1,
+      "cost_ratio": 1.15,
+      "base_prod": 18070.0156,
+      "$comment": "payback initial 1856s ; cout x1.15 par achat"
+    },
+    {
+      "id": "errant",
+      "ere": "errants",
+      "nom": "Errants colossaux",
+      "sprite": "faune_errant",
+      "desc": "Des montagnes qui marchent, couvertes de forêts.",
+      "comportement": "erre",
+      "base_cost": 37947331.92,
+      "cost_ratio": 1.15,
+      "base_prod": 14095.8719,
+      "$comment": "payback initial 2692s ; cout x1.15 par achat"
+    },
+    {
+      "id": "troupeau",
+      "ere": "errants",
+      "nom": "Grands troupeaux",
+      "sprite": "faune_brouteur",
+      "desc": "La plaine entière se met en mouvement.",
+      "comportement": "proie",
+      "base_cost": 159378794.07,
+      "cost_ratio": 1.15,
+      "base_prod": 59202.662,
+      "$comment": "payback initial 2692s ; cout x1.15 par achat"
+    },
+    {
+      "id": "corail",
+      "ere": "errants",
+      "nom": "Récifs terrestres",
+      "sprite": "flore_corail",
+      "desc": "Le corail a quitté la sève pour conquérir la roche.",
+      "comportement": "orne",
+      "base_cost": 669390935.1,
+      "cost_ratio": 1.15,
+      "base_prod": 248651.1804,
+      "$comment": "payback initial 2692s ; cout x1.15 par achat"
+    },
+    {
+      "id": "predateur",
+      "ere": "predateurs",
+      "nom": "Chasseurs à mâchoire",
+      "sprite": "faune_predateur",
+      "desc": "Fins, véloces, une mâchoire qui ne pardonne pas.",
+      "comportement": "predateur",
+      "base_cost": 757148813.38,
+      "cost_ratio": 1.15,
+      "base_prod": 193965.2552,
+      "$comment": "payback initial 3903s ; cout x1.15 par achat"
+    },
+    {
+      "id": "meute",
+      "ere": "predateurs",
+      "nom": "Meutes coordonnées",
+      "sprite": "faune_predateur",
+      "desc": "Chasser à plusieurs demande de se parler.",
+      "comportement": "predateur",
+      "base_cost": 3180025016.18,
+      "cost_ratio": 1.15,
+      "base_prod": 814654.072,
+      "$comment": "payback initial 3903s ; cout x1.15 par achat"
+    },
+    {
+      "id": "alpha",
+      "ere": "predateurs",
+      "nom": "Alphas stratèges",
+      "sprite": "faune_predateur",
+      "desc": "Ceux qui pensent la chasse avant de la courir.",
+      "comportement": "predateur",
+      "base_cost": 13356105067.96,
+      "cost_ratio": 1.15,
+      "base_prod": 3421547.1023,
+      "$comment": "payback initial 3903s ; cout x1.15 par achat"
+    },
+    {
+      "id": "primitif",
+      "ere": "eveil",
+      "nom": "Walachiens primitifs",
+      "sprite": "walachien_primitif",
+      "desc": "La mâchoire s'est redressée. Elle porte une lance.",
+      "comportement": "erre",
+      "base_cost": 15107104941.53,
+      "cost_ratio": 1.15,
+      "base_prod": 2669045.2702,
+      "$comment": "payback initial 5660s ; cout x1.15 par achat"
+    },
+    {
+      "id": "feufroid",
+      "ere": "eveil",
+      "nom": "Feu froid",
+      "sprite": null,
+      "desc": "Une flamme fluorescente qui éclaire sans brûler la forêt.",
+      "comportement": "orne",
+      "base_cost": 63449840754.43,
+      "cost_ratio": 1.15,
+      "base_prod": 11209990.1349,
+      "$comment": "payback initial 5660s ; cout x1.15 par achat"
+    },
+    {
+      "id": "langage",
+      "ere": "eveil",
+      "nom": "Langage clicté",
+      "sprite": null,
+      "desc": "Des claquements de mâchoire qui deviennent des idées.",
+      "comportement": "orne",
+      "base_cost": 266489331168.59,
+      "cost_ratio": 1.15,
+      "base_prod": 47081958.5664,
+      "$comment": "payback initial 5660s ; cout x1.15 par achat"
+    },
+    {
+      "id": "tribal",
+      "ere": "tribus",
+      "nom": "Clans tribaux",
+      "sprite": "walachien_tribal",
+      "desc": "Chaque clan protège une vallée comme on protège un enfant.",
+      "comportement": "erre",
+      "base_cost": 301426371781.15,
+      "cost_ratio": 1.15,
+      "base_prod": 36727209.9627,
+      "$comment": "payback initial 8207s ; cout x1.15 par achat"
+    },
+    {
+      "id": "totem",
+      "ere": "tribus",
+      "nom": "Totems d'os",
+      "sprite": "totem_fluo",
+      "desc": "La mémoire des ancêtres gravée en runes lumineuses.",
+      "comportement": "orne",
+      "base_cost": 1265990761480.83,
+      "cost_ratio": 1.15,
+      "base_prod": 154254281.8433,
+      "$comment": "payback initial 8207s ; cout x1.15 par achat"
+    },
+    {
+      "id": "hutte",
+      "ere": "tribus",
+      "nom": "Huttes vivantes",
+      "sprite": "hutte_fluo",
+      "desc": "On ne coupe pas un arbre : on lui demande de devenir maison.",
+      "comportement": "orne",
+      "base_cost": 5317161198219.48,
+      "cost_ratio": 1.15,
+      "base_prod": 647867983.7418,
+      "$comment": "payback initial 8207s ; cout x1.15 par achat"
+    },
+    {
+      "id": "cite",
+      "ere": "civilisation",
+      "nom": "Cités-jardins",
+      "sprite": "spire_fluo",
+      "desc": "Des spires organiques où la ville EST la forêt.",
+      "comportement": "orne",
+      "base_cost": 6014246803527.27,
+      "cost_ratio": 1.15,
+      "base_prod": 505382192.9138,
+      "$comment": "payback initial 11900s ; cout x1.15 par achat"
+    },
+    {
+      "id": "gardien",
+      "ere": "civilisation",
+      "nom": "Gardiens des biomes",
+      "sprite": "walachien_sentinelle",
+      "desc": "Le premier serment : aucune espèce ne s'éteindra ici.",
+      "comportement": "erre",
+      "base_cost": 25259836574814.54,
+      "cost_ratio": 1.15,
+      "base_prod": 2122605210.2378,
+      "$comment": "payback initial 11900s ; cout x1.15 par achat"
+    },
+    {
+      "id": "archives",
+      "ere": "civilisation",
+      "nom": "Archives du vivant",
+      "sprite": null,
+      "desc": "Le génome de chaque créature de Walachie, conservé à jamais.",
+      "comportement": "orne",
+      "base_cost": 106091313614221.08,
+      "cost_ratio": 1.15,
+      "base_prod": 8914941882.9987,
+      "$comment": "payback initial 11900s ; cout x1.15 par achat"
+    },
+    {
+      "id": "sentinelle",
+      "ere": "sentinelles",
+      "nom": "Sentinelles",
+      "sprite": "walachien_sentinelle",
+      "desc": "L'armure fluorescente, le regard froid : la vie a ses soldats.",
+      "comportement": "erre",
+      "base_cost": 120000000000000.06,
+      "cost_ratio": 1.15,
+      "base_prod": 6954276166.739,
+      "$comment": "payback initial 17255s ; cout x1.15 par achat"
+    },
+    {
+      "id": "flotte",
+      "ere": "sentinelles",
+      "nom": "Flottes de purge",
+      "sprite": null,
+      "desc": "Elles traversent le vide pour juger les civilisations destructrices.",
+      "comportement": "orne",
+      "base_cost": 504000000000000.3,
+      "cost_ratio": 1.15,
+      "base_prod": 29207959900.3038,
+      "$comment": "payback initial 17255s ; cout x1.15 par achat"
+    },
+    {
+      "id": "ancien",
+      "ere": "sentinelles",
+      "nom": "Conseil des Anciens",
+      "sprite": "walachien_ancien",
+      "desc": "Ceux qui décident quels mondes méritent d'être défendus.",
+      "comportement": "erre",
+      "base_cost": 2116800000000001.2,
+      "cost_ratio": 1.15,
+      "base_prod": 122673431581.2758,
+      "$comment": "payback initial 17255s ; cout x1.15 par achat"
+    },
+    {
+      "id": "portail",
+      "ere": "ascension",
+      "nom": "Portail du Panthéon",
+      "sprite": "portail_divin",
+      "desc": "Une porte vers ce qui regarde Walachie depuis toujours.",
+      "comportement": "orne",
+      "base_cost": 2394314777962657.0,
+      "cost_ratio": 1.15,
+      "base_prod": 95693828712.9693,
+      "$comment": "payback initial 25020s ; cout x1.15 par achat"
+    },
+    {
+      "id": "conscience",
+      "ere": "ascension",
+      "nom": "Conscience planétaire",
+      "sprite": null,
+      "desc": "Chaque créature devient une pensée d'un même esprit.",
+      "comportement": "orne",
+      "base_cost": 1.005612206744316e+16,
+      "cost_ratio": 1.15,
+      "base_prod": 401914080594.4711,
+      "$comment": "payback initial 25020s ; cout x1.15 par achat"
+    },
+    {
+      "id": "divinite",
+      "ere": "ascension",
+      "nom": "Divinité de Walachie",
+      "sprite": "divinite",
+      "desc": "L'esprit du monde ouvre les yeux — et rêve d'autres mondes.",
+      "comportement": "orne",
+      "base_cost": 4.223571268326127e+16,
+      "cost_ratio": 1.15,
+      "base_prod": 1688039138496.7783,
+      "$comment": "payback initial 25020s ; cout x1.15 par achat"
+    },
+    {
+      "id": "nef",
+      "ere": "essaimage",
+      "nom": "Nefs-semences",
+      "sprite": "nef_semence",
+      "desc": "Des vaisseaux vivants qui portent la sève vers d'autres cieux.",
+      "comportement": "erre",
+      "base_cost": 4.7772860466419704e+16,
+      "cost_ratio": 1.15,
+      "base_prod": 1316788208317.7559,
+      "$comment": "payback initial 36279s ; cout x1.15 par achat"
+    },
+    {
+      "id": "avantposte",
+      "ere": "essaimage",
+      "nom": "Avant-postes vivants",
+      "sprite": null,
+      "desc": "Une première racine plantée sur un monde qui n'est pas Walachie.",
+      "comportement": "orne",
+      "base_cost": 2.0064601395896275e+17,
+      "cost_ratio": 1.15,
+      "base_prod": 5530510474934.574,
+      "$comment": "payback initial 36279s ; cout x1.15 par achat"
+    },
+    {
+      "id": "jardin_orbital",
+      "ere": "essaimage",
+      "nom": "Jardins orbitaux",
+      "sprite": null,
+      "desc": "La sève pousse maintenant en apesanteur, entre les mondes.",
+      "comportement": "orne",
+      "base_cost": 8.427132586276436e+17,
+      "cost_ratio": 1.15,
+      "base_prod": 23228143994725.215,
+      "$comment": "payback initial 36279s ; cout x1.15 par achat"
+    },
+    {
+      "id": "sentinelle_stellaire",
+      "ere": "choeur_stellaire",
+      "nom": "Sentinelles stellaires",
+      "sprite": "sentinelle_stellaire",
+      "desc": "Elles ne dorment jamais : chaque étoile a besoin d'un gardien.",
+      "comportement": "predateur",
+      "base_cost": 9.531938816691387e+17,
+      "cost_ratio": 1.15,
+      "base_prod": 18119571647253.855,
+      "$comment": "payback initial 52605s ; cout x1.15 par achat"
+    },
+    {
+      "id": "relais",
+      "ere": "choeur_stellaire",
+      "nom": "Relais de lumière",
+      "sprite": null,
+      "desc": "Un message de vie, relayé d'étoile en étoile.",
+      "comportement": "orne",
+      "base_cost": 4.003414303010383e+18,
+      "cost_ratio": 1.15,
+      "base_prod": 76102200918466.2,
+      "$comment": "payback initial 52605s ; cout x1.15 par achat"
+    },
+    {
+      "id": "choeur",
+      "ere": "choeur_stellaire",
+      "nom": "Chœur des étoiles",
+      "sprite": "choeur_etoiles",
+      "desc": "Les Voiles chantaient le vent ; ceci chante le vide.",
+      "comportement": "erre",
+      "base_cost": 1.6814340072643607e+19,
+      "cost_ratio": 1.15,
+      "base_prod": 319629243857558.0,
+      "$comment": "payback initial 52605s ; cout x1.15 par achat"
+    },
+    {
+      "id": "toile",
+      "ere": "toile_galactique",
+      "nom": "Toile vivante",
+      "sprite": "toile_vivante",
+      "desc": "Un seul organisme, à l'échelle d'une galaxie.",
+      "comportement": "orne",
+      "base_cost": 1.9018718309533377e+19,
+      "cost_ratio": 1.15,
+      "base_prod": 249333092904442.72,
+      "$comment": "payback initial 76278s ; cout x1.15 par achat"
+    },
+    {
+      "id": "spirale",
+      "ere": "toile_galactique",
+      "nom": "Bras spiraux ensemencés",
+      "sprite": null,
+      "desc": "Chaque bras de la galaxie porte désormais une part de Walachie.",
+      "comportement": "orne",
+      "base_cost": 7.987861690004018e+19,
+      "cost_ratio": 1.15,
+      "base_prod": 1047198990198659.4,
+      "$comment": "payback initial 76278s ; cout x1.15 par achat"
+    },
+    {
+      "id": "coeur_galactique",
+      "ere": "toile_galactique",
+      "nom": "Cœur galactique",
+      "sprite": null,
+      "desc": "Au centre, quelque chose qui ressemble à une mémoire.",
+      "comportement": "orne",
+      "base_cost": 3.3549019098016874e+20,
+      "cost_ratio": 1.15,
+      "base_prod": 4398235758834369.5,
+      "$comment": "payback initial 76278s ; cout x1.15 par achat"
+    }
+  ]
+}

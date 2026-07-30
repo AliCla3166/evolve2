@@ -611,3 +611,177 @@ Retour d'Ali : « l'icône est hyper moche ». Diagnostic — `icon-192`/`icon-5
 - **Composition** : fond plein `#050b14` (= `theme_color` du manifest, pas une couleur inventée), redimensionnement `NEAREST` (garde le pixel art net, pas de flou d'interpolation) vers les 4 fichiers réellement servis — `icon-192.png`, `icon-512.png`, `icon-512-maskable.png`, `apple-touch-icon.png` (180×180, fond opaque comme l'exige iOS). Même fichier maître, aucune divergence de dessin entre les 4 tailles.
 - Aucun changement de code : les 4 chemins de fichiers sont inchangés (`manifest.ts`, `layout.tsx`, `notifications.ts`), seuls les PNG sont remplacés.
 - **Vérification** : `tsc --noEmit` silencieux, `lint` à son unique avertissement préexistant (`public/sw.js`), `next build` vert. Comparaison avant/après et simulation du masque circulaire montrées à Ali avant commit — validation explicite reçue avant de committer, conformément à la règle du dépôt.
+
+## 2026-07-30 — WALACHIE : le second mode de l'application (clicker d'évolution)
+
+Demande d'Ali : recréer Cell to Singularity dans son univers « Walachie » (exoplanète, évolution
+du magma au divin, Walachiens à grande mâchoire façon Kroot gardiens du vivant), dans un mode
+complètement séparé du jeu principal, choisi depuis l'écran titre, visuels PixelLab « pixel art
+réaliste scientifique », écosystème 2D vu de dessus qui se peuple, moments spontanés, connexion
+aux habitudes du jour, et un jeu pensé pour des années de micro-sessions.
+
+### Architecture — séparation totale, un seul pont
+- **Sauvegarde séparée** : store Zustand dédié (`walachie/store.ts`), clé `evolve2_walachie_v1`,
+  `WALACHIE_SAVE_VERSION = 1` indépendant du `SAVE_VERSION` du jeu — casser l'un ne peut pas
+  casser l'autre, et le jeu principal ne bouge pas d'un cran (aucune migration).
+- **Le seul pont est en LECTURE** : `habitBridge()` lit `useGame.getState()` (jamais l'inverse,
+  aucun cycle d'import). Bilan du soir validé aujourd'hui → sève ×1,5 jusqu'à minuit ; série →
+  +2 %/jour plafonné à +60 % ; journée qui tient la série → pulsation ×3. Des habitudes
+  manquantes n'enlèvent RIEN (doctrine : le pont bénit, ne punit jamais).
+- **Écran titre** : bouton « ✦ WALACHIE » sous COMMENCER/CONTINUER — deux modes, une application.
+
+### Économie — générée, simulée, jamais éditée à la main
+- `tools/walachie/gen_config.py` (source de vérité) → `src/data/walachie_config.json` : 12 ères
+  (Protoplanète → Ascension), 37 nœuds d'évolution, coûts ×1,15/achat, ~×20 entre ères, percée
+  d'ère payante, pulsation = 1 + 5 % de la prod/s (le clic reste utile à tout stade).
+- **La génération REFUSE d'écrire le JSON si la simulation sort de la fenêtre** : joueur en
+  micro-sessions (10 min toutes les 3 h), Divinité atteinte à **J4,9** (fenêtre 3-12 j), pire
+  attente entre deux achats **3,0 h** (garde-fou < 48 h), première Renaissance **5 Éclats**.
+- **Renaissance infinie** : Éclats = (sève du cycle / 1,1e16)^0,55, +25 % de prod par cycle,
+  5 héritages permanents à coût ×2/niveau **sans dernier niveau** (doctrine : aucune progression
+  ne se termine — la Divinité elle-même se rachète).
+- **Moments spontanés** : 5 événements (25-70 min d'écart, persisté et semé mulberry32), tous des
+  BONUS — pluie de spores ×2, chant du monde ×3, aurore clic ×5, migration/météore instantanés.
+  Une longue absence ne déclenche pas une rafale : un seul « cadeau de retour » (15 min de prod).
+  Hors ligne plafonné à 10 h (extensible via l'héritage Rêve profond).
+
+### Rendu — l'écosystème vivant
+- 36 assets PixelLab générés (`tools/gen_walachie.py`, DA distincte : violet/magenta/émeraude,
+  « scientific realistic », vue de dessus fausse perspective) : 3 tuiles de sol, 6 flores,
+  6 faunes, 4 Walachiens, 4 structures, 12 icônes d'ères, la Divinité.
+- `WalachieScene.tsx` : même patron que CellScene (une boucle rAF, lit `getState()`, zéro
+  `Date.now()` au rendu). Sol tuilé semé, veines de sève animées, chaque nœud possédé fait
+  apparaître ses créatures à des positions HACHÉES déterministes (le monde est le même d'une
+  session à l'autre), faune qui erre, flore qui ondule, ombres portées, aurore magenta pendant
+  un événement, textes flottants des pulsations. Glisser = panner, tap = pulsation.
+- Page `/walachie` : HUD sève + badges de bonus, feuille ÉVOLUTION (achats ×1/×10/×MAX, percées
+  d'ères), feuille PANTHÉON (Renaissance armée en deux taps, héritages, journal des moments),
+  panneau de retour hors ligne.
+
+### Vérification
+- `tsc` silencieux · `lint` à son unique avertissement préexistant (`public/sw.js`) ·
+  `next build` vert (route `/walachie` statique).
+- Harnais moteur hors dépôt (`w_check.ts`, **16/16 OK**) : attentes DÉRIVÉES du JSON (coûts,
+  plafond hors ligne, formule d'Éclats, pont habitudes), percée et Renaissance testées avec
+  contrôle négatif ET positif (doctrine des refus).
+- Navigateur (Chromium headless, 390×844) : bouton titre, HUD, 12 pulsations → +12 sève
+  persistées, achat du premier nœud, production passive qui monte seule, Panthéon, monde peuplé
+  à 21 nœuds panné et capturé — zéro erreur console. NB : ce sandbox n'avait pas de Chromium
+  préinstallé (contrairement aux sessions passées), un headless-shell a été installé dans
+  `/opt/pw-browsers` pour la session.
+
+## 2026-07-30 (suite) — Walachie : la Divinité n'est qu'une marche, fini le quadrillage
+
+Retour d'Ali sur la première livraison de Walachie : (1) étudier comment Cell to Singularity
+renouvelle l'expérience après la Singularité, pour que la Divinité ne soit qu'une étape et pas
+une fin ; (2) le rendu en quadrillage de tuiles répétées est moche — il veut un vrai décor
+naturel façon WorldBox, planète seule → bain primordial → eaux → terre → tribus → villages →
+villes → civilisation planétaire → interplanétaire → stellaire → galactique → la suite, avec des
+créatures qui se déplacent, se comportent, chassent.
+
+### Ce qu'on retient de Cell to Singularity (recherche avant conception)
+Leur post-Singularité crashe la simulation, débloque un « Reality Engine » à monnaie de
+prestige (Metabits), puis une couche supplémentaire (« Beyond ») pour explorer l'espace — qui
+finit par buter sur un mur (hardlock niveau 17 constaté par les joueurs, qui le regrettent).
+Décision : **on prend le contre-pied**. Pas de reset forcé, pas de mur. La Divinité ouvre la
+Renaissance (optionnelle, comme leurs Metabits) mais le jeu continue sans elle.
+
+### Économie — 3 ères réelles de plus, puis une queue qui ne s'arrête jamais
+- `tools/walachie/gen_config.py` : **Essaimage Interplanétaire → Chœur Stellaire → Toile
+  Galactique** ajoutées après Ascension (mêmes formules de croissance, aucune rupture de
+  rythme). Simulé : Divinité toujours atteignable à **J4,9** (inchangé, ce n'est qu'une marche),
+  contenu réel désormais jusqu'à **J50,9** (Toile Galactique), pire attente globale 3,3 h.
+- Au-delà de la Toile Galactique : **queue procédurale infinie** (« Au-delà — Amas k »),
+  générée à la volée côté TypeScript (`config.ts` : `eraAt()`/`nodeDef()` résolvent les ids
+  `amas_k`/`essaim_k` sans qu'aucune liste ne soit jamais écrite) — même doctrine que le Bastion
+  sans dernier niveau. `nextEraDef()` ne renvoie plus jamais `null`.
+- Chaque nœud porte désormais un **`comportement`** (`predateur` / `proie` / `erre` / `orne`),
+  source de vérité JSON, jamais codé en dur dans le TS.
+
+### Rendu — fini le quadrillage, place au tableau vivant
+- **12 décors peints en plein cadre** générés via PixelLab (max API 400×300, testé avant de
+  lancer le lot) : espace → bain primordial → eaux → rivage → tribal → village → cité → orbite
+  → portail → système → constellation → galaxie. `WalachieScene.tsx` dessine UN seul tableau
+  qui couvre tout le cadre (plus de tuiles 64×64 répétées) et change automatiquement selon
+  l'ère la plus avancée (`currentEraDef`).
+- **4 nouvelles créatures** pour les ères post-Ascension (nef-semence, sentinelle stellaire,
+  chœur d'étoiles, toile vivante).
+- **Comportements type WorldBox** dans la boucle de rendu : les prédateurs (chasseurs à
+  mâchoire, meutes, alphas, sentinelles stellaires) traquent la proie possédée la plus proche
+  (étincelle magenta à la capture, rien n'est jamais retiré — la proie repart aussitôt) ; les
+  proies (sporules, rampants, brouteurs, méduses, troupeaux) fuient le prédateur le plus proche
+  sinon errent ; le reste erre en laisse autour de sa zone ou ondule sur place (flore,
+  structures). Positions et ids résolus dynamiquement (`Object.entries(state.nodes)` +
+  `nodeDef()`), donc les instances de la queue infinie (`essaim_k`) s'affichent aussi.
+- `src/app/walachie/page.tsx` : la feuille Évolution boucle désormais sur les index d'ères déjà
+  perçues via `eraAt(i)` (plus sur une liste statique) — fonctionne aussi bien loin dans la
+  queue infinie. Copie du Panthéon révisée : la Divinité n'est plus présentée comme la
+  « dernière ère », la Renaissance est explicitement un choix.
+
+### Vérification
+- `tsc`/`lint`(avertissement préexistant seul)/`build` verts après la réécriture complète de
+  `WalachieScene.tsx`.
+- Harnais moteur étendu (`w_check2.ts`, **45/45 OK**) : queue infinie (coûts croissants sans
+  fin, `eraIndex`/`nodeDef` résolvent des ids jamais vus dans le JSON), tous les comportements
+  valides, chaque décor d'ère a bien un fichier sur disque, 20 percées d'ères d'affilée sans
+  échec (dépasse les 15 ères réelles), et surtout : **la Renaissance reste fermée sans Divinité
+  (contrôle négatif), s'ouvre après (contrôle positif), et le jeu continue de percer des ères
+  sans jamais renaître** — la Divinité ne bloque plus rien.
+- Navigateur (Chromium headless, 390×844) : décor plein cadre au lieu du quadrillage confirmé
+  visuellement à plusieurs ères (protoplanète, rivage/prédateurs, toile galactique + amas déjà
+  perçés), mouvement des créatures confirmé par diff de pixels entre captures espacées de 3 s
+  (chasse/fuite actives, pas de statisme), feuille Évolution ouverte très loin dans la queue
+  infinie sans erreur console.
+
+## 2026-07-30 (suite 2) — Walachie : arbre en bulles + créature brillante
+
+Retour d'Ali : (1) remplacer la liste défilante de l'Évolution par un affichage en
+bulles interconnectées façon Cell to Singularity, qui poussent du bas vers le haut,
+flottent légèrement, et qu'on peut parcourir librement ; (2) une créature "brillante"
+tous les 100 exemplaires d'un même nœud (distincte des améliorations meta, qui ne se
+valident qu'une fois) — cliquée, elle explose en paillettes et double la sève en stock,
+un gros coup de pouce à déclencher au bon moment.
+
+### Créature brillante
+- `walachie_config.json.shiny` (`seuil: 100`, `multiplicateur: 2.0`) — nouveau levier
+  généré par `gen_config.py`, aucun nombre en dur côté TS.
+- `engine.ts` : `shinyChargesAvailable(state, id)` = `floor(owned/seuil) - shinyClaimed[id]`
+  (peut valoir 2+ si beaucoup achetés d'un coup via ×MAX) ; `claimShiny` multiplie la
+  sève en stock et consomme une charge. `WalachieState.shinyClaimed` (nouveau champ,
+  persisté) suit les charges déjà réclamées par nœud.
+- `WalachieScene.tsx` : la créature avec charge dispo est nimbée d'une aura dorée
+  pulsante + étincelles orbitales (suit l'entité vivante si elle a un sprite, sinon une
+  position semée fixe). Le tap teste d'abord les créatures brillantes (prioritaire sur
+  la pulsation normale) : capture → 20 paillettes colorées avec gravité + texte flottant
+  du gain. Badge HUD dans `page.tsx` quand une charge est disponible.
+- Harnais dédié (`w_check3.ts`, **10/10 OK**) : seuils exacts (99 → 0 charge, 100 → 1,
+  250 → 2 pas 2,5), doublement exact de la sève, décrément des charges, et contrôle
+  négatif (réclamer sans charge ne fait rien : gain 0, sève inchangée).
+
+### Arbre en bulles (`EvolutionTree.tsx`, remplace la liste défilante)
+- Chaque ère est une bulle-portail (hub) ; ses nœuds s'enchaînent au-dessus jusqu'au
+  hub de l'ère suivante — l'arbre pousse du bas vers le haut à mesure qu'on avance,
+  jamais l'inverse. Positions horizontales semées (hash déterministe, pas de vraie
+  hiérarchie de dépendances dans l'économie — l'effet de branches reste purement
+  visuel, cohérent avec le modèle d'achat libre au sein d'une ère déjà percée).
+- Flottement sinusoïdal déphasé par bulle (bob), liens en courbes de Bézier entre
+  bulles consécutives.
+- Glisser-panner pour circuler dans tout l'arbre déjà parcouru (pas seulement la
+  frontière), avec recentrage doux vers le haut quand une nouvelle ère est perçée et
+  que l'utilisateur n'a pas pris la main sur la caméra.
+- Tap = sélection → panneau DOM ancré en bas (achat ×1/×10/×MAX ou percée d'ère),
+  volontairement du DOM normal et non dessiné au canvas pour rester réactif à la sève
+  qui monte sans reconstruire tout l'arbre à chaque tick.
+- États visuels : possédé (halo émeraude + compteur), achetable maintenant (anneau
+  doré pulsant), ère à percer (anneau magenta pointillé, pulsant si affordable).
+
+### Vérification
+- `tsc`/`lint` (avertissement préexistant seul)/`build` verts.
+- Harnais moteur créature brillante 10/10 (ci-dessus).
+- Navigateur (Chromium headless, 390×844) : badge de créature brillante confirmé à
+  l'affichage avec un nœud à ×120 ; diff de pixels entre deux captures espacées de
+  1,5 s confirme le flottement des bulles (léger, ~1.6 de diff moyen) ; un glissement
+  vertical déplace nettement la caméra dans l'arbre (diff ~15.7) ; un tap ouvre le
+  panneau de sélection (confirmé par présence du bouton ✕ dans le DOM après balayage
+  systématique du canvas, les positions exactes des bulles étant semées/hashées donc
+  non prévisibles a priori) — zéro erreur console sur l'ensemble des scénarios.
