@@ -4,6 +4,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Panel, PixelButton, Switch } from "@/components/ui/Pixel";
 import { CodexPanel } from "@/components/game/CodexPanel";
 import { DevPanel } from "@/components/game/DevPanel";
@@ -36,7 +37,7 @@ function PrefToggle({
     <Panel className="flex items-center justify-between gap-3 p-3">
       <div>
         <div className="text-xs text-cell-cyan">{title}</div>
-        <div className="text-[11px] text-cell-teal/60">{hint}</div>
+        <div className="text-[11px] text-cell-dim">{hint}</div>
       </div>
       <Switch
         on={on}
@@ -111,10 +112,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
       <div className="mx-auto max-w-md space-y-3 pb-nav pt-safe px-2 sm:max-w-lg">
         <div className="flex items-center gap-3">
-          <h1 className="flex-1 text-base uppercase tracking-[0.3em] text-cell-cyan">
+          <h1 className="font-pixel flex-1 text-base uppercase tracking-[0.3em] text-cell-cyan">
             Réglages
           </h1>
-          <button onClick={onClose} aria-label="Fermer" className="px-3 py-2 text-base text-cell-teal/70 hover:text-cell-cyan">
+          <button onClick={onClose} aria-label="Fermer" className="px-3 py-2 text-base text-cell-dim hover:text-cell-cyan">
             ✕
           </button>
         </div>
@@ -129,6 +130,19 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           >
             📖 CODEX — tous les mots du jeu, expliqués
           </button>
+        </Panel>
+
+        {/* Pont vers Walachie (refonte 31/07) — une fois entré dans /play, plus
+            aucun lien ne ramenait vers le second mode : la porte ne s'ouvrait
+            que depuis l'écran-titre, dans un seul sens. Sauvegarde et onglet
+            restent totalement séparés (voir page.tsx), ceci n'est qu'un lien. */}
+        <Panel className="p-3">
+          <Link
+            href="/walachie"
+            className="tap-h flex w-full items-center justify-center gap-2 rounded-lg border border-walachie-violet/50 bg-walachie-bg2/80 px-3 py-2 text-xs tracking-widest text-walachie-violet"
+          >
+            ✦ WALACHIE — l&apos;autre monde
+          </Link>
         </Panel>
 
         {/* Slot de sauvegarde : perso / dev */}
@@ -173,7 +187,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         {/* Sauvegarde */}
         <Panel className="space-y-2 p-3">
           <div className="text-xs text-cell-cyan">Sauvegarde</div>
-          <p className="text-[11px] leading-relaxed text-cell-teal/60">
+          <p className="text-[11px] leading-relaxed text-cell-dim">
             {cloudConfigured
               ? "La sync cloud est active — l'export reste utile comme copie de secours."
               : "En attendant la sync cloud : exporte ici, colle sur ton autre appareil."}
@@ -209,7 +223,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <PixelButton className="!py-1 text-[10px]" disabled={!importText.trim()} onClick={doImport}>
                 IMPORTER
               </PixelButton>
-              <span className="text-[10px] text-cell-teal/60">Remplace la partie actuelle.</span>
+              <span className="text-[10px] text-cell-dim">Remplace la partie actuelle.</span>
             </div>
             {importMsg && <p className="text-[11px] text-cell-cyan">{importMsg}</p>}
           </div>
@@ -219,7 +233,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         <Panel className="flex items-center justify-between gap-3 p-3">
           <div>
             <div className="text-xs text-red-400">Nouvelle partie</div>
-            <div className="text-[11px] text-cell-teal/60">
+            <div className="text-[11px] text-cell-dim">
               Efface tout : bâtiments, cartes, habitudes, rapports.
             </div>
           </div>
@@ -236,7 +250,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         {/* À propos */}
         <Panel className="p-3 text-center">
           <div className="text-xs tracking-[0.3em] text-cell-cyan">EVOLVE v{GAME_VERSION}</div>
-          <p className="mt-1 text-[11px] leading-relaxed text-cell-teal/60">
+          <p className="mt-1 text-[11px] leading-relaxed text-cell-dim">
             Âge 1 — Cellule · De la cellule au divin, financé par tes bonnes
             habitudes du réel. Pixel art généré via PixelLab, moteur Next.js.
           </p>

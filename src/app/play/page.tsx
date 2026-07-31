@@ -411,10 +411,13 @@ export default function PlayPage() {
     setSelected(id);
   };
 
-  /* Retour système Android + verrou de défilement de l'arrière-plan, pour les
-     deux overlays pilotés par cette page (cf. src/lib/overlay.ts). */
-  useOverlay(panel !== null, () => setPanel(null));
-  useOverlay(selected !== null, () => setSelected(null));
+  /* Retour système Android + verrou de défilement de l'arrière-plan + piège de
+     focus (piste Phase 1 n°11), pour les deux overlays pilotés par cette page
+     (cf. src/lib/overlay.ts). Un seul conteneur par ref, posé plus bas sur le
+     wrapper commun aux 7 panneaux plein écran et sur celui de BuildingSheet —
+     ça couvre tous les panneaux du jeu sans toucher chacun de leurs fichiers. */
+  const panelDialogRef = useOverlay<HTMLDivElement>(panel !== null, () => setPanel(null));
+  const selectedDialogRef = useOverlay<HTMLDivElement>(selected !== null, () => setSelected(null));
 
   // Sync cloud active pendant le jeu (push périodique + arrière-plan).
   const { user: cloudUser, status: cloudStatus } = useCloudSync();
@@ -552,36 +555,58 @@ export default function PlayPage() {
         </div>
       )}
 
-      {/* Panneau d'amélioration (bottom sheet) */}
+      {/* Panneau d'amélioration (bottom sheet). `role="dialog"`/`aria-modal`/le
+          piège de focus (piste Phase 1 n°11) viennent d'un seul conteneur ici
+          plutôt que d'un ajout dans BuildingSheet.tsx — un seul panneau que
+          `selected` gouverne à la fois, donc un seul wrapper suffit. */}
       {selected && (
-        <BuildingSheet
-          id={selected}
-          onClose={() => setSelected(null)}
-          onPlay={
-            SHEET_PANEL[selected]
-              ? () => {
-                  setSelected(null);
-                  setPanel(SHEET_PANEL[selected]!);
-                }
-              : undefined
-          }
-        />
+        <div ref={selectedDialogRef} role="dialog" aria-modal="true" tabIndex={-1} className="outline-none">
+          {/* Pas de `display: contents` ici : un tel conteneur sort de l'arbre
+              d'accessibilité (et devient non focusable dans la plupart des
+              navigateurs) — exactement l'inverse de ce que `role="dialog"`
+              cherche à apporter. Un `<div>` bloc ordinaire est sans risque
+              visuel : son seul enfant est en `position: fixed`, donc hors du
+              flux — il ne pousse jamais la mise en page en dessous. */}
+          <BuildingSheet
+            id={selected}
+            onClose={() => setSelected(null)}
+            onPlay={
+              SHEET_PANEL[selected]
+                ? () => {
+                    setSelected(null);
+                    setPanel(SHEET_PANEL[selected]!);
+                  }
+                : undefined
+            }
+          />
+        </div>
       )}
 
-      {/* Overlays */}
-      {panel === "habits" && (
-        <HabitsPanel onClose={() => setPanel(null)} onGoto={(p) => setPanel(p)} />
+      {/* Overlays. Même principe qu'au-dessus : un seul conteneur commun aux 7
+          panneaux plein écran (un seul actif à la fois via `panel`) porte le
+          rôle de dialogue et le piège de focus, sans toucher HabitsPanel.tsx,
+          NoyauHub.tsx, MarePanel.tsx, TerritoirePanel.tsx, BastionPanel.tsx,
+          ReportsPanel.tsx ni SettingsPanel.tsx individuellement. */}
+      {panel !== null && (
+        <div ref={panelDialogRef} role="dialog" aria-modal="true" tabIndex={-1} className="outline-none">
+          {/* Idem : pas de `display: contents` — chacun des 7 panneaux ici est
+              lui-même en `position: fixed`, donc ce conteneur bloc ordinaire
+              n'a aucun effet visuel, tout en restant réellement focusable. */}
+          {panel === "habits" && (
+            <HabitsPanel onClose={() => setPanel(null)} onGoto={(p) => setPanel(p)} />
+          )}
+          {panel === "noyau" && <NoyauHub onClose={() => setPanel(null)} />}
+          {panel === "mare" && <MarePanel onClose={() => setPanel(null)} />}
+          {panel === "derive" && (
+            <TerritoirePanel onClose={() => setPanel(null)} onAssault={handleAssault} />
+          )}
+          {panel === "bastion" && (
+            <BastionPanel onClose={() => setPanel(null)} initialTargetId={sortieTarget} />
+          )}
+          {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
+          {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
+        </div>
       )}
-      {panel === "noyau" && <NoyauHub onClose={() => setPanel(null)} />}
-      {panel === "mare" && <MarePanel onClose={() => setPanel(null)} />}
-      {panel === "derive" && (
-        <TerritoirePanel onClose={() => setPanel(null)} onAssault={handleAssault} />
-      )}
-      {panel === "bastion" && (
-        <BastionPanel onClose={() => setPanel(null)} initialTargetId={sortieTarget} />
-      )}
-      {panel === "reports" && <ReportsPanel onClose={() => setPanel(null)} />}
-      {panel === "settings" && <SettingsPanel onClose={() => setPanel(null)} />}
 
       {/* Carte d'explication à la première ouverture d'un onglet (amélioration n°6) :
           deux phrases — ce que le système fait, ce qu'il rapporte — au moment exact
@@ -626,7 +651,11 @@ export default function PlayPage() {
       <EventModal />
       <CardReveal />
       {/* Comptes rendus (pistes 1 & 5) — le rapport de retour passe devant la
-          célébration de chantier : il englobe déjà les chantiers terminés. */}
+          célébration de chantier : il englobe déjà les chantiers terminés hors
+          ligne. Priorité tranchée dans BuildCompleteModal lui-même (refonte DA
+          31/07, piste Phase 3 n20) plutôt que laissée au hasard du DOM/z-index :
+          tant que `offlineSummary` est affiché, une célébration de chantier
+          fraîchement ajoutée par un tick en direct attend d'être démasqué. */}
       <WelcomeBackModal />
       <BuildCompleteModal
         onNext={(id) => {

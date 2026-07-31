@@ -31,6 +31,7 @@ import {
   nodeMaxBuyable,
 } from "@/lib/game/walachie/engine";
 import { useWalachie } from "@/lib/game/walachie/store";
+import { prefersReducedMotion } from "@/lib/reducedMotion";
 
 type BuyQty = 1 | 10 | "max";
 
@@ -243,9 +244,16 @@ export function EvolutionTree({ erasUnlocked, qty }: { erasUnlocked: number; qty
       ctx.translate(vw / 2 - cam.x, vh / 2 - cam.y);
 
       const bs = bubblesRef.current;
+      /* `prefers-reduced-motion` (refonte 31/07) : coupe le bob (mouvement
+         continu et purement decoratif, touche chaque bulle a chaque image —
+         la premiere cible d'un reglage vestibulaire). Les pulsations locales
+         "achetable maintenant"/"ere a percer" plus bas sont laissees telles
+         quelles : ce sont des signaux fonctionnels ponctuels, pas de
+         l'ambiance en continu. */
+      const bobT = prefersReducedMotion() ? 0 : t;
       const posOf = (b: Bubble) => ({
         x: b.x,
-        y: b.y + Math.sin(t / 1600 + b.phase) * 4,
+        y: b.y + Math.sin(bobT / 1600 + b.phase) * 4,
       });
 
       // Liens (l'arbre qui monte)
@@ -371,7 +379,7 @@ export function EvolutionTree({ erasUnlocked, qty }: { erasUnlocked: number; qty
   return (
     <div className="relative flex-1 overflow-hidden">
       <canvas ref={canvasRef} className="h-full w-full touch-none select-none" />
-      <p className="pointer-events-none absolute inset-x-0 top-2 text-center text-[10px] text-[#b98cff]/50">
+      <p className="pointer-events-none absolute inset-x-0 top-2 text-center text-[10px] text-walachie-violet/50">
         glisse pour circuler dans l&apos;arbre · tape une bulle
       </p>
       {selected && (
@@ -390,13 +398,13 @@ function SelectedPanel({ bubble, qty, onClose }: { bubble: Bubble; qty: BuyQty; 
     const era = eraAt(bubble.eraIndex);
     if (!bubble.isFrontier) {
       return (
-        <div className="absolute inset-x-3 bottom-3 rounded-xl border border-[#b98cff]/30 bg-[#100a1f]/95 p-3">
+        <div className="absolute inset-x-3 bottom-3 rounded-xl border border-walachie-violet/30 bg-walachie-bg/95 p-3">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-[#b98cff]">{era.nom}</div>
-              <div className="mt-0.5 text-[11px] leading-4 text-[#b98cff]/60">{era.desc}</div>
+              <div className="text-sm text-walachie-violet">{era.nom}</div>
+              <div className="mt-0.5 text-[11px] leading-4 text-walachie-violet/60">{era.desc}</div>
             </div>
-            <button onClick={onClose} className="px-1 text-sm text-[#b98cff]/70">
+            <button onClick={onClose} className="px-1 text-sm text-walachie-violet/70">
               ✕
             </button>
           </div>
@@ -405,13 +413,13 @@ function SelectedPanel({ bubble, qty, onClose }: { bubble: Bubble; qty: BuyQty; 
     }
     const can = seve >= era.unlock_cost;
     return (
-      <div className="absolute inset-x-3 bottom-3 rounded-xl border border-dashed border-[#ff5cdb]/50 bg-[#100a1f]/95 p-3">
+      <div className="absolute inset-x-3 bottom-3 rounded-xl border border-dashed border-walachie-magenta/50 bg-walachie-bg/95 p-3">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-sm text-[#ff5cdb]">Percer : {era.nom}</div>
-            <div className="mt-0.5 text-[11px] leading-4 text-[#b98cff]/70">{era.desc}</div>
+            <div className="text-sm text-walachie-magenta">Percer : {era.nom}</div>
+            <div className="mt-0.5 text-[11px] leading-4 text-walachie-violet/70">{era.desc}</div>
           </div>
-          <button onClick={onClose} className="px-1 text-sm text-[#b98cff]/70">
+          <button onClick={onClose} className="px-1 text-sm text-walachie-violet/70">
             ✕
           </button>
         </div>
@@ -419,7 +427,7 @@ function SelectedPanel({ bubble, qty, onClose }: { bubble: Bubble; qty: BuyQty; 
           onClick={() => useWalachie.getState().doUnlockEra()}
           disabled={!can}
           className={`mt-2 w-full rounded-lg border py-2 text-xs tracking-widest ${
-            can ? "border-[#ff5cdb] text-[#ff5cdb]" : "border-[#b98cff]/20 text-[#b98cff]/40"
+            can ? "border-walachie-magenta text-walachie-magenta" : "border-walachie-violet/20 text-walachie-violet/40"
           }`}
         >
           {fmtSeve(era.unlock_cost)}
@@ -436,7 +444,7 @@ function SelectedPanel({ bubble, qty, onClose }: { bubble: Bubble; qty: BuyQty; 
   const nodeDefLabel = bubble.label;
 
   return (
-    <div className="absolute inset-x-3 bottom-3 rounded-xl border border-[#4af6b2]/30 bg-[#100a1f]/95 p-3">
+    <div className="absolute inset-x-3 bottom-3 rounded-xl border border-walachie-emeraude/30 bg-walachie-bg/95 p-3">
       <div className="flex items-center gap-2">
         {bubble.sprite ? (
           <img
@@ -448,17 +456,17 @@ function SelectedPanel({ bubble, qty, onClose }: { bubble: Bubble; qty: BuyQty; 
             draggable={false}
           />
         ) : (
-          <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center text-xl text-[#4af6b2]/60">
+          <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center text-xl text-walachie-emeraude/60">
             ◈
           </span>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1.5">
             <span className="truncate text-sm text-[#eae2ff]">{nodeDefLabel}</span>
-            {owned > 0 && <span className="text-[11px] text-[#4af6b2]">×{owned}</span>}
+            {owned > 0 && <span className="text-[11px] text-walachie-emeraude">×{owned}</span>}
           </div>
         </div>
-        <button onClick={onClose} className="px-1 text-sm text-[#b98cff]/70">
+        <button onClick={onClose} className="px-1 text-sm text-walachie-violet/70">
           ✕
         </button>
       </div>
@@ -466,7 +474,7 @@ function SelectedPanel({ bubble, qty, onClose }: { bubble: Bubble; qty: BuyQty; 
         onClick={() => useWalachie.getState().doBuyNode(bubble.id, nBuy)}
         disabled={!can}
         className={`mt-2 w-full rounded-lg border py-2 text-xs tracking-widest ${
-          can ? "border-[#4af6b2] text-[#4af6b2]" : "border-[#b98cff]/20 text-[#b98cff]/40"
+          can ? "border-walachie-emeraude text-walachie-emeraude" : "border-walachie-violet/20 text-walachie-violet/40"
         }`}
       >
         {qty === "max" ? `×${nBuy}` : `×${qty}`} · {fmtSeve(cost)}

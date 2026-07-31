@@ -785,3 +785,165 @@ un gros coup de pouce à déclencher au bon moment.
   panneau de sélection (confirmé par présence du bouton ✕ dans le DOM après balayage
   systématique du canvas, les positions exactes des bulles étant semées/hashées donc
   non prévisibles a priori) — zéro erreur console sur l'ensemble des scénarios.
+
+## 2026-07-31 — Refonte UI/UX & direction artistique : les 20 pistes du plan combiné
+
+Deux audits indépendants commandés en parallèle — l'un lisibilité/UX avec ancrage en
+sciences cognitives (mémoire de travail, contraste WCAG, cibles tactiles, canal
+redondant), l'autre direction artistique/immersion (cohésion Cellule ↔ Walachie,
+artefacts de production non maîtrisés, overlays sans sémantique d'accessibilité) —
+synthétisés en un plan unique à 4 phases et 20 pistes numérotées, livré à Ali et
+archivé dans le Projet Claude (`claude/plan-refonte-ui-ux-da-2026-07-31.md`). Les 20
+pistes ont toutes été appliquées dans la foulée. Résumé par phase ; le détail exact de
+chaque diff se lit dans le code, ce journal n'en retient que le POURQUOI.
+
+### Phase 0 — Fondations invisibles
+- **Contraste WCAG** : deux nouvelles variables CSS (`--ink-2` ~5,1:1, `--ink-3`
+  ~3,2:1) mappées sur `text-cell-dim`/`text-cell-faint`, pour remplacer les dizaines
+  d'usages de `text-cell-teal/NN` dont l'opacité tombait sous le seuil AA sur un jeu
+  qui vit entre 8 et 11 px. Sweep mécanique délégué à un sous-agent avec règles de
+  correspondance opacité → token strictement bornées (exclusion explicite des
+  classes `border-`/`bg-`/`ring-` et des couleurs sémantiques comme l'ambre
+  d'avertissement) puis re-vérifié indépendamment (diff relu à la main sur deux
+  fichiers, `tsc`/`lint`/`build`) : `Hud.tsx`, `ObjectiveStrip.tsx`,
+  `BastionPanel.tsx`, `HabitsPanel.tsx`, `MarePanel.tsx`, `TerritoirePanel.tsx`,
+  `SettingsPanel.tsx` et le nouveau `CardDetailSheet.tsx`. Deux cas ambigus laissés
+  volontairement intacts (boutons verrouillés à opacité 30-35 %, hors de la plage
+  définie) plutôt que devinés.
+- **Cibles tactiles** et **pont vers Walachie** (navigation retour, `SettingsPanel`)
+  déjà traités avant la bascule sur ce plan — voir les entrées Walachie du 30/07 pour
+  le contexte du second monde lui-même.
+
+### Phase 1 — Hiérarchie de l'attention
+- **HUD à deux niveaux** (`Hud.tsx`) : une rangée permanente (série, combat, Énergie,
+  Vitalité + UNE ressource choisie dynamiquement — celle la plus proche de son
+  plafond, `WARN_AT = 0,85`) plutôt que d'aligner toutes les ressources en
+  permanence. Un tiroir (`▼ plus de ressources`) s'ouvre automatiquement dès qu'une
+  ressource franchit le seuil d'alerte et ne se referme plus jamais tout seul une
+  fois ouvert par le joueur — l'info urgente ne se cache jamais, le reste se replie.
+- **`ObjectiveStrip`** : pagination mobile à une cellule (glissement tactile +
+  points de page), les trois blocs Aujourd'hui/Jalon/Prochain restant côte à côte
+  dès `sm:`. Au passage, `MilestonesPanel` a reçu son tout premier `useOverlay` (il
+  n'en avait aucun avant cette session — ni retour Android, ni verrou de défilement,
+  ni gestion du focus).
+- **Cartes de La Mare** : extraction d'une fonction pure `computeCardView` partagée
+  entre la grille (portrait + nom + rareté minimal, désormais un vrai bouton) et un
+  nouveau `CardDetailSheet.tsx` qui porte tout le détail (rôle, édition, 4 stats de
+  combat + récolte, poste) — élimine la duplication qui menaçait de diverger.
+- **`BastionPanel`** — le plus gros chantier de la liste : la Sortie (cible/péril/
+  préparatifs/coût) devient repliable avec résumé visible fermé ; la Boutique passe
+  d'un unique `<Panel>` à trois accordéons (`Section`, état local par section :
+  Emplacements ouvert par défaut, Améliorations, Catalogue) au lieu d'empiler tout
+  sur deux onglets pour cinq tâches.
+- **Accessibilité des overlays** (`src/lib/overlay.ts`) : le hook partagé
+  `useOverlay`/`useBackDismiss` gérait déjà le retour Android (pile de modales,
+  seule la plus haute réagit) et le verrou de défilement ; il gère maintenant AUSSI
+  le piège de focus (Tab/Maj+Tab cyclent dans les éléments focalisables de la
+  modale la plus haute de la pile) et la sauvegarde/restauration du focus à
+  l'ouverture/fermeture. `role="dialog"`/`aria-modal`/`tabIndex={-1}` posés sur 9
+  sites d'appel directs, plus une seule paire de conteneurs dans
+  `src/app/play/page.tsx` qui donne cette couverture à 8 panneaux plein écran d'un
+  coup (`className="outline-none"`, PAS `display: contents` — piège identifié et
+  évité en cours de route : `display: contents` sort l'élément de l'arbre
+  d'accessibilité et le rend non focalisable dans la plupart des navigateurs, ce qui
+  aurait annulé l'intérêt même du wrapper).
+
+### Phase 2 — Cohésion sensorielle et artistique
+- **Icônes de nav empruntées** (Bastion/Dérive) : en attendant deux vraies icônes
+  PixelLab dans le registre du kit existant, correctif CSS à coût nul dans
+  `NavIcon` (`Pixel.tsx`) — `saturate-50 brightness-110 contrast-90` uniquement sur
+  les deux sprites de bâtiment empruntés, pour réduire leur poids visuel relatif
+  face aux vraies icônes du kit.
+- **Walachie enfin sonorisé** : `installAudio()` (déjà générique, zéro échantillon)
+  n'était monté QUE sur `/play` — Walachie, pourtant le mode le plus tactile du
+  jeu, était totalement muet. Montage sur `/walachie` (couvre gratuitement tous les
+  vrais `<button>` : achats de nœud, percée d'ère, héritages, feuilles). Trois
+  repères explicites ajoutés pour les gestes hors-DOM (canvas) : `walachie_pulse`
+  (nouvelle entrée dans `audio_config.json`, même matériau que `ui_tap` — bulle
+  sinus + bruit filtré — mais transposé plus grave pour une identité propre à la
+  sève sans rompre la famille sonore commune aux deux mondes), `collect` réutilisé
+  pour la créature brillante réclamée, `victory` réutilisé pour la Renaissance. Les
+  feuilles ÉVOLUTION/PANTHÉON gagnent `panel_open`/`panel_close` au même patron que
+  `play/page.tsx`.
+- **Décors Walachie, agrandissement maîtrisé** : les 12 décors PixelLab sortent à
+  400×300 (plafond API) pour un monde de 1280×960, dessinés jusqu'ici au plus
+  proche voisin (comme les sprites) — un agrandissement ×3,2 en blocs sur un fond
+  peint aux dégradés fins, illisible. `WalachieScene.tsx` active maintenant le
+  lissage (`imageSmoothingQuality: "high"`) UNIQUEMENT pour le `drawImage` du
+  décor, remis à `false` juste après pour que sprites et créatures gardent leurs
+  pixels nets.
+- **Veines de sève conditionnées au décor** : l'effet se dessinait sur les 15 ères
+  sans exception, y compris les 6 ères spatiales (Protoplanète, Sentinelles vue en
+  orbite, Ascension, Essaimage, Chœur Stellaire, Toile Galactique) où des veines
+  vertes flottant dans le vide brisaient la cohésion. Nouveau champ
+  `seve_veins` (bool) sur chaque ère, source de vérité dans
+  `tools/walachie/gen_config.py` (regénéré, diff vérifié : uniquement les 15
+  nouveaux champs, aucune dérive de calibrage) et dans le fallback `eraAt()` de la
+  queue infinie (`false`, elle prolonge la Toile Galactique spatiale) — `true`
+  seulement sur les 9 ères de surface/sous-marines (Océan → Civilisation).
+- **Silkscreen enfin tranché** : appliqué au wordmark EVOLVE, au badge WALACHIE, aux
+  titres des feuilles Évolution/Panthéon, et aux en-têtes des 10 panneaux plein
+  écran des deux modes (`Bastion-Défense`, `Codex`, `Habitudes`, `La Mare`, `Le
+  Noyau`, `Objectifs`, `Crée ton organisme`, `Rapports`, `Réglages`, `La Dérive`) —
+  un pont typographique gratuit entre les deux mondes, le sous-ensemble "latin" de
+  Google Fonts déjà chargé couvrant les accents français sans ajout.
+- **Bouton Walachie de l'écran-titre** : remplacé par un vrai `PixelButton` teinté
+  (nouvelles variables CSS `--btn-border`/`--btn-glow`/`--btn-border-hover` sur
+  `.pixel-btn`, défaut cyan inchangé pour tous les appels existants) au lieu d'un
+  `<Link>` sans retour tactile — même poids visuel que CONTINUER.
+- **Codex étendu à Walachie** : nouveau groupe « Walachie — le second monde » (11
+  entrées : Sève, Pulsation, Ère, Nœud, Créature brillante, Divinité, Amas,
+  Renaissance, Éclats de Conscience, Panthéon, Pont d'habitudes, Moment spontané),
+  toutes sourcées depuis les `$comment` de `walachie_config.json` et le texte
+  joueur réel de `walachie/page.tsx` — aucune n'inventée.
+- **15 assets de chrome orphelins supprimés** (`public/assets/ui/` :
+  `bar_frame_large`, `bar_frame`, `btn_disabled/hover/normal/pressed`, `card_back`,
+  `divider`, `gauge_construction`, `notif_dot`, `overlay_upgrade`,
+  `panel_membrane`, `panel_noyau`, `panel_tooltip`, `plus_minus`). Le premier passage
+  au grep littéral en annonçait 28 (faux négatif massif) : `Pixel.tsx` construit
+  plusieurs chemins par gabarit (`` `${UI}/age01_cell_ui_card_${rarity}_v001.png` ``
+  pour les 6 cadres de rareté, pareil pour les icônes de nav), invisibles à une
+  recherche de chaîne littérale. Compte final vérifié à la main : 15, pas les 11 du
+  plan ni les 3 de l'ancien suivi de dette — écart documenté (et corrigé) dans le
+  pack de connaissances du Projet Claude (`04_HISTORIQUE_ET_DECISIONS.md`), le
+  dépôt gagnant sur la doc en cas de contradiction, comme toujours.
+
+### Phase 3 — les deux décisions à trancher consciemment
+- **Les deux registres de pixel art sont un choix de DA assumé, pas un non-dit** :
+  Cellule (icônes/emblèmes — bâtiments, cartes, portraits, UI) et Walachie (tableaux
+  peints plein cadre pour les décors, créatures libres par-dessus) sont deux
+  grammaires visuelles délibérément différentes, pas une incohérence à corriger.
+  Elles restent reliées par UN motif transversal commun aux deux jeux de prompts
+  PixelLab : la bioluminescence (`STYLE`/`STYLE_DECOR` dans `tools/gen_walachie.py`
+  — "bioluminescent violet magenta and emerald palette" — répond à la palette
+  cyan/lime pulsante de la Cellule côté `tools/gen_portraits.py`/`gen_ui_kit.py`).
+  C'est ce fil commun, pas l'identité de style, qui doit continuer à garantir que
+  les deux mondes se lisent comme un seul jeu vu sous deux angles.
+- **Priorité `WelcomeBackModal` vs `BuildCompleteModal`** : la collision n'était pas
+  qu'un risque théorique. `collectTick` (store.ts) vide déjà `buildCelebrations` au
+  même `set()` que celui qui pose `offlineSummary` lors d'un vrai retour — mais un
+  tick EN DIRECT qui termine un chantier pendant que le rapport de retour est
+  encore affiché (pas encore balayé) ajoute quand même une entrée à
+  `buildCelebrations` pendant que `offlineSummary` reste non nul : les deux modales
+  se montaient alors en même temps, à `z-[60]` identique, l'ordre du DOM plaçant
+  `BuildCompleteModal` visuellement PAR-DESSUS `WelcomeBackModal` — l'inverse de ce
+  que le commentaire du code annonçait déjà ("le rapport de retour passe devant").
+  Tranché en code plutôt que documenté seul, dans `BuildCompleteModal.tsx` :
+  tant que `offlineSummary` est actif, la modale de célébration (rendu ET
+  vibration/son) reste masquée ; elle s'affiche à son propre rythme dès que le
+  rapport de retour est balayé, sans rien perdre puisque `buildCelebrations`
+  n'est jamais vidée par cette suppression, seulement retardée.
+
+### Vérification
+- `npx tsc --noEmit` && `npm run lint` (avertissement préexistant seul,
+  `public/sw.js:15`) && `npm run build` verts après chaque changement significatif,
+  re-vérifiés indépendamment après la délégation du sweep de contraste (jamais fait
+  confiance au rapport du sous-agent sans re-tourner les trois commandes soi-même).
+- `python3 tools/walachie/gen_config.py` relancé après l'ajout de `seve_veins` :
+  diff du JSON généré relu en entier, uniquement les 15 nouveaux champs, aucune
+  dérive de coût/production (doctrine du projet : un JSON généré ne se retouche
+  jamais à la main).
+- Aucune migration de sauvegarde nécessaire (`SAVE_VERSION` inchangé à 20) : tout
+  ce plan est présentation, jamais un changement de `GameState`.
+- Reste ouvert (non traité par ce plan, hors scope) : génération de vraies icônes
+  PixelLab pour Bastion/Dérive (le correctif CSS n'est qu'un pis-aller assumé).

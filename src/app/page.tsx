@@ -4,8 +4,8 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import Link from "next/link";
 import { useEffect } from "react";
+import type { CSSProperties } from "react";
 import { PixelButton } from "@/components/ui/Pixel";
 import { CloudStatus } from "@/components/game/CloudStatus";
 import { portraitSrc } from "@/components/game/ProfileCreate";
@@ -49,7 +49,7 @@ export default function Home() {
 
       <div>
         <h1
-          className="text-5xl font-bold tracking-[0.35em] text-cell-cyan sm:text-7xl"
+          className="font-pixel text-5xl font-bold tracking-[0.35em] text-cell-cyan sm:text-7xl"
           style={{
             textShadow:
               "0 0 24px rgba(109,246,255,0.55), 0 0 80px rgba(109,246,255,0.25)",
@@ -110,16 +110,27 @@ export default function Home() {
       )}
 
       {/* Le second mode de l'application : Walachie (30/07/2026). Sauvegarde et
-          onglet totalement séparés — seul le pont des habitudes les relie. */}
+          onglet totalement séparés — seul le pont des habitudes les relie.
+          Un vrai PixelButton teinté violet (refonte DA 31/07, piste Phase 2
+          n16) plutôt qu'un `<Link>` ad hoc : même poids visuel et même retour
+          tactile (hover/pressed) que CONTINUER — un monde à part entière,
+          pas une extension mineure sans état pressé. */}
       {hasHydrated && (
         <div className="flex flex-col items-center gap-1">
-          <Link
+          <PixelButton
             href="/walachie"
-            className="rounded-lg border border-[#b98cff]/50 bg-[#150b26]/80 px-8 py-2.5 text-xs tracking-widest text-[#b98cff] shadow-[0_0_18px_rgba(185,140,255,0.25)]"
+            className="px-8 py-2.5 text-xs tracking-widest text-walachie-violet"
+            style={
+              {
+                "--btn-border": "rgba(185, 140, 255, 0.5)",
+                "--btn-glow": "rgba(185, 140, 255, 0.35)",
+                "--btn-border-hover": "var(--walachie-violet)",
+              } as CSSProperties
+            }
           >
             ✦ WALACHIE
-          </Link>
-          <span className="text-[10px] text-[#b98cff]/60">
+          </PixelButton>
+          <span className="text-[10px] text-walachie-violet/60">
             L&apos;autre monde : une exoplanète à faire évoluer, du magma au divin.
           </span>
         </div>

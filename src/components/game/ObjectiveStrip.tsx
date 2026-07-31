@@ -21,7 +21,7 @@
    dessiner. */
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Panel, PixelButton, ResourceBar } from "@/components/ui/Pixel";
 import { resourceName } from "@/lib/game/economy";
 import { fmtInt } from "@/lib/game/format";
@@ -44,6 +44,7 @@ import {
   type MilestoneView,
 } from "@/lib/game/milestones";
 import { nextUnlock } from "@/lib/game/progression";
+import { useOverlay } from "@/lib/overlay";
 import { useGame } from "@/lib/game/store";
 import { vibrate } from "@/lib/prefs";
 import { playCue } from "@/lib/audio";
@@ -120,7 +121,7 @@ function StripCell({
 }) {
   return (
     <div className="min-w-0 flex-1">
-      <div className="truncate text-[8px] uppercase tracking-[0.18em] text-cell-teal/45">
+      <div className="truncate text-[8px] uppercase tracking-[0.18em] text-cell-faint">
         {header}
       </div>
       <div className="mt-0.5 flex items-center gap-1">
@@ -152,12 +153,12 @@ function StripCell({
               }}
             />
           </div>
-          <span className="shrink-0 text-[8px] tabular-nums text-cell-teal/55">
+          <span className="shrink-0 text-[8px] tabular-nums text-cell-dim">
             {fmtInt(Math.min(current, target))}/{fmtInt(target)}
           </span>
         </div>
       ) : (
-        <div className="mt-1 text-[8px] text-cell-teal/45">—</div>
+        <div className="mt-1 text-[8px] text-cell-faint">—</div>
       )}
     </div>
   );
@@ -173,6 +174,13 @@ export function ObjectiveStrip() {
   const claimMilestone = useGame((s) => s.claimMilestone);
   const claimDailyObjective = useGame((s) => s.claimDailyObjective);
   const [open, setOpen] = useState(false);
+  // Pagination mobile (refonte lisibilité 31/07, piste Phase 1 n°7) : sur un
+  // écran de 320 px les trois cellules côte à côte tronquaient chaque libellé
+  // à quelques caractères (Miller — trois choses à la fois, mais aucune
+  // lisible). Une seule cellule à la fois + des points de pagination.
+  const [page, setPage] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const wasSwipeRef = useRef(false);
   const now = state.lastTick;
 
   const daily = focusDaily(state, now);
@@ -194,44 +202,109 @@ export function ObjectiveStrip() {
     }
   };
 
+  // Les trois cellules, adressables par index pour la pagination mobile —
+  // même contenu que la rangée sm+ ci-dessous, juste réutilisé deux fois.
+  const cells = [
+    <StripCell
+      key="today"
+      header={`Aujourd'hui ${dailyDone}/${DAILY_CFG.count_per_day}`}
+      icon={daily ? daily.cfg.icon : "☀️"}
+      label={daily ? daily.cfg.label : "Tout est encaissé"}
+      current={daily && !daily.achieved ? daily.current : undefined}
+      target={daily && !daily.achieved ? daily.target : undefined}
+      color="var(--cyan)"
+      claimable={!!daily?.achieved && !daily?.claimed}
+      onClaim={daily ? () => onClaimDaily(daily.cfg.id) : undefined}
+    />,
+    <StripCell
+      key="milestone"
+      header={`Jalon · ${fmtInt(pa)} PA`}
+      icon={focus ? CATEGORY_ICON[focus.cfg.category] : "✦"}
+      label={focus ? focus.cfg.label : "Âge 1 accompli"}
+      current={focus && !focus.achieved ? focus.current : undefined}
+      target={focus && !focus.achieved ? focus.target : undefined}
+      color={focus ? CATEGORY_COLOR[focus.cfg.category] : "var(--magenta)"}
+      claimable={!!focus?.achieved}
+      onClaim={focus ? () => onClaimMilestone(focus.cfg.id) : undefined}
+    />,
+    <StripCell
+      key="next"
+      header="Prochain"
+      icon={unlock ? unlock.icon : "✔"}
+      label={unlock ? unlock.label : "Tout est ouvert"}
+      current={unlock ? unlock.current : undefined}
+      target={unlock ? unlock.target : undefined}
+      color="var(--magenta)"
+    />,
+  ];
+
+  const openTable = () => {
+    // Un swipe qui vient de tourner la page ne doit pas aussi ouvrir le
+    // tableau — sur mobile, un `touchend` déclenche presque toujours un
+    // `click` de synthèse juste après, qu'on annule ici une seule fois.
+    if (wasSwipeRef.current) {
+      wasSwipeRef.current = false;
+      return;
+    }
+    setOpen(true);
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = (e.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 30) return;
+    wasSwipeRef.current = true;
+    setPage((p) => (p + (dx < 0 ? 1 : -1) + cells.length) % cells.length);
+  };
+
   return (
     <>
-      <div onClick={() => setOpen(true)} className="cursor-pointer">
-        <Panel variant="tooltip" className="px-2 py-1.5">
-          <div className="flex items-stretch gap-2">
-            <StripCell
-              header={`Aujourd'hui ${dailyDone}/${DAILY_CFG.count_per_day}`}
-              icon={daily ? daily.cfg.icon : "☀️"}
-              label={daily ? daily.cfg.label : "Tout est encaissé"}
-              current={daily && !daily.achieved ? daily.current : undefined}
-              target={daily && !daily.achieved ? daily.target : undefined}
-              color="var(--cyan)"
-              claimable={!!daily?.achieved && !daily?.claimed}
-              onClaim={daily ? () => onClaimDaily(daily.cfg.id) : undefined}
-            />
-            <div className="w-px shrink-0 bg-cell-teal/15" />
-            <StripCell
-              header={`Jalon · ${fmtInt(pa)} PA`}
-              icon={focus ? CATEGORY_ICON[focus.cfg.category] : "✦"}
-              label={focus ? focus.cfg.label : "Âge 1 accompli"}
-              current={focus && !focus.achieved ? focus.current : undefined}
-              target={focus && !focus.achieved ? focus.target : undefined}
-              color={focus ? CATEGORY_COLOR[focus.cfg.category] : "var(--magenta)"}
-              claimable={!!focus?.achieved}
-              onClaim={focus ? () => onClaimMilestone(focus.cfg.id) : undefined}
-            />
-            <div className="w-px shrink-0 bg-cell-teal/15" />
-            <StripCell
-              header="Prochain"
-              icon={unlock ? unlock.icon : "✔"}
-              label={unlock ? unlock.label : "Tout est ouvert"}
-              current={unlock ? unlock.current : undefined}
-              target={unlock ? unlock.target : undefined}
-              color="var(--magenta)"
-            />
+      <Panel variant="tooltip" className="px-2 py-1.5">
+        {/* sm+ : les trois cellules côte à côte, inchangé — assez de largeur
+            pour que rien ne soit tronqué. */}
+        <div onClick={() => setOpen(true)} className="hidden cursor-pointer items-stretch gap-2 sm:flex">
+          {cells[0]}
+          <div className="w-px shrink-0 bg-cell-teal/15" />
+          {cells[1]}
+          <div className="w-px shrink-0 bg-cell-teal/15" />
+          {cells[2]}
+        </div>
+
+        {/* Mobile : une cellule à la fois, tap sur les points ou glissement
+            pour changer, tap sur la cellule pour ouvrir le tableau complet. */}
+        <div
+          className="cursor-pointer sm:hidden"
+          onClick={openTable}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          {cells[page]}
+          <div className="mt-1.5 flex items-center justify-center gap-1.5">
+            {cells.map((_, i) => (
+              <button
+                key={i}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPage(i);
+                }}
+                aria-label={`Objectif ${i + 1} sur ${cells.length}`}
+                aria-current={i === page}
+                className="tap h-4 w-4 shrink-0 rounded-full"
+              >
+                <span
+                  className={`mx-auto block h-1.5 w-1.5 rounded-full transition ${
+                    i === page ? "bg-cell-cyan" : "bg-cell-teal/25"
+                  }`}
+                />
+              </button>
+            ))}
           </div>
-        </Panel>
-      </div>
+        </div>
+      </Panel>
 
       {open && <MilestonesPanel onClose={() => setOpen(false)} />}
     </>
@@ -252,9 +325,9 @@ function DailyCard({ v, onClaim }: { v: DailyObjectiveView; onClaim: (id: string
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className="truncate text-[12px] text-cell-cyan">{v.cfg.label}</span>
-            <span className="ml-auto shrink-0 text-[9px] text-cell-teal/45">aujourd&apos;hui</span>
+            <span className="ml-auto shrink-0 text-[9px] text-cell-faint">aujourd&apos;hui</span>
           </div>
-          <p className="mt-0.5 text-[10px] leading-snug text-cell-teal/60">{v.cfg.hint}</p>
+          <p className="mt-0.5 text-[10px] leading-snug text-cell-dim">{v.cfg.hint}</p>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <ResourceBar
               value={v.current}
@@ -263,7 +336,7 @@ function DailyCard({ v, onClaim }: { v: DailyObjectiveView; onClaim: (id: string
               width={130}
               label={`${fmtInt(Math.min(v.current, v.target))} / ${fmtInt(v.target)}`}
             />
-            <span className={`text-[10px] ${claimable ? "text-cell-lime" : "text-cell-teal/50"}`}>
+            <span className={`text-[10px] ${claimable ? "text-cell-lime" : "text-cell-faint"}`}>
               {rewardText(v.cfg.reward)}
             </span>
           </div>
@@ -288,6 +361,11 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
   const state = useGame((s) => s);
   const claimMilestone = useGame((s) => s.claimMilestone);
   const claimDailyObjective = useGame((s) => s.claimDailyObjective);
+  // Manquait entièrement (refonte lisibilité 31/07, piste Phase 1 n°11) : ce
+  // tableau plein écran n'était gouverné par aucun `useOverlay`, ni le sien ni
+  // celui d'un parent — le retour Android le traversait tout droit jusqu'à
+  // quitter la PWA, et le fond défilait dessous.
+  const dialogRef = useOverlay<HTMLDivElement>(true, onClose);
   const now = state.lastTick;
 
   const dailies = dailyViews(state, now);
@@ -310,14 +388,20 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      className="fixed inset-0 z-30 overflow-y-auto bg-abyss/95 backdrop-blur-sm outline-none"
+    >
       <div className="mx-auto max-w-md space-y-2 pb-nav pt-safe px-2 sm:max-w-2xl">
         <div className="flex items-center gap-3">
-          <h1 className="flex-1 text-base uppercase tracking-[0.3em] text-cell-cyan">Objectifs</h1>
+          <h1 className="font-pixel flex-1 text-base uppercase tracking-[0.3em] text-cell-cyan">Objectifs</h1>
           <button
             onClick={onClose}
             aria-label="Fermer"
-            className="px-3 py-2 text-base text-cell-teal/70 hover:text-cell-cyan"
+            className="px-3 py-2 text-base text-cell-dim hover:text-cell-cyan"
           >
             ✕
           </button>
@@ -330,7 +414,7 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
           <span className="text-[10px] uppercase tracking-[0.25em] text-cell-cyan/70">
             Objectifs du jour
           </span>
-          <span className="text-[9px] text-cell-teal/50">
+          <span className="text-[9px] text-cell-faint">
             trois nouveaux chaque jour à minuit
           </span>
         </div>
@@ -349,11 +433,11 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
         {/* Compteur global : la seule mesure honnête de « où j'en suis » dans l'Âge 1. */}
         <Panel variant="noyau" className="p-2.5">
           <div className="flex items-baseline gap-2">
-            <span className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">
+            <span className="text-[10px] uppercase tracking-[0.25em] text-cell-faint">
               Points d&apos;Âge
             </span>
             <span className="ml-auto text-sm text-cell-magenta">
-              {fmtInt(pa)} <span className="text-[10px] text-cell-teal/50">/ {fmtInt(TOTAL_AGE_POINTS)}</span>
+              {fmtInt(pa)} <span className="text-[10px] text-cell-faint">/ {fmtInt(TOTAL_AGE_POINTS)}</span>
             </span>
           </div>
           {/* Barre pleine largeur : ResourceBar est calibrée en px fixes, ce qui
@@ -367,14 +451,14 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
                 }}
               />
             </div>
-            <span className="shrink-0 text-[9px] text-cell-teal/50">
+            <span className="shrink-0 text-[9px] text-cell-faint">
               {done}/{views.length} jalons
             </span>
           </div>
           {/* Une barre honnête vaut mieux qu'une barre flatteuse (amélioration n°5) :
               on dit aussi ce qu'il RESTE, pas seulement le total. Depuis que serie_90
               est descendu à 60 jours, chaque point est réellement atteignable. */}
-          <p className="mt-1.5 text-[10px] leading-relaxed text-cell-teal/60">
+          <p className="mt-1.5 text-[10px] leading-relaxed text-cell-dim">
             Encore {fmtInt(TOTAL_AGE_POINTS - pa)} PA à encaisser. L&apos;Âge 1 s&apos;achève
             quand tous les jalons sont réclamés — chaque jalon se déclenche tout seul, il
             n&apos;y a rien à activer, seulement à encaisser.
@@ -396,12 +480,12 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="truncate text-[12px] text-cell-cyan">{v.cfg.label}</span>
-                    <span className="ml-auto shrink-0 text-[9px] text-cell-teal/45">
+                    <span className="ml-auto shrink-0 text-[9px] text-cell-faint">
                       {CATEGORY_LABEL[v.cfg.category]} · {v.cfg.age_points} PA
                     </span>
                   </div>
 
-                  <p className="mt-0.5 text-[10px] leading-snug text-cell-teal/60">{v.cfg.hint}</p>
+                  <p className="mt-0.5 text-[10px] leading-snug text-cell-dim">{v.cfg.hint}</p>
 
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <ResourceBar
@@ -412,7 +496,7 @@ function MilestonesPanel({ onClose }: { onClose: () => void }) {
                       label={progressText(v)}
                     />
                     <span
-                      className={`text-[10px] ${claimable ? "text-cell-lime" : "text-cell-teal/50"}`}
+                      className={`text-[10px] ${claimable ? "text-cell-lime" : "text-cell-faint"}`}
                     >
                       {rewardText(v.cfg.reward)}
                     </span>

@@ -82,7 +82,7 @@ function MiniBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`${wide ? "px-3" : "w-8"} h-8 rounded-md border text-xs transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-30 ${
+      className={`tap ${wide ? "px-3" : "w-8"} h-8 rounded-md border text-xs transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-30 ${
         active
           ? "border-cell-lime/70 bg-cell-lime/15 text-cell-lime"
           : "border-cell-cyan/40 bg-membrane text-cell-cyan"
@@ -127,7 +127,7 @@ function HabitRow({
     controls = (
       <div className="space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-14 shrink-0 text-[10px] text-cell-teal/60">Dépensé</span>
+          <span className="w-14 shrink-0 text-[10px] text-cell-dim">Dépensé</span>
           <input
             type="number"
             step={100}
@@ -138,10 +138,10 @@ function HabitRow({
             onChange={(e) => patch({ caloriesBurned: Number(e.target.value) || 0 })}
             className="w-24 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-center text-xs text-white outline-none focus:border-cell-cyan"
           />
-          <span className="text-[10px] text-cell-teal/60">kcal</span>
+          <span className="text-[10px] text-cell-dim">kcal</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-14 shrink-0 text-[10px] text-cell-teal/60">Mangé</span>
+          <span className="w-14 shrink-0 text-[10px] text-cell-dim">Mangé</span>
           <input
             type="number"
             step={100}
@@ -152,11 +152,11 @@ function HabitRow({
             onChange={(e) => patch({ caloriesEaten: Number(e.target.value) || 0 })}
             className="w-24 rounded-md border border-cell-cyan/40 bg-abyss px-2 py-1 text-center text-xs text-white outline-none focus:border-cell-cyan"
           />
-          <span className="text-[10px] text-cell-teal/60">kcal</span>
+          <span className="text-[10px] text-cell-dim">kcal</span>
         </div>
         {palier && (
           <p
-            className={`text-[10px] ${palier === "surplus excessif" ? "text-red-400" : "text-cell-teal/60"}`}
+            className={`text-[10px] ${palier === "surplus excessif" ? "text-red-400" : "text-cell-dim"}`}
           >
             Écart {diff > 0 ? "+" : ""}
             {diff} kcal ({palier})
@@ -188,7 +188,7 @@ function HabitRow({
             sur les deux postes de travail le 26/07. */}
         <span className="min-w-14 text-center text-xs text-white">
           {entry[id]} / {def.capItems}
-          {def.unitShort ? <span className="text-cell-teal/60"> {def.unitShort}</span> : null}
+          {def.unitShort ? <span className="text-cell-dim"> {def.unitShort}</span> : null}
         </span>
         <MiniBtn
           disabled={entry[id] >= (def.capItems ?? Infinity)}
@@ -219,12 +219,12 @@ function HabitRow({
             draggable={false}
           />
         )}
-        <span className={`text-xs ${energy > 0 ? "text-cell-lime" : energy < 0 ? "text-red-400" : "text-cell-teal/50"}`}>
+        <span className={`text-xs ${energy > 0 ? "text-cell-lime" : energy < 0 ? "text-red-400" : "text-cell-faint"}`}>
           {energy > 0 ? "+" : ""}
           {energy} ⚡
         </span>
       </div>
-      <p className="mb-2 text-[10px] leading-4 text-cell-teal/60">{def.desc}</p>
+      <p className="mb-2 text-[10px] leading-4 text-cell-dim">{def.desc}</p>
       {controls}
     </div>
   );
@@ -256,12 +256,12 @@ function PiliersRow({ entry, calorieGoal }: { entry: HabitDayEntry; calorieGoal:
           >
             <span className={`text-sm ${ok ? "" : "opacity-40"}`}>{p.icon}</span>
             <span
-              className={`text-[9px] leading-3 ${ok ? "text-cell-lime" : "text-cell-teal/50"}`}
+              className={`text-[9px] leading-3 ${ok ? "text-cell-lime" : "text-cell-faint"}`}
             >
               {p.name}
             </span>
             {defs.length > 1 && (
-              <span className="text-[8px] leading-3 text-cell-teal/45">
+              <span className="text-[8px] leading-3 text-cell-faint">
                 {defs.map((d) => d.icon).join(" ou ")}
               </span>
             )}
@@ -310,7 +310,7 @@ function DayStrip({
             ? "border-amber-400/50 bg-amber-400/10 text-amber-300"
             : validated
               ? "border-cell-lime/50 bg-cell-lime/10 text-cell-lime"
-              : "border-cell-cyan/15 bg-abyss/40 text-cell-teal/55";
+              : "border-cell-cyan/15 bg-abyss/40 text-cell-dim";
         const state = isGrace
           ? "rattrapée par la grâce"
           : validated && isLate
@@ -407,9 +407,24 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
         key={k}
         title={label}
         aria-label={label}
-        className={`h-3 w-3 rounded-[2px] ${isToday ? "ring-1 ring-cell-cyan" : ""}`}
+        className={`relative h-3 w-3 rounded-[2px] ${isToday ? "ring-1 ring-cell-cyan" : ""}`}
         style={cellStyle(energy, validated, isGrace, isLate, isPerfect)}
-      />,
+      >
+        {/* Second canal pour la journée parfaite (piste Phase 1 n°9) : jusqu'ici
+            elle ne se distinguait du palier d'énergie le plus haut que par une
+            légère lueur en box-shadow, à peine visible sur une case de 12 px —
+            un signal de LUMINOSITÉ seule. Une forme (l'étoile) est un second
+            canal indépendant de la couleur (dual-coding, Paivio) : elle reste
+            lisible même écrasée par les autres cases du dégradé vert. */}
+        {isPerfect && (
+          <span
+            aria-hidden
+            className="absolute inset-0 flex items-center justify-center text-[6px] leading-none text-abyss"
+          >
+            ✦
+          </span>
+        )}
+      </div>,
     );
   }
 
@@ -427,7 +442,7 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
         <span className="text-[10px] uppercase tracking-[0.2em] text-cell-cyan/70">
           {HISTORY_DAYS} derniers jours
         </span>
-        <span className="text-[10px] text-cell-teal/60">
+        <span className="text-[10px] text-cell-dim">
           {held} jours tenus · {perfect} parfaits
           {lateCount > 0 ? ` · ${lateCount} après coup` : ""}
         </span>
@@ -438,7 +453,7 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
       >
         {cells}
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-[9px] text-cell-teal/50">
+      <div className="flex flex-wrap items-center gap-2 text-[9px] text-cell-faint">
         <span>Moins</span>
         {TINT_STEPS.map((f) => (
           <span
@@ -448,9 +463,13 @@ function HistoryGrid({ habits, todayKey }: { habits: HabitsState; todayKey: stri
           />
         ))}
         <span
-          className="h-2.5 w-2.5 rounded-[2px]"
+          className="relative h-2.5 w-2.5 rounded-[2px]"
           style={cellStyle(MAX_DAY_ENERGY, 1, false, false, true)}
-        />
+        >
+          <span aria-hidden className="absolute inset-0 flex items-center justify-center text-[5px] leading-none text-abyss">
+            ✦
+          </span>
+        </span>
         <span>Parfaite</span>
         <span className="ml-2 flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-[2px]" style={cellStyle(0, 0, true)} />
@@ -487,7 +506,7 @@ function TierLadder({ streak, awards }: { streak: number; awards: Record<string,
                 ? "border-cell-lime/50 bg-cell-lime/10 text-cell-lime"
                 : isNext
                   ? "border-cell-magenta/60 bg-cell-magenta/10 text-cell-magenta"
-                  : "border-cell-cyan/15 text-cell-teal/45"
+                  : "border-cell-cyan/15 text-cell-faint"
             }`}
           >
             <div className="text-[11px] leading-none">{t.days} j</div>
@@ -565,12 +584,12 @@ function BilanBlock({ onGoto }: { onGoto?: (panel: "bastion" | "derive") => void
         <span className="text-2xl">🌙</span>
         <div className="min-w-0 flex-1">
           <h2 className="text-xs uppercase tracking-[0.25em] text-cell-magenta">Bilan du soir</h2>
-          <p className="text-[10px] text-cell-teal/60">
+          <p className="text-[10px] text-cell-dim">
             {status.catchup ? `rattrapage de la journée du ${status.day}` : `journée du ${status.day}`}
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-[9px] uppercase tracking-widest text-cell-teal/50">Percées</div>
+          <div className="text-[9px] uppercase tracking-widest text-cell-faint">Percées</div>
           <div className="text-sm text-cell-magenta">
             {status.percees} / {status.maxStock}
           </div>
@@ -604,13 +623,13 @@ function BilanBlock({ onGoto }: { onGoto?: (panel: "bastion" | "derive") => void
           </PixelButton>
         </div>
       ) : (
-        <p className="text-[11px] leading-4 text-cell-teal/60">{bilanReasonText(status, hour)}</p>
+        <p className="text-[11px] leading-4 text-cell-dim">{bilanReasonText(status, hour)}</p>
       )}
 
       {/* Les emplois d'une Percée. Toujours affichés, même à zéro : c'est la carte du
           menu, elle donne une raison de tenir la journée avant même de l'avoir tenue. */}
       <div className="space-y-1.5 pt-1">
-        <p className="text-[9px] uppercase tracking-[0.2em] text-cell-teal/50">
+        <p className="text-[9px] uppercase tracking-[0.2em] text-cell-faint">
           Ce qu&apos;une Percée déclenche
         </p>
         {BILAN_OPTIONS.map((opt) => {
@@ -633,7 +652,7 @@ function BilanBlock({ onGoto }: { onGoto?: (panel: "bastion" | "derive") => void
                     · {opt.cost} Percée{opt.cost > 1 ? "s" : ""}
                   </span>
                 </p>
-                <p className="text-[10px] leading-4 text-cell-teal/60">{bilanOptionDesc(opt)}</p>
+                <p className="text-[10px] leading-4 text-cell-dim">{bilanOptionDesc(opt)}</p>
               </div>
               {venue === "ici" ? (
                 <button
@@ -680,7 +699,7 @@ function BilanBlock({ onGoto }: { onGoto?: (panel: "bastion" | "derive") => void
             <p className="text-[11px] leading-4 text-cell-lime">
               +{status.bonusSorties} sorties gratuites demain
             </p>
-            <p className="text-[10px] leading-4 text-cell-teal/60">
+            <p className="text-[10px] leading-4 text-cell-dim">
               Une Percée fait passer un cap d&apos;un coup : une vague hors norme, un antre, ou
               une poussée de production.
             </p>
@@ -784,10 +803,10 @@ export function HabitsPanel({
         <div className="flex items-center gap-3">
           <span className="text-3xl">🧬</span>
           <div className="flex-1">
-            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">
+            <h1 className="font-pixel text-base uppercase tracking-[0.3em] text-cell-cyan">
               {isToday ? "Habitudes du jour" : "Habitudes"}
             </h1>
-            <p className="text-[11px] text-cell-teal/60">
+            <p className="text-[11px] text-cell-dim">
               {editing} —{" "}
               {isToday ? "modifiable jusqu'à minuit" : "journée notée après coup"} ·{" "}
               {piliersOk}/{PILIERS.length} piliers
@@ -796,7 +815,7 @@ export function HabitsPanel({
           <button
             onClick={onClose}
             aria-label="Fermer"
-            className="px-3 py-2 text-base text-cell-teal/70 hover:text-cell-cyan"
+            className="px-3 py-2 text-base text-cell-dim hover:text-cell-cyan"
           >
             ✕
           </button>
@@ -814,7 +833,7 @@ export function HabitsPanel({
                   ? "border-cell-lime/50 bg-cell-lime/10 text-cell-lime"
                   : streak > 0
                     ? "border-amber-400/60 bg-amber-400/10 text-amber-300"
-                    : "border-cell-teal/25 text-cell-teal/50"
+                    : "border-cell-teal/25 text-cell-faint"
               }`}
             >
               <span className="text-lg leading-none">🔥</span>
@@ -836,7 +855,7 @@ export function HabitsPanel({
                       style={{ width: `${Math.round(progress * 100)}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-cell-teal/60">
+                  <p className="text-[10px] text-cell-dim">
                     Palier {next.days} j : +{next.energy} ⚡ — encore {next.days - streak} jour
                     {next.days - streak > 1 ? "s" : ""}
                   </p>
@@ -848,7 +867,7 @@ export function HabitsPanel({
               )}
             </div>
             <div className="shrink-0 text-right">
-              <div className="text-[9px] uppercase tracking-widest text-cell-teal/50">Record</div>
+              <div className="text-[9px] uppercase tracking-widest text-cell-faint">Record</div>
               <div className="text-sm text-cell-cyan">{habits.bestStreak} j</div>
             </div>
           </div>
@@ -875,7 +894,7 @@ export function HabitsPanel({
               </button>
             </div>
           ) : (
-            <p className="text-[10px] text-cell-teal/50">
+            <p className="text-[10px] text-cell-faint">
               Filet de sécurité : {STREAK_GRACE.per_month} jour de grâce par mois
               {graceLeft ? " — disponible" : " — déjà utilisé ce mois-ci"}. Il répare un oubli isolé
               de moins de {STREAK_GRACE.max_age_days} jours.
@@ -892,7 +911,7 @@ export function HabitsPanel({
               mettre plus haut ferait croire que tout le panneau change de date
               (la série, elle, parle toujours d'aujourd'hui). */}
           <DayStrip habits={habits} todayKey={key} selected={editing} onSelect={selectDay} />
-          <p className="mt-1 mb-2 text-[9px] leading-3 text-cell-teal/50">
+          <p className="mt-1 mb-2 text-[9px] leading-3 text-cell-faint">
             Pas eu le temps de noter un jour ? Les {SAISIE_WINDOW_DAYS} derniers jours restent
             ouverts.
           </p>
@@ -921,7 +940,7 @@ export function HabitsPanel({
               {entry.energy >= 0 ? "+" : ""}
               {entry.energy} ⚡ {isToday ? "aujourd'hui" : "ce jour-là"}
             </span>
-            <span className="text-[10px] text-cell-teal/60">
+            <span className="text-[10px] text-cell-dim">
               journée parfaite = les {PILIERS.length} piliers
             </span>
           </div>

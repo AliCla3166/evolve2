@@ -1,7 +1,8 @@
-/* Comportement commun à TOUS les panneaux et modales du jeu (piste 10).
+/* Comportement commun à TOUS les panneaux et modales du jeu (piste 10, puis
+   refonte lisibilité 31/07 — piste Phase 1 n°11).
 
-   Deux manques signalés par le diagnostic, sans rapport apparent mais qui se
-   règlent au même endroit — au moment où un overlay s'ouvre :
+   Trois manques signalés, sans rapport apparent mais qui se règlent au même
+   endroit — au moment où un overlay s'ouvre :
 
    1. Le bouton retour d'Android quittait le jeu. Aucun `popstate` n'était
       écouté : avec un panneau plein écran ouvert, le réflexe n°1 d'un joueur
@@ -13,7 +14,20 @@
       bas d'un panneau faisait glisser la page en dessous, et le joueur
       retrouvait la base à un autre endroit en refermant.
 
-   Un seul `useOverlay(open, close)` par overlay suffit. */
+   3. (31/07) Rien ne posait le focus DANS l'overlay à l'ouverture, ni ne le
+      rendait à son point de départ à la fermeture — un clavier ou un lecteur
+      d'écran qui ouvrait un panneau restait sur le bouton qui l'a ouvert,
+      SOUS l'overlay, et Tab s'évadait vers la nav basse en dessous. Et rien
+      ne bornait Tab À L'INTÉRIEUR de l'overlay, qui n'avait donc aucun piège
+      de focus. Corrigé au même endroit que 1 et 2, sur le sommet de la MÊME
+      pile : quand un inspecteur s'ouvre par-dessus un panneau (fiche de slot
+      du Bastion, fiche de bâtiment), seul le sommet capte Tab — exactement
+      la même règle que `handlePop` applique déjà au retour système, pour
+      qu'il n'y ait jamais deux overlays qui se disputent la même touche.
+
+   Un seul `useOverlay(open, close)` par overlay suffit ; il renvoie une ref à
+   poser sur le conteneur racine (`role="dialog"`, `aria-modal="true"`,
+   `tabIndex={-1}` — voir CodexPanel.tsx pour l'exemple le plus simple). */
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -31,6 +45,8 @@ interface OverlayEntry {
   token: number;
   close: () => void;
   closedByBack: boolean;
+  /** Conteneur DOM de CET overlay — sert au piège de focus (n°3). */
+  ref: { current: HTMLElement | null };
 }
 
 /** Pile des overlays ouverts, du plus ancien au plus récent. */
@@ -61,8 +77,42 @@ function handlePop() {
   top.close();
 }
 
-/** Le retour système ferme l'overlay au lieu de quitter l'application. */
-export function useBackDismiss(open: boolean, close: () => void) {
+/** Piège de focus (n°3) : Tab/Shift+Tab bouclent parmi les seuls éléments
+ *  focusables du SOMMET de la pile. Un écouteur global, comme `handlePop` et
+ *  pour la même raison — deux overlays empilés ne doivent jamais se disputer
+ *  la même touche. Les éléments du dessous restent dans le DOM (l'overlay du
+ *  dessus ne les démonte pas) mais Tab ne doit plus pouvoir y atterrir tant
+ *  qu'un autre overlay est au-dessus. */
+function handleTabTrap(e: KeyboardEvent) {
+  if (e.key !== "Tab") return;
+  const top = stack[stack.length - 1];
+  const container = top?.ref.current;
+  if (!container) return;
+  const focusables = Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+  if (focusables.length === 0) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+/** Le retour système ferme l'overlay au lieu de quitter l'application, ET
+ *  gère le focus (n°3) — même pile, même jeton, pour rester exactement
+ *  synchronisés sur ce qui est réellement ouvert. Renvoie une ref à poser sur
+ *  le conteneur racine de l'overlay (`role="dialog"`, `tabIndex={-1}`). */
+export function useBackDismiss<T extends HTMLElement = HTMLDivElement>(
+  open: boolean,
+  close: () => void,
+) {
   /* `close` est souvent une closure recréée à chaque rendu : on la garde dans
      une ref pour que l'effet ne se rejoue pas (et ne réempile pas d'entrée)
      à chaque rendu. La ref est synchronisée dans un effet, pas pendant le
@@ -72,22 +122,36 @@ export function useBackDismiss(open: boolean, close: () => void) {
     closeRef.current = close;
   }, [close]);
 
+  const containerRef = useRef<T | null>(null);
+  /** Élément qui avait le focus juste avant l'ouverture — pour le lui rendre
+   *  à la fermeture, où qu'elle vienne (croix, voile, retour système). */
+  const restoreRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const entry: OverlayEntry = {
       token: ++seq,
       close: () => closeRef.current(),
       closedByBack: false,
+      ref: containerRef,
     };
     stack.push(entry);
     if (!listening) {
       window.addEventListener("popstate", handlePop);
-      listening = true; // jamais retiré : un écouteur passif unique pour la session.
+      window.addEventListener("keydown", handleTabTrap);
+      listening = true; // jamais retiré : des écouteurs passifs uniques pour la session.
     }
     // Même URL, donc aucune navigation Next : on n'empile qu'un état.
     window.history.pushState({ evolveOverlay: entry.token }, "");
 
+    // Focus initial sur le conteneur lui-même : sans ça, le focus resterait
+    // sur le bouton qui vient d'ouvrir le panneau, SOUS l'overlay. Un `rAF`
+    // laisse le DOM du panneau se poser avant de le déplacer.
+    restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const raf = requestAnimationFrame(() => containerRef.current?.focus());
+
     return () => {
+      cancelAnimationFrame(raf);
       const i = stack.lastIndexOf(entry);
       if (i >= 0) stack.splice(i, 1);
       /* Fermeture par l'interface (croix, voile, onglet) : on retire notre
@@ -108,8 +172,16 @@ export function useBackDismiss(open: boolean, close: () => void) {
           window.history.back();
         }
       }
+      // Restauration du focus — seulement si la cible est encore attachée au
+      // DOM (elle peut avoir disparu : fermeture depuis un autre chemin, ou
+      // le bouton qui a ouvert le panneau ne s'y affiche plus).
+      if (restoreRef.current && document.contains(restoreRef.current)) {
+        restoreRef.current.focus();
+      }
     };
   }, [open]);
+
+  return containerRef;
 }
 
 /** Empêche l'arrière-plan de défiler tant qu'un overlay est ouvert. */
@@ -125,10 +197,16 @@ export function useScrollLock(locked: boolean) {
   }, [locked]);
 }
 
-/** Les deux d'un coup — ce qu'appellent tous les overlays du jeu. */
-export function useOverlay(open: boolean, close: () => void) {
-  useBackDismiss(open, close);
+/** Les trois d'un coup — ce qu'appellent tous les overlays du jeu. Renvoie la
+ *  ref à poser sur le conteneur racine :
+ *
+ *    const dialogRef = useOverlay<HTMLDivElement>(true, onClose);
+ *    <div ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1} ...>
+ */
+export function useOverlay<T extends HTMLElement = HTMLDivElement>(open: boolean, close: () => void) {
+  const containerRef = useBackDismiss<T>(open, close);
   useScrollLock(open);
+  return containerRef;
 }
 
 /** Défilement doux, sauf si le joueur a demandé moins d'animations. */

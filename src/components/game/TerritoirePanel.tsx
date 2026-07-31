@@ -123,7 +123,7 @@ function Stepper({
     <span className="inline-flex items-center gap-1">
       <button
         onClick={() => onChange(Math.max(0, value - 1))}
-        className="h-6 w-6 rounded border border-cell-cyan/40 text-xs text-cell-cyan disabled:opacity-30"
+        className="tap flex items-center justify-center rounded border border-cell-cyan/40 text-xs text-cell-cyan disabled:opacity-30"
         disabled={value <= 0}
       >
         −
@@ -131,7 +131,7 @@ function Stepper({
       <span className="w-7 text-center text-xs text-white">{value}</span>
       <button
         onClick={() => onChange(Math.min(max, value + 1))}
-        className="h-6 w-6 rounded border border-cell-cyan/40 text-xs text-cell-cyan disabled:opacity-30"
+        className="tap flex items-center justify-center rounded border border-cell-cyan/40 text-xs text-cell-cyan disabled:opacity-30"
         disabled={value >= max}
       >
         +
@@ -172,14 +172,14 @@ function RelaisCard({ destId }: { destId: string }) {
         <span className="text-xl leading-none">🧭</span>
         <div className="min-w-0 flex-1">
           <div className="text-sm tracking-wide text-cell-cyan">{offer.destName}</div>
-          <div className="text-[11px] text-cell-teal/70">
+          <div className="text-[11px] text-cell-dim">
             Relais du jour · rang {offer.tier} · {expeditionDurationH(state, offer.durationH)} h
             aller-retour
           </div>
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-cell-cyan/15 pt-2 text-[11px] text-cell-teal/70">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-cell-cyan/15 pt-2 text-[11px] text-cell-dim">
         <span>risque {Math.round(offer.risk * 100)} %</span>
         <span>difficulté {offer.difficulty}</span>
         <span className="flex items-center gap-1">
@@ -199,7 +199,7 @@ function RelaisCard({ destId }: { destId: string }) {
           <p className="text-cell-lime">
             Escouade en mer — retour dans {fmtDuration(Math.max(0, inFlight.endsAt - now))}
           </p>
-          <p className="text-cell-teal/60">
+          <p className="text-cell-dim">
             {UNIT_IDS.filter((u) => inFlight.squad[u] > 0)
               .map((u) => `${inFlight.squad[u]}× ${unitConfig(u).name}`)
               .join(" · ")}
@@ -211,7 +211,7 @@ function RelaisCard({ destId }: { destId: string }) {
             <div key={u} className="flex items-center justify-between text-[11px]">
               <span className="text-cell-teal/80">
                 {unitConfig(u).icon} {unitConfig(u).name}
-                <span className="text-cell-teal/50"> · {avail[u]} dispo</span>
+                <span className="text-cell-faint"> · {avail[u]} dispo</span>
               </span>
               <Stepper
                 value={squad[u]}
@@ -221,7 +221,7 @@ function RelaisCard({ destId }: { destId: string }) {
             </div>
           ))}
           {(cardBonus.exp > 0 || cardBonus.atk > 0) && (
-            <p className="text-[10px] text-cell-teal/60">
+            <p className="text-[10px] text-cell-dim">
               🃏 Cartes assignées : +{cardBonus.exp} exploration · +{cardBonus.atk} assaut
             </p>
           )}
@@ -242,12 +242,12 @@ function RelaisCard({ destId }: { destId: string }) {
             </PixelButton>
           </div>
           {slotsFree <= 0 && (
-            <p className="text-[10px] text-cell-teal/50">
+            <p className="text-[10px] text-cell-faint">
               Toutes tes escouades sont déjà en mer.
             </p>
           )}
           {UNIT_IDS.every((u) => avail[u] === 0) && (
-            <p className="text-[10px] text-cell-teal/50">
+            <p className="text-[10px] text-cell-faint">
               Aucune unité disponible — recrute au Noyau, sur la fiche du bâtiment.
             </p>
           )}
@@ -307,7 +307,7 @@ function CrewSection({ foyer }: { foyer: FoyerDef }) {
           ⛏️ Équipage — {used}/{slots} poste{slots > 1 ? "s" : ""}
           {crew.length > used && ` (+${crew.length - used} sans place)`}
         </span>
-        <span className={mult > 1 ? "text-cell-lime" : "text-cell-teal/50"}>
+        <span className={mult > 1 ? "text-cell-lime" : "text-cell-faint"}>
           rendement ×{mult.toFixed(2).replace(".", ",")}
         </span>
       </div>
@@ -365,19 +365,19 @@ function CrewSection({ foyer }: { foyer: FoyerDef }) {
         </button>
       )}
       {!full && libres.length === 0 && (
-        <p className="text-[10px] text-cell-teal/50">
+        <p className="text-[10px] text-cell-faint">
           Aucune créature libre — pêche à La Mare, ou libère une carte de la défense.
         </p>
       )}
       {!full && verrouillees > 0 && (
-        <p className="text-[10px] text-cell-teal/50">
+        <p className="text-[10px] text-cell-faint">
           🔒 {verrouillees} espèce{verrouillees > 1 ? "s" : ""}{" "}
           verrouillée{verrouillees > 1 ? "s" : ""} — il en faut une 2ᵉ prise pour avoir le
           droit de la mettre au travail.
         </p>
       )}
       {full && (
-        <p className="text-[10px] text-cell-teal/50">
+        <p className="text-[10px] text-cell-faint">
           Gisement au complet. Développe-le pour ouvrir un poste de plus — ou pose une
           créature négative, qui n&apos;occupe aucune place.
         </p>
@@ -407,7 +407,7 @@ function CrewSection({ foyer }: { foyer: FoyerDef }) {
                 />
                 <span className="min-w-0 flex-1 truncate text-[11px] text-white/85">
                   {sp.name}
-                  <span className="text-cell-teal/50"> nv{cardLevel(entry.count)}</span>
+                  <span className="text-cell-faint"> nv{cardLevel(entry.count)}</span>
                 </span>
                 <span className="shrink-0 text-[10px] text-cell-lime">
                   +{Math.round(creatureRecolteBonus(id, entry) * 100)} %
@@ -478,7 +478,7 @@ function FoyerCard({
           <div className="text-sm tracking-wide" style={{ color: nat.color }}>
             {foyer.name}
           </div>
-          <div className="text-[11px] text-cell-teal/70">
+          <div className="text-[11px] text-cell-dim">
             {nat.name} · palier {target}
             {taken && (reprises > 0 ? ` · ${reprises}e reconquête` : " · capturé")}
             {!taken && !open && " · secteur verrouillé"}
@@ -540,7 +540,7 @@ function FoyerCard({
               </p>
             )}
             {taken && dev === devSoftCap() && (
-              <p className="text-cell-teal/60">
+              <p className="text-cell-dim">
                 Paliers calibrés atteints — au-delà, chaque niveau creuse la veine et
                 enrichit le butin de reconquête.
               </p>
@@ -578,7 +578,7 @@ function FoyerCard({
         )}
 
         {foyer.nature === "antre" && (
-          <p className="text-cell-teal/70">
+          <p className="text-cell-dim">
             {foyer.boss_name} · butin ×{TERRITOIRE_ANTRES.loot_mult} ·{" "}
             {TERRITOIRE_ANTRES.fragments} fragments de carte
           </p>
@@ -614,7 +614,7 @@ function FoyerCard({
                 des passages), il paie en butin. Il faut le dire, sinon le joueur
                 croit risquer sa conquête. */}
             {reprise && repriseLoot && (
-              <div className="mt-1 space-y-0.5 text-[10px] leading-relaxed text-cell-teal/70">
+              <div className="mt-1 space-y-0.5 text-[10px] leading-relaxed text-cell-dim">
                 <p className="text-center">
                   Le foyer reste tien — tu le redéfies plus haut, pour le butin.
                 </p>
@@ -634,13 +634,13 @@ function FoyerCard({
               </div>
             )}
             {needsPercee && (
-              <p className="mt-1 text-center text-[10px] text-cell-teal/60">
+              <p className="mt-1 text-center text-[10px] text-cell-dim">
                 Un antre coûte une Percée — tu en as {percees}.
               </p>
             )}
           </>
         ) : (
-          <p className="text-center text-[11px] text-cell-teal/60">
+          <p className="text-center text-[11px] text-cell-dim">
             Ce secteur s&apos;ouvre au palier {sector?.unlock_palier ?? 0}.
           </p>
         )}
@@ -721,8 +721,8 @@ export function TerritoirePanel({
             draggable={false}
           />
           <div className="flex-1">
-            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">La Dérive</h1>
-            <p className="text-[11px] text-cell-teal/60">
+            <h1 className="font-pixel text-base uppercase tracking-[0.3em] text-cell-cyan">La Dérive</h1>
+            <p className="text-[11px] text-cell-dim">
               {progress.capturedUnlocked}/{progress.totalUnlocked} foyers pris dans les eaux
               ouvertes · palier {palier}
             </p>
@@ -730,7 +730,7 @@ export function TerritoirePanel({
           <button
             onClick={onClose}
             aria-label="Fermer"
-            className="px-3 py-2 text-base text-cell-teal/70 hover:text-cell-cyan"
+            className="px-3 py-2 text-base text-cell-dim hover:text-cell-cyan"
           >
             ✕
           </button>
@@ -753,7 +753,7 @@ export function TerritoirePanel({
                   active
                     ? "text-white"
                     : open
-                      ? "border-cell-teal/30 text-cell-teal/70"
+                      ? "border-cell-teal/30 text-cell-dim"
                       : "border-cell-teal/15 text-cell-teal/35"
                 }`}
                 style={active ? { borderColor: s.tint, background: `${s.tint}33` } : undefined}
@@ -767,7 +767,7 @@ export function TerritoirePanel({
         {/* La carte */}
         <Panel variant="membrane" className="p-1.5" style={{ background: "rgba(5, 11, 20, 0.8)" }}>
           <TerritoireScene sectorId={sector.id} selected={selected} onSelect={setSelected} />
-          <p className="px-1 pt-1.5 text-[11px] leading-relaxed text-cell-teal/60">{sector.desc}</p>
+          <p className="px-1 pt-1.5 text-[11px] leading-relaxed text-cell-dim">{sector.desc}</p>
         </Panel>
 
         {/* Fiche du relais ou du foyer sélectionné, ou invitation à en choisir un */}
@@ -776,7 +776,7 @@ export function TerritoirePanel({
         ) : foyer ? (
           <FoyerCard foyer={foyer} onAssault={onAssault} />
         ) : (
-          <p className="px-2 text-center text-[11px] text-cell-teal/50">
+          <p className="px-2 text-center text-[11px] text-cell-faint">
             Touche un foyer pour voir ce qu&apos;il cache, ou un relais ⚓ en haut de la carte
             pour envoyer une expédition.
           </p>
@@ -788,7 +788,7 @@ export function TerritoirePanel({
         </h2>
         <Panel variant="tooltip" className="px-3 py-2" style={{ background: "rgba(5, 11, 20, 0.75)" }}>
           {expeditions.length === 0 ? (
-            <p className="text-[11px] text-cell-teal/50">
+            <p className="text-[11px] text-cell-faint">
               Aucune escouade en mer. Les quatre relais changent chaque jour à minuit.
             </p>
           ) : (
@@ -810,7 +810,7 @@ export function TerritoirePanel({
                         style={{ width: `${Math.round(prog * 100)}%` }}
                       />
                     </div>
-                    <div className="text-[10px] text-cell-teal/60">
+                    <div className="text-[10px] text-cell-dim">
                       {UNIT_IDS.filter((u) => exp.squad[u] > 0)
                         .map((u) => `${exp.squad[u]}× ${unitConfig(u).name}`)
                         .join(" · ")}
@@ -826,7 +826,7 @@ export function TerritoirePanel({
         <h2 className="pt-1 text-xs uppercase tracking-[0.3em] text-cell-cyan">Revenu du territoire</h2>
         <Panel variant="tooltip" className="px-3 py-2" style={{ background: "rgba(5, 11, 20, 0.75)" }}>
           {incomeRows.length === 0 ? (
-            <p className="text-[11px] text-cell-teal/50">
+            <p className="text-[11px] text-cell-faint">
               {gisementsPris === 0
                 ? "Aucun gisement capturé — la carte ne rapporte encore rien."
                 : `${gisementsPris} gisement${gisementsPris > 1 ? "s" : ""} pris, mais la base ne produit pas encore leurs ressources : un gisement rend un pourcentage de ta production. Construis et améliore, la carte suivra.`}
@@ -859,7 +859,7 @@ export function TerritoirePanel({
         )}
 
         {nextSector && (
-          <p className="px-2 pb-1 text-center text-[11px] text-cell-teal/50">
+          <p className="px-2 pb-1 text-center text-[11px] text-cell-faint">
             Prochain secteur : {nextSector.name}, au palier {nextSector.unlock_palier}.
           </p>
         )}

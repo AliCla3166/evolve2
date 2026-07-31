@@ -17,10 +17,14 @@ export function ResourceInfoModal({
   onClose: () => void;
 }) {
   // Ce composant n'est monté que lorsque la fiche est ouverte : `true` suffit.
-  useOverlay(true, onClose);
+  const dialogRef = useOverlay<HTMLDivElement>(true, onClose);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-6"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-6 outline-none"
       onClick={onClose}
     >
       <div className="w-full max-w-xs" onClick={(e) => e.stopPropagation()}>

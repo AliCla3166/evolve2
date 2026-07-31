@@ -79,6 +79,26 @@
         { "term": "Point d'Âge", "icon": "✦", "desc": "La mesure de ton avancement vers l'Âge 2 : chaque jalon réclamé en verse. L'Âge s'achève quand tous sont encaissés." },
         { "term": "Âge", "icon": "🌌", "desc": "Un chapitre du jeu. L'Âge 1 est la cellule ; son ascension, préparée par le Centre de mutation, ouvrira l'Âge 2." }
       ]
+    },
+    {
+      "id": "walachie",
+      "name": "Walachie — le second monde",
+      "icon": "✦",
+      "$comment_walachie": "Ajoute au Codex le vocabulaire du second mode (30/07), jusque-la introuvable hors de /walachie lui-meme (refonte lisibilite/DA 31/07, piste Phase 2 n17). Sourced depuis walachie_config.json et les copies ecran reelles de walachie/page.tsx et EvolutionTree.tsx, jamais invente.",
+      "terms": [
+        { "term": "Sève", "icon": "🌿", "desc": "La ressource de base de Walachie — produite en continu et par pulsation, elle achète les nœuds de l'arbre d'évolution." },
+        { "term": "Pulsation", "icon": "👆", "desc": "Le tap manuel sur le monde. Il reste volontairement modeste face à la production passive (environ 5 % de l'idle, à tout stade)." },
+        { "term": "Ère", "icon": "🪐", "desc": "Un grand palier d'évolution, de la protoplanète à la Divinité et au-delà. Chaque ère est un ensemble de nœuds à débloquer avant de percer vers la suivante." },
+        { "term": "Nœud", "icon": "🔘", "desc": "Une bulle achetable de l'arbre d'évolution, à l'intérieur d'une ère. Tous les nœuds d'une ère débloqués ouvrent la percée vers l'ère suivante." },
+        { "term": "Créature brillante", "icon": "✨", "desc": "Apparaît dans l'écosystème tous les 100 exemplaires d'un même nœud possédé. Un tap la fait exploser en paillettes et double la sève en stock." },
+        { "term": "Divinité", "icon": "👁️", "desc": "La dernière ère écrite à la main. L'atteindre ouvre la Renaissance, mais ne ferme rien : le jeu continue au-delà, dans les Amas." },
+        { "term": "Amas", "icon": "🌠", "desc": "Au-delà de la Divinité, une file d'ères procédurales sans fin — chaque Amas coûte ×20 le précédent. Aucune progression ne se termine, ici non plus." },
+        { "term": "Renaissance", "icon": "🔄", "desc": "Recommencer à la protoplanète en échange d'Éclats de Conscience, qui accélèrent la sève de façon permanente (+25 % par cycle). Se déclenche depuis le Panthéon." },
+        { "term": "Éclats de Conscience", "icon": "💎", "desc": "La monnaie gagnée à chaque Renaissance, dépensée en héritages permanents au Panthéon — jamais perdue au cycle suivant." },
+        { "term": "Panthéon", "icon": "🏛️", "desc": "L'écran de la Renaissance : héritages, journal des moments passés, et le Rêve profond qui prolonge le plafond de rattrapage hors ligne." },
+        { "term": "Pont d'habitudes", "icon": "🌉", "desc": "La seule lecture que Walachie fait de ta partie Cellule : Bilan du soir validé → sève ×1,5 jusqu'à minuit ; série en cours → production +2 %/jour (plafond +60 %) ; jour qui tient la série → pulsation ×3. Rien n'est jamais retiré si les habitudes manquent." },
+        { "term": "Moment spontané", "icon": "🌟", "desc": "Un événement aléatoire pendant la session — toujours un bonus, jamais une perte. Une longue absence ne rattrape qu'un seul « cadeau de retour »." }
+      ]
     }
   ]
 }

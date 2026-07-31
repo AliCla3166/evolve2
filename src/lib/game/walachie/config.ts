@@ -13,6 +13,12 @@ export interface WalachieEraDef {
    *  tableau par groupe d'eres, aucun quadrillage de tuiles. */
   decor: string;
   unlock_cost: number;
+  /** L'effet decoratif "veines de seve" (WalachieScene) n'a de sens que sur un
+   *  decor de surface/biologique (refonte DA 31/07, piste Phase 2 n14) — false
+   *  sur les decors spatiaux (protoplanete, orbite, portail, systeme,
+   *  constellation, galaxie), ou des veines vertes dans le vide brisaient la
+   *  cohesion. */
+  seve_veins: boolean;
 }
 
 export type WalachieComportement = "predateur" | "proie" | "erre" | "orne";
@@ -115,6 +121,9 @@ export function eraAt(index: number): WalachieEraDef {
     desc: "Walachie essaime encore plus loin dans la galaxie — il n'y a pas de dernier amas.",
     decor: TAIL.decor,
     unlock_cost: LAST_REAL_ERA.unlock_cost * Math.pow(TAIL.growth, k),
+    // La queue infinie prolonge Toile Galactique (decor_galactique, spatial) :
+    // jamais de veines de sève au-delà — cf. le commentaire de seve_veins.
+    seve_veins: false,
   };
 }
 

@@ -156,6 +156,7 @@
       "desc": "Un disque de poussière s'effondre. Walachie n'est encore qu'une braise.",
       "decor": "decor_espace",
       "unlock_cost": 0.0,
+      "seve_veins": false,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~420s"
     },
     {
@@ -165,6 +166,7 @@
       "desc": "Les geysers crachent une sève émeraude. Le monde apprend à couler.",
       "decor": "decor_primordial",
       "unlock_cost": 407.03,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~609s"
     },
     {
@@ -174,6 +176,7 @@
       "desc": "Dans la sève, des membranes se referment sur elles-mêmes. Quelque chose insiste.",
       "decor": "decor_primordial",
       "unlock_cost": 8121.39,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~883s"
     },
     {
@@ -183,6 +186,7 @@
       "desc": "La lumière devient nourriture. Les eaux s'allument la nuit.",
       "decor": "decor_eaux",
       "unlock_cost": 162042.96,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~1280s"
     },
     {
@@ -192,6 +196,7 @@
       "desc": "Les premières bêtes rampent entre les récifs lumineux.",
       "decor": "decor_eaux",
       "unlock_cost": 3233182.11,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~1856s"
     },
     {
@@ -201,6 +206,7 @@
       "desc": "Des colosses paisibles portent des forêts entières sur leur dos, sur la terre ferme.",
       "decor": "decor_rivage",
       "unlock_cost": 64510464.27,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~2692s"
     },
     {
@@ -210,6 +216,7 @@
       "desc": "La mâchoire apparaît. Fine, rapide, terrifiante — et nécessaire.",
       "decor": "decor_rivage",
       "unlock_cost": 1287152982.74,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~3903s"
     },
     {
@@ -219,6 +226,7 @@
       "desc": "Derrière les yeux d'un prédateur, une étincelle se demande pourquoi.",
       "decor": "decor_tribal",
       "unlock_cost": 25682078400.6,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~5660s"
     },
     {
@@ -228,6 +236,7 @@
       "desc": "Les Walachiens chantent autour des totems d'os fluorescent.",
       "decor": "decor_village",
       "unlock_cost": 512424832027.95,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~8207s"
     },
     {
@@ -237,6 +246,7 @@
       "desc": "Des cités-jardins qui protègent la nature au lieu de la dévorer.",
       "decor": "decor_cite",
       "unlock_cost": 10224219565996.36,
+      "seve_veins": true,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~11900s"
     },
     {
@@ -246,6 +256,7 @@
       "desc": "Gardiens de la vie, ils veillent depuis l'orbite sur toute la planète.",
       "decor": "decor_orbite",
       "unlock_cost": 204000000000000.1,
+      "seve_veins": false,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~17255s"
     },
     {
@@ -255,6 +266,7 @@
       "desc": "Le Panthéon s'ouvre. La conscience de Walachie touche au divin — une marche, pas une fin.",
       "decor": "decor_portail",
       "unlock_cost": 4070335122536517.0,
+      "seve_veins": false,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~25020s"
     },
     {
@@ -264,6 +276,7 @@
       "desc": "Des nefs-semences quittent Walachie pour ensemencer les mondes voisins du système.",
       "decor": "decor_systeme",
       "unlock_cost": 8.121386279291349e+16,
+      "seve_veins": false,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~36279s"
     },
     {
@@ -273,6 +286,7 @@
       "desc": "Un réseau de Sentinelles veille désormais entre les étoiles de la constellation.",
       "decor": "decor_stellaire",
       "unlock_cost": 1.6204295988375357e+18,
+      "seve_veins": false,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~52605s"
     },
     {
@@ -282,6 +296,7 @@
       "desc": "La galaxie entière porte la mémoire de Walachie, bras spiral après bras spiral.",
       "decor": "decor_galactique",
       "unlock_cost": 3.233182112620674e+19,
+      "seve_veins": false,
       "$comment": "unlock = base de l'ere x 1.7 ; payback des noeuds ~76278s"
     }
   ],

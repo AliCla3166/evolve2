@@ -30,17 +30,23 @@ const CODEX = (rawCodex as unknown as { groups: CodexGroup[] }).groups;
 export function CodexPanel({ onClose }: { onClose: () => void }) {
   /* Empilé par-dessus les Réglages : le retour système ferme d'abord le Codex,
      puis les Réglages (jeton d'historique par overlay). */
-  useOverlay(true, onClose);
+  const dialogRef = useOverlay<HTMLDivElement>(true, onClose);
 
   return (
-    <div className="fixed inset-0 z-40 overflow-y-auto bg-abyss/97 backdrop-blur-sm">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      className="fixed inset-0 z-40 overflow-y-auto bg-abyss/97 backdrop-blur-sm outline-none"
+    >
       <div className="mx-auto max-w-md space-y-3 pb-nav pt-safe px-2 sm:max-w-lg">
         <div className="flex items-center gap-3">
           <span className="text-2xl" aria-hidden>
             📖
           </span>
           <div className="flex-1">
-            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">Codex</h1>
+            <h1 className="font-pixel text-base uppercase tracking-[0.3em] text-cell-cyan">Codex</h1>
             <p className="text-[11px] text-cell-teal/60">
               Tous les mots du jeu, expliqués en deux phrases.
             </p>

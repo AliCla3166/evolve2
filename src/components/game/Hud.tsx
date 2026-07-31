@@ -80,7 +80,7 @@ function StreakChip({ onOpen }: { onOpen?: () => void }) {
   let text: string;
   let title: string;
   if (streak === 0 && !todayOk) {
-    cls = "border-cell-teal/30 text-cell-teal/60";
+    cls = "border-cell-teal/30 text-cell-dim";
     text = "🔥 Démarrer";
     title = `Aucune série en cours. Valide une habitude aujourd'hui pour la lancer. ${nextLabel}`;
   } else if (!todayOk) {
@@ -131,6 +131,11 @@ function CombatChip({ onOpen }: { onOpen: () => void }) {
   );
 }
 
+/** Seuil d'alerte partagé par toutes les barres de stockage plafonné : au-delà,
+ *  la barre vire à l'ambre (voir `ResourceBar`) ET le tiroir de production
+ *  s'ouvre tout seul (refonte lisibilité 31/07 — voir plus bas). */
+const WARN_AT = 0.85;
+
 export function Hud({ onOpenHabits }: { onOpenHabits?: () => void }) {
   const resources = useGame((s) => s.resources);
   const buildings = useGame((s) => s.buildings);
@@ -139,6 +144,11 @@ export function Hud({ onOpenHabits }: { onOpenHabits?: () => void }) {
   const collection = useGame((s) => s.collection);
   const fauneLevel = useGame((s) => s.fauneLevel);
   const [info, setInfo] = useState<ResourceId | null>(null);
+  // Tiroir de production replié par défaut (refonte lisibilité 31/07, piste
+  // Phase 1 n°6) : le joueur qui a choisi de le déplier une fois signale qu'il
+  // veut le suivre en continu, donc son choix reste jusqu'à ce qu'il le
+  // referme lui-même — seule l'alerte de saturation le force ouvert.
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Chiffres EFFECTIFS (bâtiments × ouvrières postées × bonus de La Dérive) : le HUD
   // doit dire ce que le tick applique réellement, sinon les postes, les gisements et
@@ -152,9 +162,35 @@ export function Hud({ onOpenHabits }: { onOpenHabits?: () => void }) {
   const capped = cappedResources();
   const vitaliteMax = vitaliteTarget(buildings.mutation ?? 0, resources.vitalite);
 
+  // La ressource productible la plus proche de son plafond (piste Phase 1 n°6) :
+  // c'est elle qui mérite une place permanente, les 5 autres ne pèsent rien tant
+  // qu'elles sont loin de saturer. Recalculée à chaque rendu (pas de useMemo :
+  // 6 ressources, coût négligeable), jamais mémorisée dans le state pour rester
+  // synchrone avec `resources`.
+  let closestToCap: ResourceId | null = null;
+  let closestRatio = -1;
+  let anyWarning = false;
+  for (const res of capped) {
+    const ratio = cap > 0 ? resources[res] / cap : 0;
+    if (ratio >= WARN_AT) anyWarning = true;
+    if (ratio > closestRatio) {
+      closestRatio = ratio;
+      closestToCap = res;
+    }
+  }
+  // Le tiroir s'ouvre tout seul dès qu'une ressource franchit le seuil — mais ne
+  // se referme jamais tout seul : un joueur qui l'a ouvert lui-même, ou qui vient
+  // de faire retomber une ressource sous le seuil, ne doit pas voir le panneau se
+  // dérober sous ses yeux (piste Fitts/prévisibilité).
+  const drawerVisible = drawerOpen || anyWarning;
+  const restResources = capped.filter((res) => res !== closestToCap);
+
   return (
     <div className="space-y-1">
-      {/* Série · monnaie de combat · Énergie (habitudes réelles) · Vitalité (méta) */}
+      {/* Série · monnaie de combat · Énergie (habitudes réelles) · Vitalité (méta)
+          · la ressource productible la plus proche de saturer. Ce cinquième
+          chip est le seul élément variable de la rangée permanente : le reste
+          de la production vit dans le tiroir replié juste dessous. */}
       <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
         <StreakChip onOpen={onOpenHabits} />
         <CombatChip onOpen={() => setInfo("combat")} />
@@ -166,7 +202,7 @@ export function Hud({ onOpenHabits }: { onOpenHabits?: () => void }) {
             color={COLORS.energie}
             width={150}
             label={`⚡ ${fmtCompact(resources.energie)}/${fmtCompact(ENERGY_CAP)}`}
-            warnAt={0.85}
+            warnAt={WARN_AT}
             title={`${resourceName("energie")} — gagnés via tes habitudes réelles (cap ${fmtInt(ENERGY_CAP)})`}
           />
         </button>
@@ -181,33 +217,62 @@ export function Hud({ onOpenHabits }: { onOpenHabits?: () => void }) {
             title={`${resourceName("vitalite")} — produits par le Noyau (${fmtRate(prod.vitalite ?? 0)}/h). Prochain palier du Centre de mutation : ${fmtInt(vitaliteMax)}.`}
           />
         </button>
-      </div>
-
-      {/* Les 6 ressources productibles (cap de stockage partagé).
-          Le plafond est écrit DANS la barre (« valeur / plafond ») et la barre
-          vire à l'ambre à 85 % : c'est le correctif central de la piste 10 —
-          le plafond n'était lisible qu'au survol souris, donc jamais sur
-          téléphone, et un joueur pouvait saturer des heures sans le savoir. */}
-      <div className="grid grid-cols-2 justify-items-center gap-x-2 sm:grid-cols-3">
-        {capped.map((res) => (
+        {closestToCap && (
           <button
-            key={res}
             className="tap-h flex items-center gap-1"
-            onClick={() => setInfo(res)}
+            onClick={() => setInfo(closestToCap)}
           >
-            {icon(res)}
+            {icon(closestToCap)}
             <ResourceBar
-              value={resources[res]}
+              value={resources[closestToCap]}
               max={cap}
-              color={COLORS[res]}
+              color={COLORS[closestToCap]}
               width={130}
-              label={`${fmtCompact(resources[res])}/${fmtCompact(cap)}`}
-              warnAt={0.85}
-              title={`${resourceName(res)} : ${fmtInt(resources[res])} / ${fmtInt(cap)} (stockage) — production ${fmtRate(prod[res] ?? 0)}/h`}
+              label={`${fmtCompact(resources[closestToCap])}/${fmtCompact(cap)}`}
+              warnAt={WARN_AT}
+              title={`${resourceName(closestToCap)} : ${fmtInt(resources[closestToCap])} / ${fmtInt(cap)} (stockage) — production ${fmtRate(prod[closestToCap] ?? 0)}/h`}
             />
           </button>
-        ))}
+        )}
       </div>
+
+      {/* Tiroir des 5 autres ressources productibles (cap de stockage partagé).
+          Replié par défaut (piste Phase 1 n°6 — HUD à deux niveaux) : la
+          rangée permanente ne montrait rien du poids relatif des ressources,
+          elle mettait 6 barres à égalité alors qu'une seule compte vraiment à
+          un instant donné (celle qui va déborder). Le plafond reste écrit DANS
+          chaque barre et vire à l'ambre à 85 % (piste 10, inchangée). */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => setDrawerOpen((v) => !v)}
+          className="tap-h flex items-center gap-1 rounded-full px-2 text-[10px] tracking-wide text-cell-dim"
+          aria-expanded={drawerVisible}
+        >
+          {drawerVisible ? "▲ moins de ressources" : "▼ plus de ressources"}
+        </button>
+      </div>
+      {drawerVisible && (
+        <div className="grid grid-cols-2 justify-items-center gap-x-2 sm:grid-cols-3">
+          {restResources.map((res) => (
+            <button
+              key={res}
+              className="tap-h flex items-center gap-1"
+              onClick={() => setInfo(res)}
+            >
+              {icon(res)}
+              <ResourceBar
+                value={resources[res]}
+                max={cap}
+                color={COLORS[res]}
+                width={130}
+                label={`${fmtCompact(resources[res])}/${fmtCompact(cap)}`}
+                warnAt={WARN_AT}
+                title={`${resourceName(res)} : ${fmtInt(resources[res])} / ${fmtInt(cap)} (stockage) — production ${fmtRate(prod[res] ?? 0)}/h`}
+              />
+            </button>
+          ))}
+        </div>
+      )}
 
       {info && <ResourceInfoModal id={info} onClose={() => setInfo(null)} />}
     </div>

@@ -40,9 +40,19 @@ export function BuildCompleteModal({ onNext }: { onNext?: (id: BuildingId) => vo
   const territoire = useGame((s) => s.territoire);
   const resources = useGame((s) => s.resources);
   const queue = useGame((s) => s.buildQueue);
-  const done = celebrations[0] ?? null;
+  // Un vrai retour d'absence vide déjà `buildCelebrations` au même `set()`
+  // (store.ts, `collectTick`) : les chantiers finis hors ligne sont racontés
+  // UNE fois, dans le rapport de retour ("Chantiers achevés"), jamais ici. Mais
+  // un tick EN DIRECT peut ajouter une nouvelle célébration pendant que le
+  // rapport de retour est encore affiché (pas encore balayé par le joueur) —
+  // c'est la collision documentée dans le plan de refonte DA (piste Phase 3
+  // n20). On la tranche ici plutôt que de la laisser au hasard du DOM/z-index :
+  // le rapport de retour reste devant, la célébration attend son tour et
+  // s'affiche à son propre rythme dès qu'il est balayé.
+  const offlineSummaryActive = useGame((s) => s.offlineSummary !== null);
+  const done = offlineSummaryActive ? null : (celebrations[0] ?? null);
 
-  useOverlay(done !== null, dismiss);
+  const dialogRef = useOverlay<HTMLDivElement>(done !== null, dismiss);
 
   // Une seule vibration par chantier célébré (le motif "réussite" : long-court-long).
   useEffect(() => {
@@ -85,7 +95,11 @@ export function BuildCompleteModal({ onNext }: { onNext?: (id: BuildingId) => vo
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4 outline-none"
       onClick={dismiss}
     >
       <div className="w-full max-w-xs" onClick={(e) => e.stopPropagation()}>

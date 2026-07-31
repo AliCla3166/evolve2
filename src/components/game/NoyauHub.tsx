@@ -68,7 +68,7 @@ export function NoyauHub({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-3">
           <img src="/assets/buildings/noyau/niveau3.png" alt="" width={40} height={40} className="pixelated" draggable={false} />
           <div className="flex-1">
-            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">Le Noyau</h1>
+            <h1 className="font-pixel text-base uppercase tracking-[0.3em] text-cell-cyan">Le Noyau</h1>
             <p className="text-[11px] text-cell-teal/60">
               Effectif {total}/{cap} · {fragments} fragment{fragments > 1 ? "s" : ""} de carte
             </p>

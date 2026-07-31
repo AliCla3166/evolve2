@@ -28,6 +28,7 @@ import { useEffect, useRef } from "react";
 import { currentEraDef } from "@/lib/game/walachie/engine";
 import { nodeDef, walachieSprite, WCFG } from "@/lib/game/walachie/config";
 import { useWalachie } from "@/lib/game/walachie/store";
+import { prefersReducedMotion } from "@/lib/reducedMotion";
 
 const imgCache = new Map<string, HTMLImageElement>();
 
@@ -260,35 +261,65 @@ export function WalachieScene({
       const { vw, vh } = viewSize();
       clampCam();
 
+      /* `prefers-reduced-motion` (refonte 31/07) : coupe uniquement les
+         oscillations continues purement decoratives (veines de seve, bob de
+         l'ornement, pulsation/rotation de l'aura brillante, aurore) — jamais
+         le pas de temps `dt` ni les minuteries d'age (etincelles, paillettes,
+         textes flottants) qui restent necessaires au fonctionnement de la
+         scene. Le steering chasse/fuite/errance des creatures n'est PAS gele
+         ici : contrairement au bob/aux veines, il porte une information reelle
+         (le comportement de chaque espece), meme si aucune capture n'est
+         jamais definitive — decision documentee, a rouvrir si un retour
+         d'accessibilite la contredit. `animT` fige a 0 le terme temporel des
+         oscillations ci-dessous : la forme reste visible, mais immobile. */
+      const reducedMotion = prefersReducedMotion();
+      const animT = reducedMotion ? 0 : t;
+
       ctx.clearRect(0, 0, vw, vh);
       ctx.save();
       ctx.translate(vw / 2, vh / 2);
       ctx.scale(scale, scale);
       ctx.translate(-cam.x, -cam.y);
-      ctx.imageSmoothingEnabled = false;
 
       // --- Décor plein cadre : un seul tableau peint, pas de quadrillage.
-      // Il change à mesure que de nouvelles ères sont percées. ---
+      // Il change à mesure que de nouvelles ères sont percées. Les décors
+      // (PixelLab, tools/gen_walachie.py) sortent à 400×300, bien en-deçà du
+      // monde 1280×960 (WCFG.scene) : un lissage nearest-neighbor (comme pour
+      // les sprites) les étirait en blocs de 3px, illisible sur des dégradés
+      // peints (refonte DA 31/07, piste Phase 2 n14). Le lissage n'est activé
+      // QUE pour ce drawImage — remis à false juste après pour que sprites et
+      // créatures gardent leurs pixels nets. */
       const era = currentEraDef(s);
       const decorImg = getImage(walachieSprite(era.decor));
       if (ready(decorImg)) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         ctx.drawImage(decorImg, 0, 0, W, H);
       } else {
         ctx.fillStyle = "#171126";
         ctx.fillRect(0, 0, W, H);
       }
+      // Sprites et créatures gardent leurs pixels nets — le lissage ne vaut
+      // que pour l'étirement du décor peint ci-dessus.
+      ctx.imageSmoothingEnabled = false;
 
       // --- Veines de sève (ambiance, procédural, par-dessus le décor) ---
-      ctx.strokeStyle = "rgba(74, 246, 178, 0.08)";
-      ctx.lineWidth = 3;
-      for (let i = 0; i < 5; i++) {
-        ctx.beginPath();
-        const sy = (H / 6) * (i + 1) + Math.sin(t / 4000 + i) * 8;
-        ctx.moveTo(0, sy);
-        for (let x = 0; x <= W; x += 64) {
-          ctx.lineTo(x, sy + Math.sin(x / 140 + i * 2 + t / 5000) * 22);
+      // Seulement sur les décors de surface/biologique (era.seve_veins) :
+      // avant cette entrée l'effet se dessinait aussi sur les vues spatiales
+      // (protoplanète, orbite, portail, système, constellation, galaxie), où
+      // des veines vertes flottant dans le vide brisaient la cohésion DA.
+      if (era.seve_veins) {
+        ctx.strokeStyle = "rgba(74, 246, 178, 0.08)";
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 5; i++) {
+          ctx.beginPath();
+          const sy = (H / 6) * (i + 1) + Math.sin(animT / 4000 + i) * 8;
+          ctx.moveTo(0, sy);
+          for (let x = 0; x <= W; x += 64) {
+            ctx.lineTo(x, sy + Math.sin(x / 140 + i * 2 + animT / 5000) * 22);
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
       }
 
       // --- Entités : une par exemplaire possédé (plafonné par la config),
@@ -358,7 +389,7 @@ export function WalachieScene({
       for (const [key, e] of entities) {
         if (!seen.has(key)) continue; // instance non affichée ce cycle (au-delà du plafond)
         if (e.comportement === "orne") {
-          e.y = e.baseY + Math.sin(t / 1800 + e.baseX) * 1.5;
+          e.y = e.baseY + Math.sin(animT / 1800 + e.baseX) * 1.5;
           continue;
         }
         let vx = 0;
@@ -456,7 +487,7 @@ export function WalachieScene({
           px = 70 + hash01(h + 7, 3) * (W - 140);
           py = 70 + hash01(11, h + 5) * (H - 140);
         }
-        const pulse = 1 + 0.14 * Math.sin(t / 260 + hashId(id));
+        const pulse = 1 + 0.14 * Math.sin(animT / 260 + hashId(id));
         const r = size * 0.62 * pulse;
         const grad = ctx.createRadialGradient(px, py, 0, px, py, r * 1.9);
         grad.addColorStop(0, "rgba(255,232,150,0.55)");
@@ -466,7 +497,7 @@ export function WalachieScene({
         ctx.arc(px, py, r * 1.9, 0, Math.PI * 2);
         ctx.fill();
         for (let i = 0; i < 4; i++) {
-          const ang = t / 480 + (i * Math.PI) / 2;
+          const ang = animT / 480 + (i * Math.PI) / 2;
           const sx = px + Math.cos(ang) * r * 1.3;
           const sy = py + Math.sin(ang) * r * 1.3 * 0.6;
           ctx.fillStyle = "#ffe896";
@@ -523,7 +554,7 @@ export function WalachieScene({
 
       // --- Aurore quand un événement est actif ---
       if (s.activeEvent) {
-        const pulseA = 0.06 + 0.04 * Math.sin(t / 600);
+        const pulseA = 0.06 + 0.04 * Math.sin(animT / 600);
         ctx.fillStyle = `rgba(255, 92, 219, ${pulseA})`;
         ctx.fillRect(0, 0, W, H);
       }

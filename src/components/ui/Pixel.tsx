@@ -37,23 +37,31 @@ export function PixelButton({
   disabled = false,
   className = "",
   href,
+  style,
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   className?: string;
   href?: string;
+  /** Teinte l'accent du bouton (bordure/lueur/survol) via les variables CSS
+   *  `--btn-border`/`--btn-glow`/`--btn-border-hover` de `.pixel-btn` (refonte
+   *  DA 31/07, piste Phase 2 n16) — sans ça, seul l'accent cyan de Cellule
+   *  existait, et un bouton "emprunté" par Walachie sans son propre retour
+   *  tactile lisait comme un lien perdu plutôt qu'une vraie action. Défaut :
+   *  cyan (inchangé pour tous les appels existants). */
+  style?: CSSProperties;
 }) {
   const cls = `pixel-btn relative select-none px-5 py-2 text-xs tracking-widest text-cell-cyan ${className}`;
   if (href && !disabled) {
     return (
-      <Link href={href} className={`inline-flex items-center justify-center ${cls}`}>
+      <Link href={href} className={`inline-flex items-center justify-center ${cls}`} style={style}>
         {children}
       </Link>
     );
   }
   return (
-    <button onClick={onClick} disabled={disabled} className={cls}>
+    <button onClick={onClick} disabled={disabled} className={cls} style={style}>
       {children}
     </button>
   );
@@ -243,7 +251,15 @@ const NAV_SRC: Partial<Record<NavIconId, string>> = {
   derive: "/assets/buildings/raid/niveau1.png",
 };
 
-/** Icône de navigation du HUD. */
+/** Icône de navigation du HUD.
+ *  Correctif à coût nul (refonte DA 31/07, piste Phase 2 n12) : les deux
+ *  sprites empruntés (`NAV_SRC`, Bastion/Dérive) sont des vignettes de
+ *  bâtiment pleines de détail et de couleur, pas des icônes du même registre
+ *  que le reste du kit — à 24-32 px elles ressortent plus lourdes et plus
+ *  floues que leurs voisines. En attendant deux vraies icônes PixelLab dans
+ *  le même registre, on désature/éclaircit légèrement ces deux-là pour
+ *  réduire leur poids visuel relatif ; les icônes du kit d'origine ne sont
+ *  pas touchées. */
 export function NavIcon({
   id,
   size = 32,
@@ -253,13 +269,16 @@ export function NavIcon({
   size?: number;
   active?: boolean;
 }) {
+  const borrowed = NAV_SRC[id] !== undefined;
   return (
     <img
       src={NAV_SRC[id] ?? `${UI}/age01_cell_ui_icon_${id}_v001.png`}
       alt={id}
       width={size}
       height={size}
-      className={`pixelated ${active ? "drop-shadow-[0_0_6px_rgba(109,246,255,0.9)]" : "opacity-80"}`}
+      className={`pixelated ${active ? "drop-shadow-[0_0_6px_rgba(109,246,255,0.9)]" : "opacity-80"} ${
+        borrowed ? "saturate-50 brightness-110 contrast-90" : ""
+      }`}
       draggable={false}
     />
   );

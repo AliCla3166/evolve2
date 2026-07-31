@@ -6,14 +6,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CardFrame, Panel, PixelButton, type Rarity } from "@/components/ui/Pixel";
+import { CardDetailSheet, type CardViewData } from "@/components/game/CardDetailSheet";
 import {
   cardArt,
-  cardHp,
   cardLevel,
-  cardPowerAtk,
-  cardPowerDef,
-  cardPowerExp,
-  cardPowerRec,
   cardsDefenseBonus,
   cardsExpeditionExpBonus,
   catchesToPlayable,
@@ -29,11 +25,11 @@ import {
   nextLevelAt,
   rarityConfig,
   slotsUsed,
+  type SpeciesConfig,
 } from "@/lib/game/cards";
 import { effectiveReserveCap } from "@/lib/game/bastion/config";
 import {
   buildingOfPostedSpecies,
-  getBuildingConfig,
   posteResource,
   workLevelOf,
   workerBonus,
@@ -41,6 +37,7 @@ import {
 import { fmtInt } from "@/lib/game/format";
 import { useGame } from "@/lib/game/store";
 import { crewedSpecies, foyerDef, foyerOfCrewSpecies } from "@/lib/game/territoire";
+import type { CardEntry } from "@/lib/game/types";
 
 /* ---------- Paillettes (spawn visuel côté client, comme la v1) ---------- */
 
@@ -62,8 +59,6 @@ function rollSparkleRarity(): number {
   }
   return 0;
 }
-
-const ROLE_LABEL = { defense: "🛡️ Défense", exploration: "🧭 Exploration", assaut: "⚔️ Assaut" } as const;
 
 /* ---------- Mini-jeu de pêche (refonte 24/07, façon Stardew Valley) ----------
    Une barre "canne" montée par pression maintenue (accélération vers le haut),
@@ -275,6 +270,55 @@ function FishingBar({
   );
 }
 
+/** Tout le calcul dérivé d'une carte de la collection — un seul calcul, utilisé
+ *  à la fois par la grille (piste Phase 1 n°8 : elle ne garde plus que ce qui
+ *  pèse sur la décision immédiate) et par la fiche détail qu'un tap ouvre
+ *  (CardDetailSheet.tsx, qui porte le reste : rôle, édition, 4 stats, postes). */
+function computeCardView(
+  sp: SpeciesConfig,
+  entry: CardEntry,
+  ctx: {
+    assignments: ReturnType<typeof useGame.getState>["cardAssignments"];
+    territoire: ReturnType<typeof useGame.getState>["territoire"];
+    postes: ReturnType<typeof useGame.getState>["postes"];
+    fauneLevel: ReturnType<typeof useGame.getState>["fauneLevel"];
+    collection: ReturnType<typeof useGame.getState>["collection"];
+  },
+): CardViewData {
+  const posteA = foyerOfCrewSpecies(ctx.territoire, sp.id);
+  const posteB = buildingOfPostedSpecies({ postes: ctx.postes }, sp.id);
+  const edIdx = bestEditionIndex(entry);
+  const edCounts = editionCounts(entry);
+  const edTitle = MARE.editions
+    .map((e, i) => (edCounts[i] > 0 ? `${e.name} × ${edCounts[i]}` : null))
+    .filter(Boolean)
+    .join(" · ");
+
+  return {
+    rar: rarityConfig(entry.bestRarity),
+    level: cardLevel(entry.count),
+    next: nextLevelAt(entry.count),
+    inDef: ctx.assignments.defense.includes(sp.id),
+    inExp: ctx.assignments.expedition.includes(sp.id),
+    playable: isCardPlayable(entry),
+    missing: catchesToPlayable(entry),
+    edIdx,
+    edTitle,
+    freeSlot: isFreeSlotCard(entry),
+    posteA,
+    posteALabel: posteA ? (foyerDef(posteA)?.name ?? posteA) : null,
+    posteARecoltePct: posteA ? Math.round(creatureRecolteBonus(sp.id, entry) * 100) : null,
+    posteB,
+    posteBLevel: posteB ? workLevelOf({ fauneLevel: ctx.fauneLevel }, sp.id) : null,
+    posteBPct: posteB
+      ? Math.round(
+          workerBonus({ collection: ctx.collection, fauneLevel: ctx.fauneLevel }, sp.id, posteResource(posteB)) *
+            100,
+        )
+      : null,
+  };
+}
+
 export function MarePanel({ onClose }: { onClose: () => void }) {
   const jetons = useGame((s) => s.jetons);
   const fragments = useGame((s) => s.fragments);
@@ -299,6 +343,8 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
   const toggleCardAssign = useGame((s) => s.toggleCardAssign);
 
   const [tab, setTab] = useState<"peche" | "collection">("peche");
+  /** Espèce dont la fiche détail est ouverte (piste Phase 1 n°8). */
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [sparkles, setSparkles] = useState<Sparkle[]>([]);
   /** Rareté de la prise en cours (null = pas de mini-jeu actif). */
   const [captureRarity, setCaptureRarity] = useState<number | null>(null);
@@ -385,12 +431,12 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
         {/* En-tête */}
         <div className={`flex items-center gap-3 ${inertWhileFishing}`}>
           <div className="flex-1">
-            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">La Mare</h1>
-            <p className="text-[11px] text-cell-teal/60">
+            <h1 className="font-pixel text-base uppercase tracking-[0.3em] text-cell-cyan">La Mare</h1>
+            <p className="text-[11px] text-cell-dim">
               Chaque prise devient une carte d&apos;unité pour ta cellule.
             </p>
           </div>
-          <button onClick={onClose} aria-label="Fermer" className="px-3 py-2 text-base text-cell-teal/70 hover:text-cell-cyan">
+          <button onClick={onClose} aria-label="Fermer" className="px-3 py-2 text-base text-cell-dim hover:text-cell-cyan">
             ✕
           </button>
         </div>
@@ -410,7 +456,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
             </PixelButton>
           </div>
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[11px] text-cell-teal/70">
+            <span className="text-[11px] text-cell-dim">
               🧩 {fragments}/{MARE.fragments_per_card} fragments (expéditions)
             </span>
             {fragments >= MARE.fragments_per_card && (
@@ -430,7 +476,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
               className={`flex-1 rounded-md border px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] ${
                 tab === t
                   ? "border-cell-cyan bg-membrane text-cell-cyan"
-                  : "border-cell-cyan/25 text-cell-teal/60"
+                  : "border-cell-cyan/25 text-cell-dim"
               }`}
             >
               {t === "peche" ? "Pêcher" : `Collection ${Object.keys(collection).length}/${MARE.species.length}`}
@@ -484,7 +530,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
             {notice && (
               <p className="text-center text-[11px] text-cell-magenta">{notice}</p>
             )}
-            <p className="text-center text-[10px] leading-relaxed text-cell-teal/50">
+            <p className="text-center text-[10px] leading-relaxed text-cell-faint">
               Rareté : {MARE.rarities.map((r) => (
                 <span key={r.id} style={{ color: r.color }}>
                   {r.name.toLowerCase()}{" "}
@@ -495,7 +541,7 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 bête sort de l'eau, l'édition dans quel état la carte tombe. Les effets
                 sont composés depuis les nombres du JSON (editionEffect) — aucun libellé
                 ne peut donc promettre autre chose que ce que le moteur applique. */}
-            <p className="text-center text-[10px] leading-relaxed text-cell-teal/50">
+            <p className="text-center text-[10px] leading-relaxed text-cell-faint">
               Édition : {MARE.editions.slice(1).map((e, i) => (
                 <span key={e.id} style={{ color: e.color }}>
                   {e.name.toLowerCase()} ({editionEffect(i + 1)}){" "}
@@ -506,18 +552,18 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             {/* Bonus d'assignation */}
-            <p className="text-center text-[11px] text-cell-teal/70">
+            <p className="text-center text-[11px] text-cell-dim">
               Cartes assignées : 🛡️ +{fmtInt(defBonus)} défense · 🧭 +{fmtInt(expBonus)} exploration
               {/* On affiche les PLACES occupées, pas le nombre de cartes : une négative
                   n'en occupe aucune, donc « 6/6 » avec sept cartes posées est le compte
                   juste, et c'est exactement celui que le store applique (cards.slotsUsed). */}
               {" "}({slotsUsed(assignments.defense, collection)}/{defenseCap} · {slotsUsed(assignments.expedition, collection)}/{MARE.assign_slots.expedition})
             </p>
-            <p className="text-center text-[10px] text-cell-teal/50">
+            <p className="text-center text-[10px] text-cell-faint">
               🛡️ Défense : bonus passif de la cellule ET réserve plaçable du Bastion-Défense jouable
               (plafond achetable dans sa Boutique).
             </p>
-            <p className="text-center text-[10px] text-cell-teal/50">
+            <p className="text-center text-[10px] text-cell-faint">
               🔒 Une prise donne la carte, pas le droit de la jouer : il faut une 2ᵉ prise de la
               même espèce pour l&apos;assigner ou la mettre au travail.
             </p>
@@ -525,12 +571,12 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                 l'espace écrit entre un pluriel ternaire et le texte qui le suit quand
                 celui-ci passe à la ligne — on lisait « 9 créaturesau travail ». Vérifié
                 dans le chunk compilé, pas deviné. Ne pas les retirer en reformatant. */}
-            <p className="text-center text-[10px] text-cell-teal/50">
+            <p className="text-center text-[10px] text-cell-faint">
               ⛏️ Récolte : {postees.size} créature{postees.size > 1 ? "s" : ""}{" "}
               au travail sur les gisements de La Dérive. Une créature ne tient qu&apos;UN poste — on
               la poste depuis la fiche du gisement, sur la carte.
             </p>
-            <p className="text-center text-[10px] text-cell-teal/50">
+            <p className="text-center text-[10px] text-cell-faint">
               ⚙️ Postes : {employees} créature{employees > 1 ? "s" : ""}{" "}
               au travail dans les organes de la base — chacune fait monter le rendement du sien et
               gagne un niveau de travail sans plafond. On la poste depuis la fiche de l&apos;organe.
@@ -545,125 +591,77 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                     <div key={sp.id} className="flex flex-col items-center gap-1 opacity-60">
                       <div className="relative h-[128px] w-[96px]">
                         <img src="/assets/ui/age01_cell_ui_card_slot_v001.png" alt="" className="pixelated absolute inset-0 h-full w-full" draggable={false} />
-                        <span className="absolute inset-0 flex items-center justify-center text-lg text-cell-teal/50">?</span>
+                        <span className="absolute inset-0 flex items-center justify-center text-lg text-cell-faint">?</span>
                       </div>
-                      <span className="text-center text-[10px] leading-tight text-cell-teal/40">Espèce inconnue</span>
+                      <span className="text-center text-[10px] leading-tight text-cell-faint">Espèce inconnue</span>
                     </div>
                   );
                 }
-                const rar = rarityConfig(entry.bestRarity);
-                const level = cardLevel(entry.count);
-                const next = nextLevelAt(entry.count);
-                const inDef = assignments.defense.includes(sp.id);
-                const inExp = assignments.expedition.includes(sp.id);
-                const posteA = foyerOfCrewSpecies(territoire, sp.id);
-                const posteB = buildingOfPostedSpecies({ postes }, sp.id);
-                // Le verrou des doublons : la première prise donne la carte, la
-                // deuxième donne le droit de la jouer (cf. cards.isCardPlayable).
-                const playable = isCardPlayable(entry);
-                const missing = catchesToPlayable(entry);
-                /* L'ÉDITION : deuxième axe, orthogonal à la rareté. La carte porte la
-                   plus prestigieuse jamais obtenue, et l'infobulle détaille les prises
-                   par édition — c'est là que se lisent les deux routes vers une carte,
-                   celle du travail (les doublons) et celle de la chance. */
-                const edIdx = bestEditionIndex(entry);
-                const ed = editionConfig(edIdx);
-                const edCounts = editionCounts(entry);
-                const edTitle = MARE.editions
-                  .map((e, i) => (edCounts[i] > 0 ? `${e.name} × ${edCounts[i]}` : null))
-                  .filter(Boolean)
-                  .join(" · ");
+                // Tout le calcul dérivé (rareté, édition, postes, verrou) vit
+                // dans computeCardView, partagé avec la fiche détail — voir la
+                // note au-dessus de MarePanel.
+                const view = computeCardView(sp, entry, {
+                  assignments,
+                  territoire,
+                  postes,
+                  fauneLevel,
+                  collection,
+                });
+                const ed = editionConfig(view.edIdx);
                 return (
                   <div key={sp.id} className="flex flex-col items-center gap-1">
-                    <div
-                      style={
-                        edIdx > 0
-                          ? { filter: `drop-shadow(0 0 8px ${ed.color})` }
-                          : undefined
-                      }
+                    {/* Refonte lisibilité 31/07 (piste Phase 1 n°8) : la grille ne
+                        garde que ce qu'il faut voir tout de suite — portrait, nom,
+                        rareté/niveau, verrou ou boutons d'assignation. Rôle, édition
+                        en détail, 4 stats de combat et poste(s) éventuels vivent
+                        désormais dans la fiche détail (tap sur le portrait/le nom). */}
+                    <button
+                      onClick={() => setDetailId(sp.id)}
+                      className="flex flex-col items-center gap-1"
+                      aria-label={`Détail de ${sp.name}`}
                     >
-                      <CardFrame rarity={rar.id as Rarity}>
-                        <img
-                          src={cardArt(sp.id)}
-                          alt={sp.name}
-                          className="pixelated h-full w-full object-contain"
-                          draggable={false}
-                          onError={(e) => {
-                            // Portrait pas encore généré (nouvelle espèce en attente de PixelLab) — repli neutre.
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = "/assets/ui/age01_cell_ui_card_slot_v001.png";
-                          }}
-                        />
-                      </CardFrame>
-                    </div>
-                    {/* Lisibilite de la grille (piste 7) + cibles tactiles (piste 10) :
-                        le nom passe a 11 px, les PV rejoignent la ligne de stats — on tombe
-                        de 5 lignes de texte tassees a 4 — et les deux boutons d'assignation
-                        passent de ~22 px a 44 px de haut sur toute la largeur de la carte. */}
-                    <span className="text-center text-[11px] font-bold leading-tight text-cell-cyan">{sp.name}</span>
-                    <span className="text-center text-[9px] leading-tight" style={{ color: rar.color }}>
-                      {rar.name} · Nv {level}
-                      {next !== null && <span className="text-cell-teal/50"> ({entry.count}/{next})</span>}
-                    </span>
-                    {edIdx > 0 && (
-                      <span
-                        className="text-center text-[9px] leading-tight"
-                        style={{ color: ed.color }}
-                        title={edTitle}
-                      >
-                        ◈ {ed.name} · {editionEffect(edIdx)}
-                      </span>
-                    )}
-                    <span className="text-[9px] text-cell-teal/60">
-                      {ROLE_LABEL[sp.role]}
-                      {isFreeSlotCard(entry) && (
-                        <span className="text-cell-teal/50"> · sans place</span>
-                      )}
-                    </span>
-                    <div className="flex flex-wrap items-center justify-center gap-x-1.5 text-[10px] leading-tight">
-                      <span className="text-cell-magenta/80">❤{cardHp(sp.id, entry)}</span>
-                      <span className="text-cell-teal/70">🛡{cardPowerDef(sp.id, entry)}</span>
-                      <span className="text-cell-teal/70">🧭{cardPowerExp(sp.id, entry)}</span>
-                      <span className="text-cell-teal/70">⚔{cardPowerAtk(sp.id, entry)}</span>
-                      {/* La 4e puissance, dérivée des trois autres : ce que cette carte
-                          rapporte postée sur un gisement (cf. mare_config.recolte). */}
-                      <span className="text-cell-lime/80">⛏{cardPowerRec(sp.id, entry)}</span>
-                    </div>
-                    {posteA && (
-                      <span className="text-center text-[9px] leading-tight text-cell-lime/90">
-                        ⛏️ {foyerDef(posteA)?.name ?? posteA}
-                        {" +"}
-                        {Math.round(creatureRecolteBonus(sp.id, entry) * 100)} %
-                      </span>
-                    )}
-                    {posteB && (
-                      <span className="text-center text-[9px] leading-tight text-cell-lime/90">
-                        ⚙️ {getBuildingConfig(posteB).name} · nv{" "}
-                        {workLevelOf({ fauneLevel }, sp.id)}
-                        {" +"}
-                        {Math.round(
-                          workerBonus({ collection, fauneLevel }, sp.id, posteResource(posteB)) *
-                            100,
-                        )}{" "}
-                        %
-                      </span>
-                    )}
-                    {!playable ? (
                       <div
-                        className="tap-h mt-0.5 flex w-full items-center justify-center rounded border border-cell-teal/20 text-[10px] text-cell-teal/50"
+                        style={
+                          view.edIdx > 0
+                            ? { filter: `drop-shadow(0 0 8px ${ed.color})` }
+                            : undefined
+                        }
+                      >
+                        <CardFrame rarity={view.rar.id as Rarity}>
+                          <img
+                            src={cardArt(sp.id)}
+                            alt={sp.name}
+                            className="pixelated h-full w-full object-contain"
+                            draggable={false}
+                            onError={(e) => {
+                              // Portrait pas encore généré (nouvelle espèce en attente de PixelLab) — repli neutre.
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = "/assets/ui/age01_cell_ui_card_slot_v001.png";
+                            }}
+                          />
+                        </CardFrame>
+                      </div>
+                      <span className="text-center text-[11px] font-bold leading-tight text-cell-cyan">{sp.name}</span>
+                      <span className="text-center text-[9px] leading-tight" style={{ color: view.rar.color }}>
+                        {view.rar.name} · Nv {view.level}
+                      </span>
+                    </button>
+                    {!view.playable ? (
+                      <div
+                        className="tap-h mt-0.5 flex w-full items-center justify-center rounded border border-cell-teal/20 text-[10px] text-cell-faint"
                         title="Une prise donne la carte, pas le droit de la jouer : il en faut une deuxième."
                       >
-                        🔒 encore {missing} prise{missing > 1 ? "s" : ""}
+                        🔒 encore {view.missing} prise{view.missing > 1 ? "s" : ""}
                       </div>
                     ) : (
                     <div className="mt-0.5 flex w-full gap-1">
                       <button
                         onClick={() => toggleCardAssign(sp.id, "defense")}
                         className={`tap-h flex-1 rounded border text-[15px] ${
-                          inDef ? "border-cell-lime bg-cell-lime/20 text-cell-lime" : "border-cell-teal/30 text-cell-teal/60"
+                          view.inDef ? "border-cell-lime bg-cell-lime/20 text-cell-lime" : "border-cell-teal/30 text-cell-dim"
                         }`}
                         title="Assigner à la défense de la cellule"
-                        aria-pressed={inDef}
+                        aria-pressed={view.inDef}
                         aria-label={`Assigner ${sp.name} à la défense de la cellule`}
                       >
                         🛡️
@@ -671,10 +669,10 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
                       <button
                         onClick={() => toggleCardAssign(sp.id, "expedition")}
                         className={`tap-h flex-1 rounded border text-[15px] ${
-                          inExp ? "border-cell-cyan bg-cell-cyan/20 text-cell-cyan" : "border-cell-teal/30 text-cell-teal/60"
+                          view.inExp ? "border-cell-cyan bg-cell-cyan/20 text-cell-cyan" : "border-cell-teal/30 text-cell-dim"
                         }`}
                         title="Assigner aux expéditions"
-                        aria-pressed={inExp}
+                        aria-pressed={view.inExp}
                         aria-label={`Assigner ${sp.name} aux expéditions`}
                       >
                         🧭
@@ -688,6 +686,22 @@ export function MarePanel({ onClose }: { onClose: () => void }) {
           </>
         )}
       </div>
+
+      {detailId && collection[detailId] && (
+        <CardDetailSheet
+          sp={MARE.species.find((s) => s.id === detailId)!}
+          entry={collection[detailId]}
+          view={computeCardView(MARE.species.find((s) => s.id === detailId)!, collection[detailId], {
+            assignments,
+            territoire,
+            postes,
+            fauneLevel,
+            collection,
+          })}
+          onClose={() => setDetailId(null)}
+          onToggleAssign={toggleCardAssign}
+        />
+      )}
     </div>
   );
 }

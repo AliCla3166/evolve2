@@ -13,6 +13,25 @@
      Une seule valeur pour les trois, sinon l'oeil apprend trois signaux au lieu d'un. */
   --amber: #ffb020;
 
+  /* ===== Echelle de contraste du texte secondaire (refonte lisibilite 31/07) =====
+     Avant cette passe, le texte secondaire etait une opacite ad hoc sur la
+     couleur de base (`text-cell-teal/45`, `/50`, `/55`...) choisie a l'oeil,
+     jamais mesuree. Calcul WCAG reel (melange alpha sur --abyss ET sur les
+     fonds Walachie #100a1f/#0d0718, formule de luminance relative standard) :
+     `text-cell-teal/45` sur --abyss ne tenait que 3,17:1, sous le seuil AA
+     (4,5:1) alors que 100% du texte du jeu est sous 24px. Ces deux variables
+     remplacent les opacites au cas par cas par deux paliers verifies au pire
+     cas sur les trois fonds sombres de l'app (marge de securite au-dessus du
+     seuil, pas juste au ras) :
+     - --ink-2 (~5,1:1 sur les trois fonds) : texte secondaire porteur
+       d'information (libelles, descriptions) -> palier AA texte normal.
+     - --ink-3 (~3,2:1) : reserve au texte large/purement decoratif qui ne
+       porte aucune information necessaire a la comprehension (le texte deja
+       redit ailleurs) -> palier AA texte large/UI, jamais pour du texte
+       porteur seul. */
+  --ink-2: rgba(207, 232, 242, 0.55);
+  --ink-3: rgba(207, 232, 242, 0.4);
+
   /* ===== Zones sures (piste 10) =====
      `viewportFit: "cover"` fait passer la page sous l'encoche et sous la barre
      de geste. Ces quatre variables sont le seul endroit ou `env()` est lu :
@@ -26,6 +45,20 @@
      `pb-24` disperses dans les panneaux etaient des compensations devinees ;
      ici la valeur est unique et les panneaux s'y accrochent via `.pb-nav`. */
   --nav-h: 58px;
+
+  /* ===== Palette Walachie (refonte 31/07) =====
+     Le second mode (30/07) avait sa palette ecrite en litteraux hexadecimaux
+     repetes ~80 fois dans 3 fichiers (EvolutionTree.tsx, WalachieScene.tsx,
+     walachie/page.tsx) au lieu de variables centralisees comme le reste du
+     jeu -- une divergence de METHODE, pas de couleur : la teinte violette
+     assumee comme distincte de Cellule n'est pas remise en cause ici, seule
+     sa source de verite change. Zero pixel ne bouge a l'ecran avec ce
+     changement seul. */
+  --walachie-violet: #b98cff;
+  --walachie-magenta: #ff5cdb;
+  --walachie-emeraude: #4af6b2;
+  --walachie-bg: #100a1f;
+  --walachie-bg2: #0d0718;
 }
 
 @theme inline {
@@ -39,6 +72,15 @@
   /* Couleur d'alerte unique du jeu (etape 8) : stockage sature, vague
      imminente, rappels bloques par le navigateur. */
   --color-cell-amber: var(--amber);
+  /* Echelle de contraste du texte secondaire, voir commentaire plus haut. */
+  --color-cell-dim: var(--ink-2);
+  --color-cell-faint: var(--ink-3);
+  /* Palette Walachie, voir commentaire plus haut. */
+  --color-walachie-violet: var(--walachie-violet);
+  --color-walachie-magenta: var(--walachie-magenta);
+  --color-walachie-emeraude: var(--walachie-emeraude);
+  --color-walachie-bg: var(--walachie-bg);
+  --color-walachie-bg2: var(--walachie-bg2);
 }
 
 body {
@@ -253,16 +295,25 @@ body.overlay-open {
   border-radius: 8px;
 }
 
-/* Bouton simple : le texte définit la largeur, plus jamais de débordement. */
+/* Bouton simple : le texte définit la largeur, plus jamais de débordement.
+   Accent parametre par variables CSS (refonte DA 31/07, piste Phase 2 n16) :
+   defaut cyan (inchange pour tous les appels existants), qu'un bouton peut
+   retenter via `style={{ "--btn-border": ..., ... }}` (voir PixelButton dans
+   Pixel.tsx) -- le bouton WALACHIE de l'ecran-titre en est le premier usage,
+   pour un vrai retour tactile a l'identique de CONTINUER plutot qu'un `<Link>`
+   ad hoc sans etat pressed/hover. */
 .pixel-btn {
-  border: 1px solid rgba(109, 246, 255, 0.45);
+  --btn-border: rgba(109, 246, 255, 0.45);
+  --btn-glow: rgba(109, 246, 255, 0.25);
+  --btn-border-hover: var(--cyan);
+  border: 1px solid var(--btn-border);
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(18, 42, 62, 0.95), rgba(9, 20, 34, 0.95));
   min-height: 40px;
 }
 .pixel-btn:hover:not(:disabled) {
-  border-color: var(--cyan);
-  box-shadow: 0 0 10px rgba(109, 246, 255, 0.25);
+  border-color: var(--btn-border-hover);
+  box-shadow: 0 0 10px var(--btn-glow);
 }
 .pixel-btn:active:not(:disabled) {
   transform: translateY(1px);

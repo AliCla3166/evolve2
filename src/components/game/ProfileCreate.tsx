@@ -63,7 +63,7 @@ export function ProfileCreate() {
         className="w-full max-w-md p-4"
         style={{ background: "rgba(5, 11, 20, 0.92)" }}
       >
-        <h1 className="mb-1 text-center text-base uppercase tracking-[0.3em] text-cell-cyan">
+        <h1 className="font-pixel mb-1 text-center text-base uppercase tracking-[0.3em] text-cell-cyan">
           Crée ton organisme
         </h1>
         <p className="mb-4 text-center text-[11px] text-cell-teal/60">

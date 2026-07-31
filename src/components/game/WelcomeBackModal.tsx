@@ -25,7 +25,7 @@ export function WelcomeBackModal() {
   const dismiss = useGame((s) => s.dismissOfflineSummary);
 
   /* Avant tout retour anticipe : un Hook ne peut pas etre conditionnel. */
-  useOverlay(summary !== null, dismiss);
+  const dialogRef = useOverlay<HTMLDivElement>(summary !== null, dismiss);
 
   if (!summary) return null;
 
@@ -48,7 +48,11 @@ export function WelcomeBackModal() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4 outline-none"
       onClick={dismiss}
     >
       <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>

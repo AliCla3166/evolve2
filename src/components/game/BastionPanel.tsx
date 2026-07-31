@@ -90,7 +90,7 @@ function WavePreview({ waveN, level, mod }: { waveN: number; level: number; mod?
   const preview = previewWave(waveN, mod);
   if (level <= 0) {
     return (
-      <p className="text-[10px] text-cell-teal/50">
+      <p className="text-[10px] text-cell-faint">
         🔭 Aucune vigie : tu défendras à l&apos;aveugle. (Boutique → Améliorations → Vigie)
       </p>
     );
@@ -99,7 +99,7 @@ function WavePreview({ waveN, level, mod }: { waveN: number; level: number; mod?
     <div className="space-y-1 rounded-lg border border-cell-teal/20 bg-black/30 p-2">
       <div className="flex items-center justify-between text-[10px] text-cell-cyan">
         <span>🔭 Vigie — vague {preview.waveN}</span>
-        <span className="text-cell-teal/60">
+        <span className="text-cell-dim">
           {preview.total} ennemi{preview.total > 1 ? "s" : ""}
           {preview.isBoss ? " · 👑 BOSS" : ""}
         </span>
@@ -113,7 +113,7 @@ function WavePreview({ waveN, level, mod }: { waveN: number; level: number; mod?
             >
               {t.ranged ? "🏹" : "🦠"} {t.name}
               {level >= 3 && (
-                <span className="text-cell-teal/50">
+                <span className="text-cell-faint">
                   {" "}
                   ×{t.count} · {t.hp} PV · {t.dmg} dgt
                 </span>
@@ -135,7 +135,7 @@ function WavePreview({ waveN, level, mod }: { waveN: number; level: number; mod?
         </div>
       )}
       {level >= 3 && (
-        <p className="text-[9px] text-cell-teal/50">
+        <p className="text-[9px] text-cell-faint">
           Multiplicateurs de vague : PV ×{preview.hpMult.toFixed(2)} · dégâts ×{preview.dmgMult.toFixed(2)}
         </p>
       )}
@@ -188,6 +188,44 @@ function CombatCost({ amount, have }: { amount: number; have: number }) {
       <img src="/assets/resources/combat.png" alt="" width={14} height={14} className="pixelated" draggable={false} />
       {fmtInt(amount)}
     </span>
+  );
+}
+
+/** Section repliable de la Boutique (refonte lisibilité 31/07, piste Phase 1
+ *  n°10) : Emplacements/Améliorations/Catalogue s'empilaient à plat sur un
+ *  seul écran, jusqu'à une douzaine de lignes avant même d'avoir rien acheté.
+ *  Chaque section garde son propre état d'ouverture (pas de coordination
+ *  nécessaire entre elles) et porte un résumé dans son en-tête pour rester
+ *  utile même repliée. */
+function Section({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 py-1 text-left"
+        aria-expanded={open}
+      >
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span aria-hidden className="shrink-0 text-cell-dim">
+            {open ? "▾" : "▸"}
+          </span>
+          <span className="shrink-0 text-[10px] uppercase tracking-[0.25em] text-cell-faint">{title}</span>
+        </span>
+        {!open && summary && <span className="truncate text-[10px] text-cell-faint">{summary}</span>}
+      </button>
+      {open && <div className="space-y-2 pt-1">{children}</div>}
+    </div>
   );
 }
 
@@ -252,6 +290,12 @@ export function BastionPanel({
   const [peril, setPeril] = useState(0);
   const [preparatifIds, setPreparatifIds] = useState<string[]>([]);
   const [wantPercee, setWantPercee] = useState(false);
+  // Le bloc Sortie replié par défaut (refonte lisibilité 31/07, piste Phase 1
+  // n°10) : cible/péril/préparatifs/percée occupaient tout l'écran d'entrée
+  // même pour un joueur qui vient juste défendre la vague planifiée. Ouvert
+  // d'office si on arrive avec une cible déjà choisie depuis la carte de La
+  // Dérive — dans ce cas, préparer la sortie EST la raison de la visite.
+  const [sortieOpen, setSortieOpen] = useState(initialTargetId !== null);
 
   // Poll léger (pas de re-render 60 fps) : HUD de bataille + charge des supports actifs.
   useEffect(() => {
@@ -383,13 +427,13 @@ export function BastionPanel({
         <div className="flex items-center gap-3">
           <img src="/assets/buildings/defense/niveau1.png" alt="" width={40} height={40} className="pixelated" draggable={false} />
           <div className="flex-1">
-            <h1 className="text-base uppercase tracking-[0.3em] text-cell-cyan">Bastion-Défense</h1>
-            <p className="flex items-center gap-1 text-[11px] text-cell-teal/60">
+            <h1 className="font-pixel text-base uppercase tracking-[0.3em] text-cell-cyan">Bastion-Défense</h1>
+            <p className="flex items-center gap-1 text-[11px] text-cell-dim">
               <img src="/assets/resources/combat.png" alt="" width={14} height={14} className="pixelated" draggable={false} />
               {fmtInt(resources.combat ?? 0)} monnaie de combat
             </p>
           </div>
-          <button onClick={onClose} aria-label="Fermer" className="px-3 py-2 text-base text-cell-teal/70 hover:text-cell-cyan">
+          <button onClick={onClose} aria-label="Fermer" className="px-3 py-2 text-base text-cell-dim hover:text-cell-cyan">
             ✕
           </button>
         </div>
@@ -415,7 +459,7 @@ export function BastionPanel({
                     ? "text-cell-lime"
                     : line.startsWith("−")
                       ? "text-red-400/90"
-                      : "text-cell-teal/70"
+                      : "text-cell-dim"
                 }`}
                 style={{ animationDelay: `${0.25 + i * 0.35}s` }}
               >
@@ -460,7 +504,7 @@ export function BastionPanel({
                       className={`rounded border px-2 py-1 text-[10px] ${
                         s.ready
                           ? "animate-pulse border-cell-lime bg-cell-lime/20 text-cell-lime"
-                          : "border-cell-teal/30 text-cell-teal/50"
+                          : "border-cell-teal/30 text-cell-faint"
                       }`}
                     >
                       {buildingIcon(def.id)} {def.name} {s.ready ? "— PRÊT" : `(${s.charge}/${def.chargeKills ?? "?"})`}
@@ -522,7 +566,7 @@ export function BastionPanel({
               level={Math.max(BASTION.wave.preview_free_level, bastion.scoutLevel)}
             />
             {!canPlayLive && (
-              <p className="text-[10px] text-cell-teal/60">
+              <p className="text-[10px] text-cell-dim">
                 {!garrisonOk
                   ? "Terrain vide : pose au moins une défense (ta réserve contient une tourelle de départ) avant d'affronter la vague."
                   : `Les pathogènes ne sont pas encore en approche : une vague se joue jusqu'à ${Math.round(WAVE_LEAD_WINDOW_MS / 3_600_000)} h à l'avance. Fenêtre ouverte dans ${fmtDuration(Math.max(0, waveIn - WAVE_LEAD_WINDOW_MS))}.`}
@@ -536,22 +580,43 @@ export function BastionPanel({
             Tout se décide ici, en un écran : la cible, le Péril, les Préparatifs, la Percée. */}
         {!banner && !inBattle && (
           <Panel variant="tooltip" className="space-y-2 p-2" style={{ background: "rgba(6,22,32,0.9)" }}>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[11px] uppercase tracking-[0.25em] text-cell-cyan">Sortie</span>
-              <span className="text-[10px] text-cell-teal/60">
+            {/* En-tête toujours visible : replié, il tient en une ligne (piste
+                Phase 1 n°10 — le formulaire complet écrasait tout l'écran même
+                pour un joueur qui ne voulait que défendre la vague planifiée). */}
+            <button
+              onClick={() => setSortieOpen((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 text-left"
+              aria-expanded={sortieOpen}
+            >
+              <span className="flex min-w-0 items-baseline gap-1.5">
+                <span aria-hidden className="shrink-0 text-cell-dim">
+                  {sortieOpen ? "▾" : "▸"}
+                </span>
+                <span className="shrink-0 text-[11px] uppercase tracking-[0.25em] text-cell-cyan">
+                  Sortie
+                </span>
+                {!sortieOpen && (
+                  <span className="truncate text-[10px] text-cell-dim">
+                    · {targetNature?.icon ?? "🛡️"} {targetFoyer ? targetFoyer.name : "Bastion"} · palier{" "}
+                    {sortiePalier} · ⚡{fmtInt(avail.cost)}
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 text-[10px] text-cell-dim">
                 {avail.freeLeft > 0
                   ? `${avail.freeLeft} gratuite${avail.freeLeft > 1 ? "s" : ""} aujourd'hui`
                   : `${avail.used}/${avail.maxPerDay} aujourd'hui`}
               </span>
-            </div>
-
+            </button>
+            {sortieOpen && (
+            <>
             {/* Cible */}
             <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 bg-black/30 px-2 py-1.5">
               <div className="min-w-0">
                 <p className="truncate text-[11px]" style={{ color: targetNature?.color ?? "#7fe7d8" }}>
                   {targetNature?.icon ?? "🛡️"} {targetFoyer ? targetFoyer.name : "Bastion — défense libre"}
                 </p>
-                <p className="text-[10px] text-cell-teal/60">
+                <p className="text-[10px] text-cell-dim">
                   palier {sortiePalier}
                   {targetNature ? ` · ${targetNature.name}` : " · aucun butin de foyer"}
                   {antreMult > 1 ? ` · butin d'antre ×${antreMult}` : ""}
@@ -560,7 +625,7 @@ export function BastionPanel({
               {targetFoyer && (
                 <button
                   onClick={() => setTargetId(null)}
-                  className="shrink-0 text-[10px] text-cell-teal/60 underline"
+                  className="shrink-0 text-[10px] text-cell-dim underline"
                 >
                   viser le Bastion
                 </button>
@@ -574,7 +639,7 @@ export function BastionPanel({
 
             {/* Péril */}
             <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-widest text-cell-teal/50">Péril</p>
+              <p className="text-[10px] uppercase tracking-widest text-cell-faint">Péril</p>
               {/* L'échelle affichée s'arrête toujours UN CRAN au-dessus du meilleur
                   franchi (cf. maxPeril) : au-delà de « Cataclysmique », les barreaux sont
                   déduits, pas écrits, et il y en a toujours un de plus. Le joueur ne voit
@@ -594,7 +659,7 @@ export function BastionPanel({
                           ? "border-cell-magenta bg-cell-magenta/20 text-cell-magenta"
                           : locked
                             ? "border-cell-teal/15 text-cell-teal/30"
-                            : "border-cell-teal/30 text-cell-teal/70"
+                            : "border-cell-teal/30 text-cell-dim"
                       }`}
                     >
                       {p.name} ×{p.loot_mult}
@@ -602,7 +667,7 @@ export function BastionPanel({
                   );
                 })}
               </div>
-              <p className="text-[10px] text-cell-teal/60">
+              <p className="text-[10px] text-cell-dim">
                 Ennemis PV ×{perilInfo.hp_mult} · dégâts ×{perilInfo.dmg_mult}
                 {perilInfo.extra_bosses > 0 ? ` · +${perilInfo.extra_bosses} boss` : ""}
               </p>
@@ -610,7 +675,7 @@ export function BastionPanel({
 
             {/* Préparatifs */}
             <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-widest text-cell-teal/50">
+              <p className="text-[10px] uppercase tracking-widest text-cell-faint">
                 Préparatifs (payés en énergie)
               </p>
               <div className="grid gap-1">
@@ -623,7 +688,7 @@ export function BastionPanel({
                       className={`flex items-center gap-2 rounded border px-2 py-1 text-left transition active:translate-y-px ${
                         on
                           ? "border-cell-lime bg-cell-lime/10 text-cell-lime"
-                          : "border-cell-teal/25 text-cell-teal/70"
+                          : "border-cell-teal/25 text-cell-dim"
                       }`}
                     >
                       <span className="text-sm leading-none">{p.icon}</span>
@@ -650,7 +715,7 @@ export function BastionPanel({
                   className={`flex w-full items-center gap-2 rounded border px-2 py-1 text-left transition active:translate-y-px ${
                     wantPercee
                       ? "border-cell-magenta bg-cell-magenta/15 text-cell-magenta"
-                      : "border-cell-teal/25 text-cell-teal/70"
+                      : "border-cell-teal/25 text-cell-dim"
                   }`}
                 >
                   <span className="text-sm leading-none">⚡</span>
@@ -672,7 +737,7 @@ export function BastionPanel({
                 <span className={resources.energie >= avail.cost ? "text-cell-lime" : "text-red-400"}>
                   ⚡ {fmtInt(avail.cost)}
                 </span>
-                <span className="text-cell-teal/50"> / {fmtInt(Math.floor(resources.energie))}</span>
+                <span className="text-cell-faint"> / {fmtInt(Math.floor(resources.energie))}</span>
                 <span className="text-cell-cyan"> · butin ×{lootMult.toFixed(2)}</span>
               </div>
               <PixelButton
@@ -696,7 +761,7 @@ export function BastionPanel({
               </PixelButton>
             </div>
             {!canLaunchSortie && (
-              <p className="text-[10px] text-cell-teal/60">
+              <p className="text-[10px] text-cell-dim">
                 {!garrisonOk
                   ? "Terrain vide : pose au moins une défense (ta réserve contient une tourelle de départ) avant de sortir."
                   : avail.reason === "quota"
@@ -712,6 +777,8 @@ export function BastionPanel({
             )}
 
             <WavePreview waveN={sortiePalier} level={bastion.scoutLevel} mod={sortieMod} />
+            </>
+            )}
           </Panel>
         )}
 
@@ -720,13 +787,13 @@ export function BastionPanel({
           <div className="flex gap-2">
             <button
               onClick={() => setTab("champ")}
-              className={`flex-1 rounded-lg border py-1.5 text-[11px] tracking-widest ${tab === "champ" ? "border-cell-cyan bg-cell-cyan/15 text-cell-cyan" : "border-cell-teal/30 text-cell-teal/60"}`}
+              className={`flex-1 rounded-lg border py-1.5 text-[11px] tracking-widest ${tab === "champ" ? "border-cell-cyan bg-cell-cyan/15 text-cell-cyan" : "border-cell-teal/30 text-cell-dim"}`}
             >
               CHAMP
             </button>
             <button
               onClick={() => setTab("boutique")}
-              className={`flex-1 rounded-lg border py-1.5 text-[11px] tracking-widest ${tab === "boutique" ? "border-cell-cyan bg-cell-cyan/15 text-cell-cyan" : "border-cell-teal/30 text-cell-teal/60"}`}
+              className={`flex-1 rounded-lg border py-1.5 text-[11px] tracking-widest ${tab === "boutique" ? "border-cell-cyan bg-cell-cyan/15 text-cell-cyan" : "border-cell-teal/30 text-cell-dim"}`}
             >
               BOUTIQUE
             </button>
@@ -775,7 +842,7 @@ export function BastionPanel({
           <>
             {/* Réserve de garnison (pont La Mare -> Bastion) */}
             <Panel className="space-y-2 p-2">
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.25em] text-cell-faint">
                 <span>Garnison en réserve</span>
                 {/* Le plafond porte sur TOUTE la réserve (placées comprises) et se compte
                     en PLACES : une négative n'en occupe aucune (cards.slotCost), donc le
@@ -787,7 +854,7 @@ export function BastionPanel({
                 </span>
               </div>
               {reserveSpecies.length === 0 ? (
-                <p className="text-[11px] text-cell-teal/50">
+                <p className="text-[11px] text-cell-faint">
                   Aucune créature en réserve — assigne des cartes en 🛡️ Défense/⚔️ Assaut depuis la Mare.
                 </p>
               ) : (
@@ -811,7 +878,7 @@ export function BastionPanel({
                           <img src={cardArt(id)} alt={sp.name} className="pixelated h-full w-full object-contain" draggable={false} />
                         </CardFrame>
                         <span className="max-w-[60px] truncate text-[9px] text-cell-cyan">{sp.name}</span>
-                        <span className="text-[9px] text-cell-teal/60">{sp.role === "assaut" ? "💣 mortier" : "⛺ barracks"}</span>
+                        <span className="text-[9px] text-cell-dim">{sp.role === "assaut" ? "💣 mortier" : "⛺ barracks"}</span>
                       </button>
                     );
                   })}
@@ -821,12 +888,12 @@ export function BastionPanel({
 
             {/* Réserve de bâtiments (tourelles/murs/pièges/support) */}
             <Panel className="space-y-2 p-2">
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.25em] text-cell-faint">
                 <span>Réserve de bâtiments</span>
                 <span>{bastion.buildingReserve.length}</span>
               </div>
               {bastion.buildingReserve.length === 0 ? (
-                <p className="text-[11px] text-cell-teal/50">Aucun bâtiment en réserve — recrute-en un en Boutique.</p>
+                <p className="text-[11px] text-cell-faint">Aucun bâtiment en réserve — recrute-en un en Boutique.</p>
               ) : (
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {bastion.buildingReserve.map((inst) => {
@@ -862,7 +929,7 @@ export function BastionPanel({
                             placer support
                           </button>
                         ) : null}
-                        <button onClick={() => recycleBastionBuilding(inst.uid)} className="text-[9px] text-cell-teal/50 underline">
+                        <button onClick={() => recycleBastionBuilding(inst.uid)} className="text-[9px] text-cell-faint underline">
                           recycler
                         </button>
                       </div>
@@ -887,7 +954,7 @@ export function BastionPanel({
                   </span>
                 ))}
               </div>
-              <p className="text-[9px] text-cell-teal/55">
+              <p className="text-[9px] text-cell-dim">
                 🎯 Mythique garanti dans {recruitsUntilPity(bastion)} tirage
                 {recruitsUntilPity(bastion) > 1 ? "s" : ""} au plus tard.
               </p>
@@ -895,7 +962,7 @@ export function BastionPanel({
 
             {/* Emplacements de support (3, hors canvas) */}
             <Panel className="space-y-2 p-2">
-              <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">Support ({bastion.support.filter((s) => s).length}/{bastion.support.length})</div>
+              <div className="text-[10px] uppercase tracking-[0.25em] text-cell-faint">Support ({bastion.support.filter((s) => s).length}/{bastion.support.length})</div>
               <div className="flex gap-2">
                 {bastion.support.map((s, i) => {
                   const def = s ? buildingDef(s.occupant) : null;
@@ -911,13 +978,13 @@ export function BastionPanel({
                           <button
                             onClick={() => removeBastionSupportToReserve(i)}
                             aria-label={`Retirer ${def.name} du support`}
-                            className="tap-h w-full text-[10px] text-cell-teal/60 underline"
+                            className="tap-h w-full text-[10px] text-cell-dim underline"
                           >
                             retirer
                           </button>
                         </>
                       ) : (
-                        <span className="text-[9px] text-cell-teal/40">vide</span>
+                        <span className="text-[9px] text-cell-faint">vide</span>
                       )}
                     </div>
                   );
@@ -928,8 +995,19 @@ export function BastionPanel({
         )}
 
         {!inBattle && tab === "boutique" && (
-          <Panel className="space-y-3 p-3">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">Emplacements</div>
+          <Panel className="divide-y divide-cell-teal/10 p-3">
+            <Section
+              title="Emplacements"
+              defaultOpen
+              summary={(["turret", "barracks", "mortar"] as const)
+                .map((k) => {
+                  const u = k === "turret" ? bastion.turretSlotsUnlocked : k === "barracks" ? bastion.barracksSlotsUnlocked : bastion.mortarSlotsUnlocked;
+                  const t = k === "turret" ? BASTION.slots.turret_total : k === "barracks" ? BASTION.slots.barracks_total : BASTION.slots.mortar_total;
+                  const icon = k === "turret" ? "🗼" : k === "barracks" ? "⛺" : "💣";
+                  return `${icon}${u}/${t}`;
+                })
+                .join(" · ")}
+            >
             {(["turret", "barracks", "mortar"] as const).map((kind) => {
               const unlocked = kind === "turret" ? bastion.turretSlotsUnlocked : kind === "barracks" ? bastion.barracksSlotsUnlocked : bastion.mortarSlotsUnlocked;
               const total = kind === "turret" ? BASTION.slots.turret_total : kind === "barracks" ? BASTION.slots.barracks_total : BASTION.slots.mortar_total;
@@ -940,7 +1018,7 @@ export function BastionPanel({
                 <div key={kind} className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 p-2">
                   <div>
                     <div className="text-[11px] text-cell-cyan">{label}</div>
-                    <div className="text-[10px] text-cell-teal/60">{unlocked}/{total} débloqués</div>
+                    <div className="text-[10px] text-cell-dim">{unlocked}/{total} débloqués</div>
                   </div>
                   {maxed ? (
                     <span className="text-[10px] text-cell-magenta">MAX</span>
@@ -956,12 +1034,21 @@ export function BastionPanel({
                 </div>
               );
             })}
+            </Section>
 
-            <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">Améliorations</div>
+            <Section
+              title="Améliorations"
+              summary={[
+                bastion.reserveCap >= BASTION.reserve.max_cap,
+                bastion.maxTreeLevel >= BASTION.tree_cap.max_level,
+                bastion.scoutLevel >= BASTION.scouting.max_level,
+                bastion.inWaveRespawnUnlocked,
+              ].filter(Boolean).length + "/4 au maximum"}
+            >
             <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 p-2">
               <div>
                 <div className="text-[11px] text-cell-cyan">📦 Réserve de garnison</div>
-                <div className="text-[10px] text-cell-teal/60">{bastion.reserveCap}/{BASTION.reserve.max_cap}</div>
+                <div className="text-[10px] text-cell-dim">{bastion.reserveCap}/{BASTION.reserve.max_cap}</div>
               </div>
               {bastion.reserveCap >= BASTION.reserve.max_cap ? (
                 <span className="text-[10px] text-cell-magenta">MAX</span>
@@ -974,7 +1061,7 @@ export function BastionPanel({
             <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 p-2">
               <div>
                 <div className="text-[11px] text-cell-cyan">🌳 Spécialisation avancée</div>
-                <div className="text-[10px] text-cell-teal/60">Plafond {bastion.maxTreeLevel}/{BASTION.tree_cap.max_level}</div>
+                <div className="text-[10px] text-cell-dim">Plafond {bastion.maxTreeLevel}/{BASTION.tree_cap.max_level}</div>
               </div>
               {bastion.maxTreeLevel >= BASTION.tree_cap.max_level ? (
                 <span className="text-[10px] text-cell-magenta">MAX</span>
@@ -990,7 +1077,7 @@ export function BastionPanel({
                 {/* Pas de « /max » ici, et c'est le sujet : ce niveau n'en a pas.
                     Afficher un dénominateur reviendrait à annoncer au joueur la fin de
                     sa progression, exactement ce qu'on vient de retirer du jeu. */}
-                <div className="text-[10px] text-cell-teal/60">
+                <div className="text-[10px] text-cell-dim">
                   Niv {bastion.slotBonusLevel} · +{Math.round((foundationsMult(bastion.slotBonusLevel) - 1) * 100)}% PV/dégâts (garnison entière)
                 </div>
               </div>
@@ -1001,7 +1088,7 @@ export function BastionPanel({
             <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 p-2">
               <div>
                 <div className="text-[11px] text-cell-cyan">🔭 Vigie</div>
-                <div className="text-[10px] text-cell-teal/60">
+                <div className="text-[10px] text-cell-dim">
                   Niv {bastion.scoutLevel}/{BASTION.scouting.max_level} · {SCOUT_LEVEL_LABEL[bastion.scoutLevel] ?? SCOUT_LEVEL_LABEL[0]}
                 </div>
               </div>
@@ -1016,7 +1103,7 @@ export function BastionPanel({
             <div className="flex items-center justify-between gap-2 rounded-lg border border-cell-teal/20 p-2">
               <div>
                 <div className="text-[11px] text-cell-cyan">💫 Renforts en combat</div>
-                <div className="text-[10px] text-cell-teal/60">Une troupe tombée revient après un court délai</div>
+                <div className="text-[10px] text-cell-dim">Une troupe tombée revient après un court délai</div>
               </div>
               {bastion.inWaveRespawnUnlocked ? (
                 <span className="text-[10px] text-cell-lime">ACQUIS</span>
@@ -1026,8 +1113,12 @@ export function BastionPanel({
                 </PixelButton>
               )}
             </div>
+            </Section>
 
-            <div className="text-[10px] uppercase tracking-[0.25em] text-cell-teal/50">Catalogue (taux affichés au recrutement)</div>
+            <Section
+              title="Catalogue"
+              summary={`taux au recrutement · ${(["turret", "wall", "trap", "support"] as const).flatMap((cat) => buildingsByCategory(cat)).length} bâtiments`}
+            >
             <div className="grid grid-cols-2 gap-2">
               {(["turret", "wall", "trap", "support"] as const).flatMap((cat) => buildingsByCategory(cat)).map((def) => (
                 <div key={def.id} className="rounded-lg border p-1.5 text-center" style={{ borderColor: buildingRarityColor(def.rarity) }}>
@@ -1039,6 +1130,7 @@ export function BastionPanel({
                 </div>
               ))}
             </div>
+            </Section>
           </Panel>
         )}
 
@@ -1096,7 +1188,7 @@ function SlotInspector({
 
   /* Empile par-dessus le panneau Bastion : le retour systeme ferme d'abord
      l'inspecteur, puis le panneau (jeton d'historique par overlay). */
-  useOverlay(true, onClose);
+  const dialogRef = useOverlay<HTMLDivElement>(true, onClose);
 
   let body: React.ReactNode = null;
   if (target.kind === "barracks" || target.kind === "mortar") {
@@ -1113,7 +1205,7 @@ function SlotInspector({
           <img src={cardArt(slot.occupant)} alt={sp.name} className="pixelated h-14 w-14 rounded object-contain" draggable={false} />
           <div>
             <div className="text-sm text-cell-cyan">{sp.name}</div>
-            <div className="text-[10px] text-cell-teal/60">
+            <div className="text-[10px] text-cell-dim">
               ❤{cardHp(slot.occupant, entry)} · 🛡{cardPowerDef(slot.occupant, entry)} · ⚔{cardPowerAtk(slot.occupant, entry)}
             </div>
             {treeSlot && treeSlot.treeLevel > 0 && (
@@ -1125,7 +1217,7 @@ function SlotInspector({
         </div>
         {nextTier && (
           <div className="space-y-1 pt-1">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-cell-teal/50">Prochain palier</div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-cell-faint">Prochain palier</div>
             <div className="flex gap-2">
               {(["a", "b"] as const).map((c) => (
                 <button
@@ -1134,7 +1226,7 @@ function SlotInspector({
                   className="flex-1 rounded-lg border border-cell-cyan/30 p-1.5 text-left text-[10px] text-cell-teal/80 hover:border-cell-cyan"
                 >
                   <div className="text-cell-cyan">{nextTier[c].name}</div>
-                  <div className="text-[9px] text-cell-teal/60">{nextTier[c].desc}</div>
+                  <div className="text-[9px] text-cell-dim">{nextTier[c].desc}</div>
                 </button>
               ))}
             </div>
@@ -1163,7 +1255,7 @@ function SlotInspector({
           </div>
           <div>
             <div className="text-sm text-cell-cyan">{def.name}</div>
-            <div className="text-[10px] text-cell-teal/60">{def.desc}</div>
+            <div className="text-[10px] text-cell-dim">{def.desc}</div>
           </div>
         </div>
         <div className="flex gap-2 pt-1">
@@ -1189,7 +1281,7 @@ function SlotInspector({
           </div>
           <div>
             <div className="text-sm text-cell-cyan">{def.name}</div>
-            <div className="text-[10px] text-cell-teal/60">
+            <div className="text-[10px] text-cell-dim">
               PV {Math.round(s.hp)}/{s.hpMax} · {def.desc}
             </div>
           </div>
@@ -1211,7 +1303,13 @@ function SlotInspector({
           donc PAS passer au-dessus de la nav basse fixe (z-40) du contexte parent. On garantit
           plutôt l'absence de chevauchement géométrique avec la nav, comme le reste du panneau
           (cf. pb-nav sur le conteneur scrollable de BastionPanel) et comme BuildingSheet.tsx. */}
-      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md px-2 pb-16 sm:max-w-lg">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md px-2 pb-16 outline-none sm:max-w-lg"
+      >
         <Panel variant="noyau" className="space-y-2 p-3" style={{ background: "rgba(5, 11, 20, 0.97)" }}>
           {body}
         </Panel>

@@ -99,7 +99,7 @@ export function CardReveal() {
   const collection = useGame((s) => s.collection);
   const clearLastCatch = useGame((s) => s.clearLastCatch);
 
-  useOverlay(lastCatch !== null, clearLastCatch);
+  const dialogRef = useOverlay<HTMLDivElement>(lastCatch !== null, clearLastCatch);
 
   /* L'avancement est mémorisé AVEC la prise qui l'a produit (comparaison de
      référence) : à l'arrivée d'une nouvelle prise, l'étape initiale se déduit
@@ -236,7 +236,11 @@ export function CardReveal() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center px-6"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      className="fixed inset-0 z-[60] flex items-center justify-center px-6 outline-none"
       style={{ backgroundColor: `rgba(2, 6, 12, ${veil})`, transition: "background-color 240ms linear" }}
       onClick={skip}
     >

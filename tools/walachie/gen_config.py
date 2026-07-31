@@ -28,28 +28,39 @@ CYCLE_PROD_BONUS = 0.25    # +25 % de prod par cycle accompli
 SHINY_THRESHOLD = 100      # toutes les N unites d'un meme noeud, une creature brillante apparait
 SHINY_MULT = 2.0           # cliquee, elle double la seve en stock (paillettes, pas une amelioration)
 
-# (id, nom, icone, description, decor)
+# (id, nom, icone, description, decor, veines_seve)
 # Le decor est le fond peint plein-ecran de WalachieScene (tools/gen_walachie.py) :
 # un seul tableau par groupe d'eres, pas de quadrillage de tuiles. La Divinite
 # (fin de "ascension") N'EST PAS la fin du jeu : 3 eres reelles suivent, puis
 # une queue procedurale infinie (voir TAIL plus bas) — "aucune progression ne
 # se termine", meme la divinite se depasse.
+# veines_seve (refonte DA 31/07, piste Phase 2 n14) : l'effet decoratif "veines
+# de seve" (5 lignes ondulantes emeraude dessinees par-dessus le decor) n'a de
+# sens QUE sur un decor de surface/biologique — le sol ou l'eau d'ou la seve
+# sourd. Avant cette entree il se dessinait sur TOUS les decors sans exception,
+# y compris les vues spatiales (protoplanete, orbite, portail, systeme,
+# constellation, galaxie) ou des veines vertes flottant dans le vide brisaient
+# la cohesion DA (audit immersion du 31/07). True seulement pour les 9 eres au
+# sol/sous l'eau (ocean -> civilisation) ; False pour les 6 eres spatiales
+# (protoplanete, sentinelles [vue orbitale], ascension, essaimage, choeur
+# stellaire, toile galactique) et pour la queue infinie post-Toile (cf.
+# config.ts eraAt()).
 ERAS = [
-    ("protoplanete", "Protoplanète", "ere_protoplanete", "Un disque de poussière s'effondre. Walachie n'est encore qu'une braise.", "decor_espace"),
-    ("ocean", "Océan de Sève", "ere_ocean", "Les geysers crachent une sève émeraude. Le monde apprend à couler.", "decor_primordial"),
-    ("protovie", "Proto-vie", "ere_protovie", "Dans la sève, des membranes se referment sur elles-mêmes. Quelque chose insiste.", "decor_primordial"),
-    ("flore", "Flore Radiante", "ere_flore", "La lumière devient nourriture. Les eaux s'allument la nuit.", "decor_eaux"),
-    ("faune", "Faune Rampante", "ere_faune", "Les premières bêtes rampent entre les récifs lumineux.", "decor_eaux"),
-    ("errants", "Grands Errants", "ere_errants", "Des colosses paisibles portent des forêts entières sur leur dos, sur la terre ferme.", "decor_rivage"),
-    ("predateurs", "Prédateurs à Mâchoire", "ere_predateurs", "La mâchoire apparaît. Fine, rapide, terrifiante — et nécessaire.", "decor_rivage"),
-    ("eveil", "L'Éveil", "ere_eveil", "Derrière les yeux d'un prédateur, une étincelle se demande pourquoi.", "decor_tribal"),
-    ("tribus", "Tribus Walachiennes", "ere_tribus", "Les Walachiens chantent autour des totems d'os fluorescent.", "decor_village"),
-    ("civilisation", "Civilisation Fluorescente", "ere_civilisation", "Des cités-jardins qui protègent la nature au lieu de la dévorer.", "decor_cite"),
-    ("sentinelles", "Les Sentinelles", "ere_sentinelles", "Gardiens de la vie, ils veillent depuis l'orbite sur toute la planète.", "decor_orbite"),
-    ("ascension", "Ascension", "ere_ascension", "Le Panthéon s'ouvre. La conscience de Walachie touche au divin — une marche, pas une fin.", "decor_portail"),
-    ("essaimage", "Essaimage Interplanétaire", "ere_essaimage", "Des nefs-semences quittent Walachie pour ensemencer les mondes voisins du système.", "decor_systeme"),
-    ("choeur_stellaire", "Chœur Stellaire", "ere_choeur", "Un réseau de Sentinelles veille désormais entre les étoiles de la constellation.", "decor_stellaire"),
-    ("toile_galactique", "Toile Galactique", "ere_toile", "La galaxie entière porte la mémoire de Walachie, bras spiral après bras spiral.", "decor_galactique"),
+    ("protoplanete", "Protoplanète", "ere_protoplanete", "Un disque de poussière s'effondre. Walachie n'est encore qu'une braise.", "decor_espace", False),
+    ("ocean", "Océan de Sève", "ere_ocean", "Les geysers crachent une sève émeraude. Le monde apprend à couler.", "decor_primordial", True),
+    ("protovie", "Proto-vie", "ere_protovie", "Dans la sève, des membranes se referment sur elles-mêmes. Quelque chose insiste.", "decor_primordial", True),
+    ("flore", "Flore Radiante", "ere_flore", "La lumière devient nourriture. Les eaux s'allument la nuit.", "decor_eaux", True),
+    ("faune", "Faune Rampante", "ere_faune", "Les premières bêtes rampent entre les récifs lumineux.", "decor_eaux", True),
+    ("errants", "Grands Errants", "ere_errants", "Des colosses paisibles portent des forêts entières sur leur dos, sur la terre ferme.", "decor_rivage", True),
+    ("predateurs", "Prédateurs à Mâchoire", "ere_predateurs", "La mâchoire apparaît. Fine, rapide, terrifiante — et nécessaire.", "decor_rivage", True),
+    ("eveil", "L'Éveil", "ere_eveil", "Derrière les yeux d'un prédateur, une étincelle se demande pourquoi.", "decor_tribal", True),
+    ("tribus", "Tribus Walachiennes", "ere_tribus", "Les Walachiens chantent autour des totems d'os fluorescent.", "decor_village", True),
+    ("civilisation", "Civilisation Fluorescente", "ere_civilisation", "Des cités-jardins qui protègent la nature au lieu de la dévorer.", "decor_cite", True),
+    ("sentinelles", "Les Sentinelles", "ere_sentinelles", "Gardiens de la vie, ils veillent depuis l'orbite sur toute la planète.", "decor_orbite", False),
+    ("ascension", "Ascension", "ere_ascension", "Le Panthéon s'ouvre. La conscience de Walachie touche au divin — une marche, pas une fin.", "decor_portail", False),
+    ("essaimage", "Essaimage Interplanétaire", "ere_essaimage", "Des nefs-semences quittent Walachie pour ensemencer les mondes voisins du système.", "decor_systeme", False),
+    ("choeur_stellaire", "Chœur Stellaire", "ere_choeur", "Un réseau de Sentinelles veille désormais entre les étoiles de la constellation.", "decor_stellaire", False),
+    ("toile_galactique", "Toile Galactique", "ere_toile", "La galaxie entière porte la mémoire de Walachie, bras spiral après bras spiral.", "decor_galactique", False),
 ]
 
 # (id, ere, nom, sprite|None, description, comportement)
@@ -131,13 +142,14 @@ META = [
 def build():
     eras = []
     nodes = []
-    for e, (eid, name, icon, desc, decor) in enumerate(ERAS):
+    for e, (eid, name, icon, desc, decor, veines_seve) in enumerate(ERAS):
         base = ERA_BASE0 * (ERA_GROWTH ** e)
         payback = PAYBACK0_S * (PAYBACK_GROWTH ** e)
         unlock = 0.0 if e == 0 else round(base * UNLOCK_MULT, 2)
         eras.append({
             "id": eid, "nom": name, "icone": icon, "desc": desc, "decor": decor,
             "unlock_cost": unlock,
+            "seve_veins": veines_seve,
             "$comment": "unlock = base de l'ere x %.1f ; payback des noeuds ~%ds" % (UNLOCK_MULT, payback),
         })
         js = [n for n in NODES if n[1] == eid]
